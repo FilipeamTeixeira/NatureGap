@@ -1,12 +1,12 @@
 # NatureGap — Step 05: Mismatch and Intervention Layer
 # Computes the ecological residual and ranks cells for intervention.
 #
-# Ecological residual = expected richness − observed richness (effort-corrected)
-# Positive residual → nature under pressure relative to habitat quality
-# Negative residual → biodiversity surplus, potential unrecognised refuge
+# Ecological residual = observed richness (effort-corrected) − expected richness
+# Negative residual → nature under pressure relative to habitat quality
+# Positive residual → biodiversity surplus, potential unrecognised refuge
 #
 # Intervention ranking:
-#   composite_score = w1 * normalised_residual + w2 * corridor_importance
+#   composite_score = w1 * normalised_underperformance + w2 * corridor_importance
 #   Top-ranked cells get counterfactual connectivity estimates (re-run graph
 #   with candidate cell reclassified as habitat, measure betweenness change).
 #
@@ -20,7 +20,7 @@ library(igraph)
 
 DATA_PROC <- here::here("data/processed")
 
-W_RESIDUAL    <- 0.55  # weight on ecological residual in composite score
+W_RESIDUAL    <- 0.55  # weight on underperformance in composite score
 W_CORRIDOR    <- 0.45  # weight on corridor importance
 TOP_N         <- 20    # number of cells for counterfactual connectivity
 
@@ -53,18 +53,34 @@ grid <- grid |>
   mutate(
     expected_richness = habitat_quality * MAX_EXPECTED,
     richness_corrected = replace_na(richness_corrected, 0),
-    ecological_residual = expected_richness - richness_corrected
+    ecological_residual = richness_corrected - expected_richness,
+    underperformance = pmax(0, -ecological_residual)
+  )
+
+max_abs_residual <- max(abs(grid$ecological_residual), na.rm = TRUE)
+grid <- grid |>
+  mutate(
+    impact_score = if_else(
+      max_abs_residual == 0,
+      0,
+      round(ecological_residual / max_abs_residual * 50)
+    )
   )
 
 # ── 3. Normalise components for composite score ───────────────────────────────
 
 grid <- grid |>
   mutate(
-    resid_norm    = (ecological_residual - min(ecological_residual, na.rm = TRUE)) /
-                    (max(ecological_residual, na.rm = TRUE) - min(ecological_residual, na.rm = TRUE)),
+    resid_range   = max(underperformance, na.rm = TRUE) - min(underperformance, na.rm = TRUE),
+    resid_norm    = if_else(
+      resid_range == 0,
+      0,
+      (underperformance - min(underperformance, na.rm = TRUE)) / resid_range
+    ),
     corr_norm     = replace_na(corridor_importance, 0),
     composite     = W_RESIDUAL * resid_norm + W_CORRIDOR * corr_norm
-  )
+  ) |>
+  select(-resid_range)
 
 # ── 4. Rank cells by composite score ─────────────────────────────────────────
 

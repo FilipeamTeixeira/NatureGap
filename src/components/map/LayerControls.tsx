@@ -1,6 +1,5 @@
 'use client';
 
-import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MapLayer } from '@/lib/types';
 
@@ -63,10 +62,9 @@ export default function LayerControls({ layers, onToggle }: LayerControlsProps) 
       </div>
 
       <div className="px-4 py-3 border-t border-[#e4e7e3] mt-2">
-        <button className="flex items-center gap-2 text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors">
-          <Info size={11} />
-          About the layers
-        </button>
+        <p className="text-[11px] text-neutral-400 leading-relaxed">
+          Additional habitat, heat, and connectivity layers will appear here once exported data is available.
+        </p>
       </div>
     </aside>
   );

@@ -37,7 +37,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
   return (
     <div className="w-[320px] flex-shrink-0 bg-white border-l border-[#e4e7e3] flex flex-col overflow-hidden">
-      {/* Header */}
       <div className="px-5 pt-4 flex-shrink-0">
         <button
           onClick={onClose}
@@ -62,7 +61,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex -mx-5 px-5 border-b border-[#e4e7e3] overflow-x-auto">
           {TABS.map((t) => (
             <button
@@ -81,11 +79,9 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' && (
           <div className="p-5 flex flex-col gap-5">
-            {/* Impact gap */}
             <div>
               <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-1">
                 Nature impact (gap)
@@ -121,13 +117,14 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
                   <p className="text-[11px] text-neutral-400 leading-snug">
                     {cell.habitatPotential === 'high'
                       ? 'This landscape could support high biodiversity.'
-                      : 'Moderate habitat capacity based on land cover.'}
+                      : cell.habitatPotential === 'moderate'
+                        ? 'Moderate habitat capacity based on land cover.'
+                        : 'Limited habitat capacity based on land cover.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Pressures */}
             {cell.pressures.length > 0 && (
               <div>
                 <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-2">
@@ -144,7 +141,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               </div>
             )}
 
-            {/* Observed biodiversity */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">
@@ -179,7 +175,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               </div>
             </div>
 
-            {/* Trend */}
             <div>
               <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest mb-2">
                 Impact trend (12 months)
@@ -187,23 +182,24 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               <TrendChart data={cell.trendData} />
             </div>
 
-            {/* Top actions */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">
-                  Top actions for this area
-                </p>
-                <button
-                  onClick={() => setTab('actions')}
-                  className="text-[10px] text-[#3d6b2f] font-medium hover:underline"
-                >
-                  See all →
-                </button>
+            {cell.interventions.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">
+                    Top actions for this area
+                  </p>
+                  <button
+                    onClick={() => setTab('actions')}
+                    className="text-[10px] text-[#3d6b2f] font-medium hover:underline"
+                  >
+                    See all →
+                  </button>
+                </div>
+                {cell.interventions.slice(0, 2).map((iv) => (
+                  <InterventionCard key={iv.id} intervention={iv} />
+                ))}
               </div>
-              {cell.interventions.slice(0, 2).map((iv) => (
-                <InterventionCard key={iv.id} intervention={iv} />
-              ))}
-            </div>
+            )}
           </div>
         )}
 
@@ -215,6 +211,11 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
             {cell.interventions.map((iv) => (
               <InterventionCard key={iv.id} intervention={iv} />
             ))}
+            {cell.interventions.length === 0 && (
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                No ranked interventions are available for this area yet.
+              </p>
+            )}
           </div>
         )}
 
@@ -236,7 +237,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
                     <div className="flex-1 h-1.5 bg-[#f0f0ee] rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[#6a9044] rounded-full transition-all"
-                        style={{ width: `${(s.count / cell.observedRichness) * 100}%` }}
+                        style={{ width: `${(s.count / Math.max(cell.observedRichness, 1)) * 100}%` }}
                       />
                     </div>
                     <div className="w-6 text-xs font-semibold text-neutral-700 text-right">{s.count}</div>

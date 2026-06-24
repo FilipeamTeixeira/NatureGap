@@ -1,0 +1,66 @@
+{
+  "honmoku-sancho": {
+    "impactScore": -14,
+    "habitatQuality": 52,
+    "observedRichness": 68,
+    "expectedRichness": 104,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 2.3,
+    "taxonomicDiversity": 1.9,
+    "species": [
+      { "type": "plant", "count": 27 },
+      { "type": "bird", "count": 21 },
+      { "type": "insect", "count": 13 },
+      { "type": "mammal", "count": 5 },
+      { "type": "fungi", "count": 2 }
+    ],
+    "corridorImportance": 71,
+    "fragmentationIndex": 84,
+    "pressures": [
+      "Invasive understorey (Sasa bamboo, Kudzu on former base land)",
+      "Port disturbance — noise and air quality (Honmoku Pier ~1.8 km)",
+      "Isolated from nearest green corridor (Negishi Forest ~2.3 km SW)",
+      "Low observer effort (2.3 obs / km path)"
+    ],
+    "trendData": [-18, -17, -17, -16, -18, -16, -15, -14, -15, -14, -14, -14],
+    "interventions": [
+      {
+        "id": "i1",
+        "title": "Remove invasive understorey",
+        "description": "Manual removal of Sasa bamboo and Kudzu on the north slope. Allows native shrub regeneration within 2-3 seasons. Priority area: 0.2 ha around the hilltop bench.",
+        "impact": "high",
+        "category": "ground"
+      },
+      {
+        "id": "i2",
+        "title": "Plant a stepping-stone corridor",
+        "description": "A street-tree row along Honmoku-dori toward Negishi Forest Park (2.3 km SW) would reduce isolation. Priority segment: Wadayama to Maeyama junction (~800 m). Estimated connectivity gain: +18% network betweenness.",
+        "impact": "high",
+        "category": "corridor",
+        "connectivityGain": 18
+      },
+      {
+        "id": "i3",
+        "title": "Introduce native understorey species",
+        "description": "Plant Aucuba japonica, Camellia japonica, and native ferns in the gaps left after Sasa removal. Focus on species used as food and shelter by Honmoku's resident thrush population.",
+        "impact": "high",
+        "category": "pollinator"
+      },
+      {
+        "id": "i4",
+        "title": "Maintain twice-yearly mowing",
+        "description": "The Oct 2025 shift to biannual mowing has already improved the trend. Continue and extend to the full park boundary (currently only the hilltop bench area).",
+        "impact": "medium",
+        "category": "ground"
+      },
+      {
+        "id": "i5",
+        "title": "Bioblitz with Honmoku elementary school",
+        "description": "Observer effort is 2.3 obs/km — below the Naka Ward average of 4.1. A school survey day would improve the biodiversity baseline and engage the local community.",
+        "impact": "medium",
+        "category": "ground"
+      }
+    ]
+  }
+}

@@ -5,63 +5,44 @@ import dynamic from 'next/dynamic';
 import Navbar from '@/components/layout/Navbar';
 import LayerControls from '@/components/map/LayerControls';
 import CellDetailPanel from '@/components/detail/CellDetailPanel';
-import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
-import { YOKOHAMA_CELLS, MAP_LAYERS, ALL_WARDS } from '@/lib/mock-data';
-import type { CellData, MapLayer, WardFeature } from '@/lib/types';
+import { MAP_LAYERS } from '@/lib/mock-data';
+import { GREEN_SPACES } from '@/lib/green-spaces';
+import { parkToCellData } from '@/lib/park-data';
+import type { CellData, MapLayer } from '@/lib/types';
 
-// MapLibre must be loaded client-side only
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
-type Selection =
-  | { kind: 'full'; cell: CellData }
-  | { kind: 'summary'; ward: WardFeature }
-  | null;
-
 export default function Page() {
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [layers, setLayers] = useState<MapLayer[]>(MAP_LAYERS);
 
   const toggleLayer = (id: string) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)),
-    );
+    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
   };
 
-  const handleCellClick = (id: string) => {
-    const cell = YOKOHAMA_CELLS.find((c) => c.id === id);
-    if (cell) {
-      setSelection({ kind: 'full', cell });
-      return;
-    }
-    const ward = ALL_WARDS.find((w) => w.id === id);
-    if (ward) {
-      setSelection({ kind: 'summary', ward });
-    }
+  const handleHexClick = (parkId: string, cellId: string, score: number) => {
+    const park = GREEN_SPACES.find((p) => p.id === parkId);
+    if (!park) return;
+    setSelectedCell(parkToCellData(park, score, cellId));
   };
-
-  const selectedId =
-    selection?.kind === 'full'
-      ? selection.cell.id
-      : selection?.kind === 'summary'
-        ? selection.ward.id
-        : null;
 
   return (
     <div className="h-full flex flex-col">
-      <Navbar />
+      <Navbar activePath="/" />
 
       <div className="flex flex-1 min-h-0">
         <LayerControls layers={layers} onToggle={toggleLayer} />
 
         <div className="flex-1 relative min-w-0">
-          <MapView selectedCellId={selectedId} onCellClick={handleCellClick} />
+          <MapView
+            layers={layers}
+            selectedCellId={selectedCell?.id ?? null}
+            onHexClick={handleHexClick}
+          />
         </div>
 
-        {selection?.kind === 'full' && (
-          <CellDetailPanel cell={selection.cell} onClose={() => setSelection(null)} />
-        )}
-        {selection?.kind === 'summary' && (
-          <WardSummaryPanel ward={selection.ward} onClose={() => setSelection(null)} />
+        {selectedCell && (
+          <CellDetailPanel cell={selectedCell} onClose={() => setSelectedCell(null)} />
         )}
       </div>
     </div>

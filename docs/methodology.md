@@ -79,11 +79,11 @@ Where `MAX_EXPECTED = 350` (provisional upper bound based on literature values f
 ## 5. Ecological residual
 
 ```
-ecological_residual_i = expected_richness_i − corrected_richness_i
+ecological_residual_i = corrected_richness_i − expected_richness_i
 ```
 
-- **Positive residual** → nature is underperforming relative to habitat quality. Priority for restoration.
-- **Negative residual** → biodiversity surplus. Potentially an unrecognised refuge worth protecting.
+- **Negative residual** → nature is underperforming relative to habitat quality. Priority for restoration.
+- **Positive residual** → biodiversity surplus. Potentially an unrecognised refuge worth protecting.
 - **Near zero** → nature is performing as expected.
 
 ---
@@ -111,7 +111,7 @@ Proportion of the 8 possible queen's-case neighbours that are NOT classified as 
 ## 7. Intervention ranking
 
 ```
-composite_score_i = 0.55 × normalised_residual_i + 0.45 × corridor_importance_i
+composite_score_i = 0.55 × normalised_underperformance_i + 0.45 × corridor_importance_i
 ```
 
 Cells are ranked by composite score. Higher score = higher restoration priority.

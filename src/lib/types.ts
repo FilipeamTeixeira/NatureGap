@@ -1,4 +1,4 @@
-export type LayerId = 'habitat' | 'trees' | 'biodiversity' | 'impact' | 'connectivity' | 'heat' | 'landuse';
+export type LayerId = 'impact';
 
 export interface MapLayer {
   id: LayerId;
