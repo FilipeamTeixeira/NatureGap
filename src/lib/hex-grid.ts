@@ -1,8 +1,9 @@
 import { GREEN_SPACES, type GreenSpace } from './green-spaces';
 import { getScoreColor } from './utils';
+import { HEX_CONFIG, STORAGE } from './config';
+import { supabase } from './supabase';
 
-/** Circumradius in metres — 10 m hex cells (pipeline default). */
-const HEX_RADIUS_M = 10;
+const HEX_RADIUS_M = HEX_CONFIG.radiusM;
 
 function mToLng(m: number, lat: number) {
   return m / (111_319.5 * Math.cos((lat * Math.PI) / 180));
@@ -38,31 +39,87 @@ function ringBbox(ring: [number, number][]) {
   return { minLng, maxLng, minLat, maxLat };
 }
 
-/** Residual score for a vegetation cell — mimics pipeline output. */
+/**
+ * Synthetic residual score for a vegetation cell — used only when the
+ * precomputed pipeline hexgrid is not yet available from Supabase.
+ *
+ * All geography constants below are Yokohama-specific and match the
+ * spatial model in pipeline/05_residuals/score.R.
+ */
+const SYNTH = {
+  // Urban-centre reference (Nishi-ku CBD proxy for decay modelling)
+  urbanCentreLng: 139.621,
+  urbanCentreLat: 35.466,
+  urbanCentreCosLat: 35.47,   // latitude used for cos() projection
+  urbanDecay: -30,
+  urbanDecayRadius: 4_200,    // metres
+
+  // Western green belt
+  greenBeltLngThreshold: 139.56,
+  greenBeltLatThreshold:  35.43,
+  greenBeltMax:           22,
+  greenBeltSlope:        210,
+
+  // Northern uplift
+  northernLatThreshold: 35.53,
+  northernMax:          12,
+  northernSlope:       190,
+
+  // Coastal penalty
+  coastalLatThreshold:  35.4,
+  coastalLngThreshold: 139.6,
+  coastalMax:           14,
+  coastalSlope:        120,
+
+  // Port zone penalty
+  portLngThreshold: 139.655,
+  portLatThreshold:  35.47,
+  portPenalty:      -18,
+
+  // Noise model coefficients (decorrelate the synthetic scores)
+  noiseLng1: 531.3, noiseLat1: 213.7, noiseAmp1: 5,
+  noiseLng2: 317.9, noiseLat2: 489.1, noiseAmp2: 3.5,
+  noiseLng3: 721.1,                   noiseAmp3: 2,
+
+  // Per-park overrides
+  honmokuParkIds: ['honmoku-sancho', 'shinhonmoku-park'] as string[],
+  honmokuPenalty: -6,
+} as const;
+
 function hexScore(lng: number, lat: number, park: GreenSpace): number {
-  const dxM = (lng - 139.621) * 111_319.5 * Math.cos(35.47 * Math.PI / 180);
-  const dyM = (lat - 35.466) * 111_319.5;
+  const dxM =
+    (lng - SYNTH.urbanCentreLng) *
+    111_319.5 *
+    Math.cos((SYNTH.urbanCentreCosLat * Math.PI) / 180);
+  const dyM = (lat - SYNTH.urbanCentreLat) * 111_319.5;
   const distM = Math.sqrt(dxM * dxM + dyM * dyM);
-  const urban = -30 * Math.exp(-distM / 4_200);
+  const urban = SYNTH.urbanDecay * Math.exp(-distM / SYNTH.urbanDecayRadius);
 
   const green =
-    lng < 139.56 && lat > 35.43 ? Math.min(22, (139.56 - lng) * 210) : 0;
-  const north = lat > 35.53 ? Math.min(12, (lat - 35.53) * 190) : 0;
+    lng < SYNTH.greenBeltLngThreshold && lat > SYNTH.greenBeltLatThreshold
+      ? Math.min(SYNTH.greenBeltMax, (SYNTH.greenBeltLngThreshold - lng) * SYNTH.greenBeltSlope)
+      : 0;
+  const north =
+    lat > SYNTH.northernLatThreshold
+      ? Math.min(SYNTH.northernMax, (lat - SYNTH.northernLatThreshold) * SYNTH.northernSlope)
+      : 0;
   const coast =
-    lat < 35.4 && lng > 139.6 ? -Math.min(14, (35.4 - lat) * 120) : 0;
-  const port = lng > 139.655 && lat > 35.47 ? -18 : 0;
+    lat < SYNTH.coastalLatThreshold && lng > SYNTH.coastalLngThreshold
+      ? -Math.min(SYNTH.coastalMax, (SYNTH.coastalLatThreshold - lat) * SYNTH.coastalSlope)
+      : 0;
+  const port =
+    lng > SYNTH.portLngThreshold && lat > SYNTH.portLatThreshold ? SYNTH.portPenalty : 0;
   const noise =
-    Math.sin(lng * 531.3 + lat * 213.7) * 5 +
-    Math.cos(lng * 317.9 - lat * 489.1) * 3.5 +
-    Math.sin((lng + lat) * 721.1) * 2;
+    Math.sin(lng * SYNTH.noiseLng1 + lat * SYNTH.noiseLat1) * SYNTH.noiseAmp1 +
+    Math.cos(lng * SYNTH.noiseLng2 - lat * SYNTH.noiseLat2) * SYNTH.noiseAmp2 +
+    Math.sin((lng + lat) * SYNTH.noiseLng3) * SYNTH.noiseAmp3;
 
-  // Honmoku parks: slightly underperforming (port-adjacent pressure)
-  const honmoku =
-    park.id === 'sancho-park' || park.id === 'shinhonmoku-park' ? -6 : 0;
+  // Port-adjacent parks underperform relative to interior parks
+  const honmoku = SYNTH.honmokuParkIds.includes(park.id) ? SYNTH.honmokuPenalty : 0;
 
   return Math.max(
-    -48,
-    Math.min(48, Math.round(urban + green + north + coast + port + noise + honmoku)),
+    HEX_CONFIG.minScore,
+    Math.min(HEX_CONFIG.maxScore, Math.round(urban + green + north + coast + port + noise + honmoku)),
   );
 }
 
@@ -118,10 +175,43 @@ export function buildHexGrid() {
 }
 
 let cached: ReturnType<typeof buildHexGrid> | null = null;
+let runtimeHexGrid: ReturnType<typeof buildHexGrid> | null = null;
+let initHexCalled = false;
+
+/**
+ * Fetch the precomputed hexgrid.geojson from Supabase Storage.
+ * When present, getHexGrid() returns pipeline data instead of the synthetic grid.
+ * Call once at app boot.
+ */
+export async function initHexGrid(): Promise<void> {
+  if (initHexCalled || !supabase) return;
+  initHexCalled = true;
+  try {
+    const { data, error } = await supabase.storage
+      .from(STORAGE.PIPELINE_BUCKET)
+      .download('hexgrid.geojson');
+    if (error || !data) return;
+    runtimeHexGrid = JSON.parse(await data.text());
+  } catch (e) {
+    console.warn('[hex-grid] Storage fetch failed, using generated grid:', e);
+  }
+}
 
 export function getHexGrid() {
+  if (runtimeHexGrid) return runtimeHexGrid;
   if (!cached) cached = buildHexGrid();
   return cached;
+}
+
+/** Median impact score across all hex cells for a given park. Returns 0 when unknown. */
+export function medianScoreForPark(parkId: string): number {
+  const scores = getHexGrid()
+    .features
+    .filter((f) => f.properties?.parkId === parkId)
+    .map((f) => Number(f.properties?.score))
+    .filter((s) => !Number.isNaN(s))
+    .sort((a, b) => a - b);
+  return scores.length ? scores[Math.floor(scores.length / 2)] : 0;
 }
 
 export { GREEN_SPACES };

@@ -2,26 +2,21 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { WARD_CENTROIDS_GEOJSON, GLOBAL_STATS } from '@/lib/mock-data';
+import { wardCentroidsGeoJSON } from '@/lib/data';
 import { getHexGrid } from '@/lib/hex-grid';
 import { GREEN_SPACES } from '@/lib/green-spaces';
-import { formatNumber } from '@/lib/utils';
+import { IMPACT_LEGEND } from '@/lib/utils';
+import { MAP_CONFIG } from '@/lib/config';
 import type { MapLayer } from '@/lib/types';
 
 interface MapViewProps {
   layers: MapLayer[];
   selectedCellId: string | null;
   onHexClick: (parkId: string, cellId: string, score: number) => void;
+  flyToTarget?: { center: [number, number]; zoom: number } | null;
+  dataRevision?: number;
 }
 
-const LEGEND = [
-  { color: '#2E6F40', label: 'Much better than expected' },
-  { color: '#73A56D', label: 'Better than expected' },
-  { color: '#B8C9AE', label: 'As expected' },
-  { color: '#E8A44C', label: 'Worse than expected' },
-  { color: '#C95B4B', label: 'Much worse than expected' },
-];
 
 const LAYER_MAP: Partial<Record<string, string[]>> = {
   impact: ['hex-fill', 'hex-outline', 'hex-selected', 'park-area'],
@@ -41,6 +36,19 @@ function parkPolygonsGeoJSON() {
 
 function safeColor(color: unknown) {
   return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : '#3d6b2f';
+}
+
+function medianHexForPark(parkId: string) {
+  const hexes = getHexGrid().features
+    .filter((feature) => feature.properties?.parkId === parkId)
+    .map((feature) => ({
+      cellId: String(feature.properties?.cellId ?? ''),
+      score: Number(feature.properties?.score),
+    }))
+    .filter((feature) => feature.cellId && !Number.isNaN(feature.score))
+    .sort((a, b) => a.score - b.score);
+
+  return hexes.length ? hexes[Math.floor(hexes.length / 2)] : null;
 }
 
 function createPopupContent({
@@ -105,11 +113,15 @@ function createPopupContent({
   return root;
 }
 
-export default function MapView({ layers, selectedCellId, onHexClick }: MapViewProps) {
+export default function MapView({ layers, selectedCellId, onHexClick, flyToTarget, dataRevision }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const onClickRef = useRef(onHexClick);
+  /** Set to true once our custom sources/layers have been added to the map. */
+  const layersAddedRef = useRef(false);
+  /** Latest layers prop — readable inside async map callbacks without stale closures. */
+  const layersRef = useRef(layers);
   const impactLayerEnabled = layers.some((layer) => layer.id === 'impact' && layer.enabled);
 
   useEffect(() => {
@@ -117,16 +129,19 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
   }, [onHexClick]);
 
   useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      // Zoom 17 → each 10 m hex is ~10 px, comfortably clickable
-      center: [139.6606, 35.4255],  // 本牧山頂公園 centroid
-      zoom: 17,
-      minZoom: 9,
-      maxZoom: 20,
+      style: MAP_CONFIG.basemapUrl,
+      center: MAP_CONFIG.center,
+      zoom: MAP_CONFIG.zoom,
+      minZoom: MAP_CONFIG.minZoom,
+      maxZoom: MAP_CONFIG.maxZoom,
       attributionControl: false,
     });
 
@@ -175,7 +190,7 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
 
       // ── Ward labels (on top) ───────────────────────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.addSource('ward-labels', { type: 'geojson', data: WARD_CENTROIDS_GEOJSON as any });
+      map.addSource('ward-labels', { type: 'geojson', data: wardCentroidsGeoJSON() as any });
       map.addLayer({
         id: 'ward-label-text',
         type: 'symbol',
@@ -183,7 +198,7 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
         layout: {
           'text-field': ['get', 'nameJa'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 10, 9, 14, 13],
-          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+          'text-font': MAP_CONFIG.mapFonts,
           'text-anchor': 'center',
           'text-allow-overlap': false,
         },
@@ -193,6 +208,17 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
           'text-halo-width': 1.5,
         },
       });
+
+      // Mark our layers as ready and apply current visibility state
+      layersAddedRef.current = true;
+      for (const layer of layersRef.current) {
+        const mlIds = LAYER_MAP[layer.id];
+        if (!mlIds) continue;
+        const vis = layer.enabled ? 'visible' : 'none';
+        for (const id of mlIds) {
+          try { map.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
+        }
+      }
 
       // ── Cursor ────────────────────────────────────────────────────────────
       map.on('mouseenter', 'park-area', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -259,26 +285,13 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
         if (e.defaultPrevented) return; // hex already handled it
         const props = e.features?.[0]?.properties;
         if (!props) return;
-        // Use median score from rendered hexes in this park
-        const hexFeatures = map.queryRenderedFeatures(undefined, {
-          layers: ['hex-fill'],
-          filter: ['==', ['get', 'parkId'], props.parkId],
-        });
-        const sortedHexes = hexFeatures
-          .map((f) => ({
-            cellId: String(f.properties?.cellId ?? ''),
-            score: Number(f.properties?.score),
-          }))
-          .filter((f) => f.cellId && !Number.isNaN(f.score))
-          .sort((a, b) => a.score - b.score);
-        const medianHex = sortedHexes.length
-          ? sortedHexes[Math.floor(sortedHexes.length / 2)]
-          : null;
+        const parkId = String(props.parkId ?? '');
+        if (!parkId) return;
+        // Use the full park hexgrid, not only MapLibre's currently rendered viewport.
+        const medianHex = medianHexForPark(parkId);
         const medianScore = medianHex
           ? medianHex.score
           : 0;
-        const parkId = String(props.parkId ?? '');
-        if (!parkId) return;
         onClickRef.current(parkId, medianHex?.cellId ?? parkId, medianScore);
       });
     });
@@ -304,38 +317,37 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
   }, [selectedCellId]);
 
   // ── Sync layer visibility ──────────────────────────────────────────────────
+  // Runs whenever layers prop changes (user toggle). Guards on layersAddedRef so
+  // we never call setLayoutProperty before our custom layers exist.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map?.isStyleLoaded()) return;
+    if (!mapRef.current || !layersAddedRef.current) return;
     for (const layer of layers) {
       const mlIds = LAYER_MAP[layer.id];
       if (!mlIds) continue;
       const vis = layer.enabled ? 'visible' : 'none';
       for (const id of mlIds) {
-        try { map.setLayoutProperty(id, 'visibility', vis); } catch { /* not loaded */ }
+        try { mapRef.current.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
       }
     }
   }, [layers]);
 
-  return (
-    <div className="relative w-full h-full">
-      <div ref={containerRef} className="w-full h-full" />
+  // ── Refresh hex source when pipeline data loads from Storage ──────────────
+  useEffect(() => {
+    if (!mapRef.current || !layersAddedRef.current || dataRevision === 0) return;
+    const src = mapRef.current.getSource('hexgrid') as maplibregl.GeoJSONSource | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    src?.setData(getHexGrid() as any);
+  }, [dataRevision]);
 
-      {/* Stats bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white/96 backdrop-blur-sm border-t border-[#E4E7E1] pointer-events-none">
-        <div className="flex items-center gap-8 px-6 py-3">
-          {[
-            { label: 'Observations today', value: formatNumber(GLOBAL_STATS.observationsToday) },
-            { label: 'Species observed',   value: formatNumber(GLOBAL_STATS.speciesObserved) },
-            { label: 'Areas improving',    value: String(GLOBAL_STATS.areasImproving) },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-baseline gap-2">
-              <span className="text-[13px] font-semibold text-[#1F2A1F]">{value}</span>
-              <span className="text-[11px] text-[#667066]">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+  // ── Fly to a programmatic target (search selection) ───────────────────────
+  useEffect(() => {
+    if (!flyToTarget || !mapRef.current) return;
+    mapRef.current.flyTo({ center: flyToTarget.center, zoom: flyToTarget.zoom, duration: 900 });
+  }, [flyToTarget]);
+
+  return (
+    <div className="relative w-full h-full" style={{ minHeight: 0 }}>
+      <div ref={containerRef} className="w-full h-full" style={{ position: 'absolute', inset: 0 }} />
 
       {impactLayerEnabled && (
         <div className="absolute top-3 right-3 bg-white/96 backdrop-blur-sm rounded-2xl border border-[#E4E7E1] p-4" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
@@ -343,7 +355,7 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
             Nature Impact Gap
           </p>
           <div className="flex flex-col gap-1.5">
-            {LEGEND.map(({ color, label }) => (
+            {IMPACT_LEGEND.map(({ color, label }) => (
               <div key={label} className="flex items-center gap-2.5">
                 <div className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ backgroundColor: color }} />
                 <span className="text-[10px] text-[#667066] leading-tight">{label}</span>

@@ -2,6 +2,16 @@
 # Produces the expected nature layer — what biodiversity you would expect
 # if observer effort were uniform across the city.
 #
+# Primary data sources (from step 01):
+#   data/raw/landcover.tif      — ESA WorldCover 10m landcover classification
+#   data/raw/impervious.tif     — EMC-BUILT impervious surface fraction (0–1)
+#   data/raw/osm_green_spaces.gpkg
+#   data/raw/osm_paths.gpkg
+#
+# Optional (uncomment if available from step 01):
+#   data/raw/ndvi.tif           — Sentinel-2 NDVI
+#   data/raw/lst.tif            — Landsat surface temperature
+#
 # Outputs:
 #   data/processed/grid_habitat.gpkg   — cell grid with habitat index fields
 #   data/processed/habitat_quality.tif — raster for PMTiles conversion
@@ -15,111 +25,223 @@ DATA_RAW  <- here::here("data/raw")
 DATA_PROC <- here::here("data/processed")
 dir.create(DATA_PROC, recursive = TRUE, showWarnings = FALSE)
 
-BBOX      <- c(xmin = 139.48, ymin = 35.30, xmax = 139.70, ymax = 35.60)
-CRS_LOCAL <- "EPSG:6674"
-CELL_SIZE <- 250  # metres
+# Yokohama city extent — must match BBOX_CITY in ingest.R
+BBOX_CITY <- c(xmin = 139.640415, ymin = 35.415460, xmax = 139.672859, ymax = 35.430148)
+CRS_LOCAL <- "EPSG:6674"   # JGD2011 / Japan Plane Rectangular CS VI
+CELL_SIZE <- 50            # metres — reduce for finer resolution (re-run full pipeline after changing)
+
+# WorldCover class codes
+WC_TREE     <- 10L
+WC_SHRUB    <- 20L
+WC_GRASS    <- 30L
+WC_CROP     <- 40L
+WC_BUILT    <- 50L
+WC_BARE     <- 60L
+WC_SNOW     <- 70L
+WC_WATER    <- 80L
+WC_WETLAND  <- 90L
+WC_MANGROVE <- 95L
+WC_MOSS     <- 100L
+
+# All classes that count as "vegetated" for the habitat index
+WC_GREEN <- c(WC_TREE, WC_SHRUB, WC_GRASS, WC_WETLAND, WC_MANGROVE)
 
 # ── 1. Build reference grid ───────────────────────────────────────────────────
-# Create a regular square grid over the Yokohama bounding box
 
-bbox_sf <- st_bbox(c(xmin = BBOX["xmin"], ymin = BBOX["ymin"],
-                     xmax = BBOX["xmax"], ymax = BBOX["ymax"]),
-                   crs = 4326) |>
+bb <- unname(BBOX_CITY)
+
+bbox_sf <- st_bbox(
+  c(xmin = bb[1],
+    ymin = bb[2],
+    xmax = bb[3],
+    ymax = bb[4]),
+  crs = 4326
+) |>
   st_as_sfc() |>
   st_transform(CRS_LOCAL)
 
-grid <- st_make_grid(bbox_sf, cellsize = CELL_SIZE, square = TRUE) |>
+grid <- st_make_grid(bbox_sf, cellsize = CELL_SIZE, square = FALSE) |>
   st_as_sf() |>
   mutate(cell_id = row_number())
 
 cat(sprintf("Grid: %d cells at %dm resolution\n", nrow(grid), CELL_SIZE))
 
-# ── 2. NDVI mean per cell ─────────────────────────────────────────────────────
-# Requires data/raw/ndvi.tif (from step 01)
+# ── 2. ESA WorldCover: vegetation class fractions per cell ───────────────────
+# Each 250m × 250m cell contains ~625 WorldCover pixels (10m).
+# Extract all pixel values and tabulate class fractions.
+#
+# Derived fields:
+#   tree_fraction      — proportion of cell with class 10 (tree cover)
+#   shrub_fraction     — proportion with class 20 (shrubland)
+#   grass_fraction     — proportion with class 30 (grassland)
+#   built_fraction_wc  — proportion with class 50 (built-up, from WorldCover)
+#   green_fraction_wc  — proportion with any of: tree, shrub, grass, wetland, mangrove
 
-if (file.exists(file.path(DATA_RAW, "ndvi.tif"))) {
-  ndvi <- rast(file.path(DATA_RAW, "ndvi.tif")) |> project(CRS_LOCAL)
-  ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE, ID = TRUE)
-  grid$ndvi_mean <- ndvi_mean$ndvi
+lc_path <- file.path(DATA_RAW, "landcover.tif")
+
+if (file.exists(lc_path)) {
+  cat("Extracting WorldCover class fractions...\n")
+
+  lc <- rast(lc_path) |> project(CRS_LOCAL, method = "near")
+
+  # Extract all pixels for each grid cell (method = "simple" → centroid assignment)
+  lc_vals <- terra::extract(lc, vect(grid))
+  # Column 1 = ID (row index in grid), column 2 = class value
+
+  lc_fracs <- lc_vals |>
+    as_tibble() |>
+    rename(row_idx = ID, lc_class = 2) |>
+    filter(!is.na(lc_class)) |>
+    group_by(row_idx) |>
+    summarise(
+      tree_fraction      = mean(lc_class == WC_TREE),
+      shrub_fraction     = mean(lc_class == WC_SHRUB),
+      grass_fraction     = mean(lc_class == WC_GRASS),
+      built_fraction_wc  = mean(lc_class == WC_BUILT),
+      green_fraction_wc  = mean(lc_class %in% WC_GREEN),
+      .groups = "drop"
+    ) |>
+    mutate(cell_id = grid$cell_id[row_idx]) |>
+    select(-row_idx)
+
+  grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
+    mutate(across(c(tree_fraction, shrub_fraction, grass_fraction,
+                    built_fraction_wc, green_fraction_wc),
+                  \(x) replace_na(x, 0)))
 } else {
-  message("NDVI raster not found — skipping. Run step 01 first.")
-  grid$ndvi_mean <- NA_real_
+  message("WorldCover not found — run step 01 first. Filling with NA.")
+  grid <- grid |>
+    mutate(tree_fraction = NA_real_, shrub_fraction = NA_real_,
+           grass_fraction = NA_real_, built_fraction_wc = NA_real_,
+           green_fraction_wc = NA_real_)
 }
 
-# ── 3. LST percentile rank per cell ──────────────────────────────────────────
+# ── 3. EMC-BUILT: impervious surface fraction per cell ───────────────────────
+# Provides higher-accuracy built-up fraction than WorldCover alone.
+# Values already normalised to 0–1 by step 01.
 
-if (file.exists(file.path(DATA_RAW, "lst.tif"))) {
-  lst <- rast(file.path(DATA_RAW, "lst.tif")) |> project(CRS_LOCAL)
-  lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE, ID = TRUE)
-  grid$lst_celsius <- lst_mean$lst_celsius
-  grid$lst_rank    <- rank(grid$lst_celsius, na.last = "keep") / sum(!is.na(grid$lst_celsius))
+imp_path <- file.path(DATA_RAW, "impervious.tif")
+
+if (file.exists(imp_path)) {
+  cat("Extracting impervious surface fractions...\n")
+  imp  <- rast(imp_path) |> project(CRS_LOCAL, method = "bilinear")
+  imp_mean <- terra::extract(imp, vect(grid), fun = mean, na.rm = TRUE)
+  grid$impervious_fraction <- replace_na(imp_mean[[2]], 0)
 } else {
-  message("LST raster not found — skipping. Run step 01 first.")
-  grid$lst_celsius <- NA_real_
-  grid$lst_rank    <- NA_real_
+  message("Impervious raster not found — run step 01 first. Filling with NA.")
+  grid$impervious_fraction <- NA_real_
 }
 
-# ── 4. Green space area fraction per cell ────────────────────────────────────
+# ── 4. OSM green space: supplemental area fraction ───────────────────────────
+# Provides fine-grained park boundary data to supplement WorldCover at 250m.
 
 green <- st_read(file.path(DATA_RAW, "osm_green_spaces.gpkg"), quiet = TRUE)
+cell_area <- CELL_SIZE^2
 
-green_area <- st_intersection(green, grid) |>
-  mutate(area_m2 = as.numeric(st_area(geometry))) |>
+inter <- st_intersection(green, grid)
+
+inter$area_m2 <- as.numeric(st_area(st_geometry(inter)))
+
+green_area <- inter |>
   st_drop_geometry() |>
   group_by(cell_id) |>
-  summarise(green_area_m2 = sum(area_m2))
-
-cell_area <- CELL_SIZE^2
+  summarise(green_area_m2 = sum(area_m2), .groups = "drop")
 
 grid <- grid |>
   left_join(green_area, by = "cell_id") |>
   mutate(
     green_area_m2 = replace_na(green_area_m2, 0),
-    green_fraction = pmin(green_area_m2 / cell_area, 1)
-  )
+    osm_green_fraction = pmin(green_area_m2 / cell_area, 1)
+  ) |>
+  select(-green_area_m2)
 
-# ── 5. Path density per cell (for observer effort denominator) ────────────────
+# ── 5. OSM path density (observer effort denominator) ────────────────────────
 
 paths <- st_read(file.path(DATA_RAW, "osm_paths.gpkg"), quiet = TRUE)
 
-path_length <- st_intersection(paths, grid) |>
-  mutate(len_m = as.numeric(st_length(geometry))) |>
+inter <- st_intersection(paths, grid)
+
+inter$len_m <- as.numeric(st_length(st_geometry(inter)))
+
+path_length <- inter |>
   st_drop_geometry() |>
   group_by(cell_id) |>
-  summarise(path_length_m = sum(len_m))
+  summarise(path_length_m = sum(len_m), .groups = "drop")
 
 grid <- grid |>
   left_join(path_length, by = "cell_id") |>
-  mutate(path_length_m = replace_na(path_length_m, 0),
-         path_km = path_length_m / 1000)
+  mutate(
+    path_length_m = replace_na(path_length_m, 0),
+    path_km       = path_length_m / 1000
+  ) |>
+  select(-path_length_m)
 
-# ── 6. Composite habitat quality index ───────────────────────────────────────
-# Weighted combination of sub-indices (0–1 each):
-#   - NDVI (greenness)       weight 0.35
-#   - Green fraction         weight 0.30
-#   - LST inverse rank       weight 0.20  (cooler = better)
-#   - Path density penalty   weight 0.15  (more paths = more accessible = less wild)
+# ── 6. Optional: NDVI and LST (uncomment if available) ───────────────────────
+# These supplement the WorldCover-based vegetation index with reflectance data.
+
+grid$ndvi_mean <- NA_real_
+grid$lst_rank  <- NA_real_
+
+# if (file.exists(file.path(DATA_RAW, "ndvi.tif"))) {
+#   ndvi <- rast(file.path(DATA_RAW, "ndvi.tif")) |> project(CRS_LOCAL)
+#   ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
+#   grid$ndvi_mean <- ndvi_mean$ndvi
+# }
 #
-# NOTE: weights are provisional and documented as such.
+# if (file.exists(file.path(DATA_RAW, "lst.tif"))) {
+#   lst <- rast(file.path(DATA_RAW, "lst.tif")) |> project(CRS_LOCAL)
+#   lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
+#   grid$lst_celsius <- lst_mean$lst_celsius
+#   grid$lst_rank    <- rank(grid$lst_celsius, na.last = "keep") /
+#                       sum(!is.na(grid$lst_celsius))
+# }
+
+# ── 7. Composite habitat quality index ───────────────────────────────────────
+#
+# Combines WorldCover vegetation classes and impervious surface into a
+# single 0–1 quality index per cell.
+#
+# Component               Weight   Source
+# ─────────────────────── ──────   ─────────────────────────────────────────
+# Tree cover fraction        0.35   WorldCover class 10 (tree cover)
+# Green fraction             0.25   WorldCover any vegetated class
+# Imperviousness (inverted)  0.25   EMC-BUILT (high imperviousness = low quality)
+# OSM green fraction         0.15   Parks / reserves from OSM (supplemental)
+#
+# Weights are provisional; see docs/methodology.md for calibration notes.
+
+# Safe fallbacks: if a source is missing, use OSM green fraction as proxy
+safe_tree   <- if_else(!is.na(grid$tree_fraction),     grid$tree_fraction,     grid$osm_green_fraction * 0.5)
+safe_green  <- if_else(!is.na(grid$green_fraction_wc), grid$green_fraction_wc, grid$osm_green_fraction)
+safe_imp    <- if_else(!is.na(grid$impervious_fraction),
+                       grid$impervious_fraction,
+                       replace_na(grid$built_fraction_wc, 0))
 
 grid <- grid |>
   mutate(
-    ndvi_idx    = pmax(0, pmin(1, (replace_na(ndvi_mean, 0) + 0.2) / 1.2)),
-    green_idx   = green_fraction,
-    lst_idx     = 1 - replace_na(lst_rank, 0.5),
-    path_idx    = pmin(path_km / 2, 1),   # penalise high path density (proxy for urbanisation)
-    habitat_quality = 0.35 * ndvi_idx +
-                      0.30 * green_idx +
-                      0.20 * lst_idx  +
-                      0.15 * (1 - path_idx)
+    habitat_quality = 0.35 * safe_tree  +
+                      0.25 * safe_green +
+                      0.25 * (1 - safe_imp) +
+                      0.15 * osm_green_fraction
   )
+
+cat(sprintf(
+  "Habitat quality: min=%.3f, mean=%.3f, max=%.3f\n",
+  min(grid$habitat_quality,  na.rm = TRUE),
+  mean(grid$habitat_quality, na.rm = TRUE),
+  max(grid$habitat_quality,  na.rm = TRUE)
+))
 
 st_write(grid, file.path(DATA_PROC, "grid_habitat.gpkg"), delete_dsn = TRUE)
 cat(sprintf("Written: %s\n", file.path(DATA_PROC, "grid_habitat.gpkg")))
 
-# ── 7. Export habitat quality raster for PMTiles ─────────────────────────────
+# ── 8. Export habitat quality raster for PMTiles ─────────────────────────────
 
-hab_rast <- rasterize(vect(grid), rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
-                      field = "habitat_quality")
+hab_rast <- rasterize(
+  vect(grid),
+  rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
+  field = "habitat_quality"
+)
 writeRaster(hab_rast, file.path(DATA_PROC, "habitat_quality.tif"), overwrite = TRUE)
 cat("Written: habitat_quality.tif\n")
+

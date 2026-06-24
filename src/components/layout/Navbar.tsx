@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Leaf } from 'lucide-react';
+import { CITY } from '@/lib/config';
 
 const NAV_LINKS = [
   { label: 'Explore',     href: '/' },
@@ -43,7 +44,7 @@ export default function Navbar({ activePath }: NavbarProps) {
 
       <div className="flex items-center gap-3 flex-shrink-0">
         <span className="text-[11px] font-medium text-[#2E6F40] bg-[#DDEAD8] px-2.5 py-1 rounded-full">
-          Yokohama · Beta
+          {CITY.badge}
         </span>
       </div>
     </header>

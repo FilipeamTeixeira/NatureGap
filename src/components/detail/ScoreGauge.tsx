@@ -1,3 +1,6 @@
+import { formatScore, getScoreColor } from '@/lib/utils';
+import { SCORE_THRESHOLDS } from '@/lib/config';
+
 interface ScoreGaugeProps {
   score: number;
   min?: number;
@@ -9,15 +12,11 @@ function polar(cx: number, cy: number, r: number, deg: number) {
   return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
 }
 
-function gaugeColor(score: number): string {
-  if (score <= -20) return '#C95B4B';
-  if (score <= -10) return '#E8A44C';
-  if (score < 5)   return '#E8A44C';
-  if (score < 15)  return '#73A56D';
-  return '#2E6F40';
-}
-
-export default function ScoreGauge({ score, min = -50, max = 50 }: ScoreGaugeProps) {
+export default function ScoreGauge({
+  score,
+  min = SCORE_THRESHOLDS.GAUGE_MIN,
+  max = SCORE_THRESHOLDS.GAUGE_MAX,
+}: ScoreGaugeProps) {
   const cx = 100;
   const cy = 108;
   const r = 78;
@@ -34,8 +33,8 @@ export default function ScoreGauge({ score, min = -50, max = 50 }: ScoreGaugePro
   const largeArc = arcSpan > 180 ? 1 : 0;
   const hasFill = Math.abs(pct) > 0.005;
 
-  const color = gaugeColor(clamped);
-  const label = score > 0 ? `+${score}` : String(score);
+  const color = getScoreColor(clamped);
+  const label = formatScore(score);
 
   return (
     <svg viewBox="0 0 200 125" className="w-40 flex-shrink-0">

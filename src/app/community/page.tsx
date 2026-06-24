@@ -1,45 +1,18 @@
 import Navbar from '@/components/layout/Navbar';
 import { Calendar, MapPin, Users } from 'lucide-react';
-
-const EVENTS = [
-  {
-    title: 'Satoyama walk — Yokohama',
-    date: 'Sat 5 Jul 2025 · 09:00',
-    location: 'Sankei-en, Naka Ward',
-    attendees: 14,
-    type: 'Guided walk',
-  },
-  {
-    title: 'iNaturalist bioblitz',
-    date: 'Sun 6 Jul 2025 · all day',
-    location: 'Kohoku Ward green belt',
-    attendees: 31,
-    type: 'Citizen science',
-  },
-  {
-    title: 'Pollinator corridor planting',
-    date: 'Sat 12 Jul 2025 · 10:00',
-    location: 'Honmoku Futo, Naka Ward',
-    attendees: 8,
-    type: 'Restoration',
-  },
-  {
-    title: 'Urban ecology talk',
-    date: 'Thu 17 Jul 2025 · 19:00',
-    location: 'Kanagawa University',
-    attendees: 55,
-    type: 'Event',
-  },
-];
+import { fetchEvents } from '@/lib/data';
+import { CITY } from '@/lib/config';
 
 const TYPE_COLOR: Record<string, string> = {
-  'Guided walk':    'text-[#2E6F40] bg-[#DDEAD8]',
-  'Citizen science':'text-[#3A6A8A] bg-[#E3EDF5]',
-  'Restoration':    'text-[#9B6A1A] bg-[#FDF0DC]',
-  'Event':          'text-[#667066] bg-[#F0F2EE]',
+  'Guided walk':     'text-[#2E6F40] bg-[#DDEAD8]',
+  'Citizen science': 'text-[#3A6A8A] bg-[#E3EDF5]',
+  'Restoration':     'text-[#9B6A1A] bg-[#FDF0DC]',
+  'Event':           'text-[#667066] bg-[#F0F2EE]',
 };
 
-export default function CommunityPage() {
+export default async function CommunityPage() {
+  const events = await fetchEvents();
+
   return (
     <div className="h-full flex flex-col">
       <Navbar activePath="/community" />
@@ -50,14 +23,14 @@ export default function CommunityPage() {
             Community
           </h1>
           <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">
-            Local events and citizen science opportunities in Yokohama. Each event ties directly
+            Local events and citizen science opportunities in {CITY.name}. Each event ties directly
             to high-priority map cells.
           </p>
 
           <div className="flex flex-col gap-3">
-            {EVENTS.map(({ title, date, location, attendees, type }) => (
+            {events.map(({ id, title, date, location, attendees, type }) => (
               <div
-                key={title}
+                key={id}
                 className="bg-white rounded-2xl p-5 border border-[#E4E7E1]"
                 style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
               >

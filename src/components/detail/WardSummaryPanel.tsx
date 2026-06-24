@@ -1,7 +1,8 @@
 'use client';
 
 import { ArrowLeft, X } from 'lucide-react';
-import { cn, getScoreLabel, getScoreColor, formatScore } from '@/lib/utils';
+import { cn, getScoreLabel } from '@/lib/utils';
+import { SCORE_THRESHOLDS, CITY } from '@/lib/config';
 import type { WardFeature } from '@/lib/types';
 import ScoreGauge from './ScoreGauge';
 
@@ -11,8 +12,7 @@ interface WardSummaryPanelProps {
 }
 
 export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProps) {
-  const color = getScoreColor(ward.score);
-  const isUnder = ward.score < -5;
+  const isUnder = ward.score < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
 
   return (
     <div className="w-[320px] flex-shrink-0 bg-white border-l border-[#E4E7E1] flex flex-col overflow-hidden">
@@ -28,7 +28,7 @@ export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProp
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="font-semibold text-[#1F2A1F] text-[15px] leading-tight">{ward.name} Ward</h2>
-            <p className="text-[12px] text-[#667066] mt-0.5">{ward.nameJa} · Yokohama</p>
+            <p className="text-[12px] text-[#667066] mt-0.5">{ward.nameJa} · {CITY.name}</p>
           </div>
           <button
             onClick={onClose}

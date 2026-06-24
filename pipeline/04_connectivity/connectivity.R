@@ -34,29 +34,31 @@ CRS_LOCAL <- "EPSG:6674"
 CELL_SIZE  <- 250
 
 hab_rast <- rasterize(
-  vect(grid), 
+  vect(grid),
   rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
   field = "is_habitat"
 )
 
 # ── 3. Patch metrics with landscapemetrics ───────────────────────────────────
 
-lsm_patch <- calculate_lsm(hab_rast, level = "patch",
-                             what = c("lsm_p_area", "lsm_p_shape", "lsm_p_enn"))
-
-lsm_landscape <- calculate_lsm(hab_rast, level = "landscape",
-                                 what = c("lsm_l_shdi", "lsm_l_ai"))
+lsm_patch <- calculate_lsm(hab_rast, what = c("lsm_p_area", "lsm_p_shape", "lsm_p_enn"))
+lsm_landscape <- calculate_lsm(hab_rast, what = c("lsm_l_shdi", "lsm_l_ai"))
 
 # Map patch metrics back to cells using get_patches
 patches <- get_patches(hab_rast, class = 1)[[1]][[1]]
-patch_vals <- terra::extract(patches, vect(grid), ID = TRUE)
+patch_vals <- terra::extract(patches, vect(st_centroid(grid)), ID = TRUE)
 grid$patch_id <- patch_vals[[2]]
 
 patch_area <- lsm_patch |>
-  filter(metric == "area") |>
+  filter(metric == "area", class == 1) |>
   select(id, patch_area_ha = value)
 
+# grid <- grid |>
+#   left_join(patch_area, by = c("patch_id" = "id")) |>
+#   mutate(patch_area_ha = replace_na(patch_area_ha, 0))
+
 grid <- grid |>
+  select(-any_of("patch_area_ha")) |>          # safe to re-run
   left_join(patch_area, by = c("patch_id" = "id")) |>
   mutate(patch_area_ha = replace_na(patch_area_ha, 0))
 
@@ -93,6 +95,13 @@ cat(sprintf("Graph: %d nodes, %d edges\n", vcount(g), ecount(g)))
 
 # ── 5. Betweenness centrality → corridor importance ──────────────────────────
 # Normalised betweenness: 0 = unimportant node, 1 = key corridor bottleneck
+edge_resistance_clean <- edge_resistance
+
+eps <- min(edge_resistance_clean[edge_resistance_clean > 0], na.rm = TRUE) * 0.001
+
+edge_resistance_clean[edge_resistance_clean <= 0] <- eps
+E(g)$weight <- edge_resistance_clean
+bc <- betweenness(g, weights = E(g)$weight, normalized = TRUE)
 
 bc <- betweenness(g, weights = E(g)$weight, normalized = TRUE)
 

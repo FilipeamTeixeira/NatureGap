@@ -82,15 +82,15 @@ ecological_residual = observed_richness_corrected - expected_richness_corrected
 Negative values mean observed biodiversity is below expected biodiversity.
 Positive values mean observed biodiversity is above expected biodiversity.
 
-Color mapping must match `src/lib/utils.ts`.
+Color mapping must match `src/lib/utils.ts` (`getScoreColor`) and `IMPACT_LEGEND`.
 
 | Score range | Color | Meaning |
 | --- | --- | --- |
-| `<= -20` | `#dc2626` | Much worse than expected |
-| `<= -10` | `#f59e0b` | Worse than expected |
-| `< 5` | `#fbbf24` | As expected |
-| `< 15` | `#22c55e` | Better than expected |
-| `>= 15` | `#16a34a` | Much better than expected |
+| `< -20` | `#C95B4B` | Much worse than expected |
+| `< -10` | `#E8A44C` | Worse than expected |
+| `< 5`   | `#B8C9AE` | As expected |
+| `< 15`  | `#73A56D` | Better than expected |
+| `>= 15` | `#2E6F40` | Much better than expected |
 
 ## `park-stats.json`
 

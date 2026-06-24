@@ -12,18 +12,82 @@ library(sf)
 library(terra)
 library(tidyverse)
 
-DATA_PROC  <- here::here("data/processed")
-DATA_EXPORT <- here::here("data/export")
+DATA_ROOT <- if (dir.exists(here::here("pipeline/data"))) {
+  here::here("pipeline/data")
+} else {
+  here::here("data")
+}
+
+DATA_RAW    <- file.path(DATA_ROOT, "raw")
+DATA_PROC   <- file.path(DATA_ROOT, "processed")
+DATA_EXPORT <- file.path(DATA_ROOT, "export")
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
 
+run_pmtiles_convert <- function(input_path, output_path) {
+  pmtiles_bin <- Sys.which("pmtiles")
+  if (!nzchar(pmtiles_bin)) {
+    stop("pmtiles CLI not found on PATH. Install it before running export.R.", call. = FALSE)
+  }
+
+  args <- shQuote(c("convert", input_path, output_path))
+  cat(sprintf("Running: %s %s\n", pmtiles_bin, paste(args, collapse = " ")))
+  status <- system2(pmtiles_bin, args = args)
+  if (!identical(status, 0L)) {
+    stop(sprintf("pmtiles convert failed with exit status %s", status), call. = FALSE)
+  }
+}
+
+run_gdal_translate_mbtiles <- function(input_path, output_path) {
+  gdal_translate_bin <- Sys.which("gdal_translate")
+  if (!nzchar(gdal_translate_bin)) {
+    stop("gdal_translate not found on PATH. Install GDAL before running export.R.", call. = FALSE)
+  }
+
+  if (file.exists(output_path)) unlink(output_path)
+  args <- shQuote(c(
+    "-of", "MBTILES",
+    "-ot", "Byte",
+    "-scale", "0", "1", "0", "255",
+    "-co", "TILE_FORMAT=PNG",
+    input_path,
+    output_path
+  ))
+  cat(sprintf("Running: %s %s\n", gdal_translate_bin, paste(args, collapse = " ")))
+  status <- system2(gdal_translate_bin, args = args)
+  if (!identical(status, 0L)) {
+    stop(sprintf("gdal_translate MBTiles export failed with exit status %s", status), call. = FALSE)
+  }
+}
+
+run_gdaladdo <- function(input_path) {
+  gdaladdo_bin <- Sys.which("gdaladdo")
+  if (!nzchar(gdaladdo_bin)) {
+    stop("gdaladdo not found on PATH. Install GDAL before running export.R.", call. = FALSE)
+  }
+
+  args <- shQuote(c("-r", "average", input_path, "2", "4", "8", "16"))
+  cat(sprintf("Running: %s %s\n", gdaladdo_bin, paste(args, collapse = " ")))
+  status <- system2(gdaladdo_bin, args = args)
+  if (!identical(status, 0L)) {
+    stop(sprintf("gdaladdo failed with exit status %s", status), call. = FALSE)
+  }
+}
+
+write_geojson <- function(value, output_path) {
+  if (file.exists(output_path)) unlink(output_path)
+  st_write(value, output_path, delete_dsn = FALSE)
+}
+
+# Colour scale — must stay in sync with SCORE_COLORS in src/lib/config.ts
+# and IMPACT_LEGEND in src/lib/utils.ts
 score_color <- function(score) {
   case_when(
-    is.na(score) ~ "#fbbf24",
-    score <= -20 ~ "#dc2626",
-    score <= -10 ~ "#f59e0b",
-    score < 5    ~ "#fbbf24",
-    score < 15   ~ "#22c55e",
-    TRUE         ~ "#16a34a"
+    is.na(score) ~ "#B8C9AE",   # treat missing as "as expected"
+    score < -20  ~ "#C95B4B",   # much worse than expected
+    score < -10  ~ "#E8A44C",   # worse than expected
+    score <   5  ~ "#B8C9AE",   # as expected
+    score <  15  ~ "#73A56D",   # better than expected
+    TRUE         ~ "#2E6F40"    # much better than expected
   )
 }
 
@@ -37,8 +101,13 @@ make_slug <- function(value) {
 # ── 1. Rasters → Cloud-Optimised GeoTIFF → PMTiles ───────────────────────────
 
 raster_layers <- c(
-  "habitat_quality"    = file.path(DATA_PROC, "habitat_quality.tif")
-  # add ndvi.tif, lst.tif etc. here as they are produced
+  "habitat_quality" = file.path(DATA_PROC, "habitat_quality.tif")
+  # Optional layers (uncomment once available from step 01):
+  # "ndvi"          = file.path(DATA_RAW,  "ndvi.tif"),
+  # "lst"           = file.path(DATA_RAW,  "lst.tif")
+  # Note: landcover.tif and impervious.tif are categorical / fractional rasters
+  # better served as vector tile attributes rather than PMTiles; they are
+  # embedded as cell properties in hexgrid.geojson (step 3 below).
 )
 
 for (layer_name in names(raster_layers)) {
@@ -49,6 +118,7 @@ for (layer_name in names(raster_layers)) {
   }
 
   cog_path    <- file.path(DATA_EXPORT, paste0(layer_name, "_cog.tif"))
+  mbtiles_path <- file.path(DATA_EXPORT, paste0(layer_name, ".mbtiles"))
   pmtiles_path <- file.path(DATA_EXPORT, paste0(layer_name, ".pmtiles"))
 
   # Reproject to WGS84 (required for PMTiles web serving)
@@ -58,10 +128,10 @@ for (layer_name in names(raster_layers)) {
                                      "COPY_SRC_OVERVIEWS=YES"),
               overwrite = TRUE)
 
-  # Convert COG → PMTiles (requires pmtiles CLI on PATH)
-  cmd <- sprintf("pmtiles convert %s %s", cog_path, pmtiles_path)
-  cat(sprintf("Running: %s\n", cmd))
-  system(cmd)
+  # Convert COG → MBTiles → PMTiles (pmtiles CLI expects MBTiles input)
+  run_gdal_translate_mbtiles(cog_path, mbtiles_path)
+  run_gdaladdo(mbtiles_path)
+  run_pmtiles_convert(mbtiles_path, pmtiles_path)
 }
 
 # ── 2. Park polygons → GeoJSON ───────────────────────────────────────────────
@@ -87,26 +157,47 @@ if (file.exists(green_path)) {
     select(id, name, nameJa, wardId)
 
   parks_path <- file.path(DATA_EXPORT, "parks.geojson")
-  st_write(green, parks_path, delete_dsn = TRUE)
+  write_geojson(green, parks_path)
   cat(sprintf("Written: %s\n", parks_path))
 } else {
-  message("Skipping parks.geojson — data/raw/osm_green_spaces.gpkg not found")
+  message(sprintf("Skipping parks.geojson — %s not found", green_path))
 }
 
 # ── 3. Vector grid → GeoJSON (for PostGIS import + frontend cells) ───────────
 
-grid <- st_read(file.path(DATA_PROC, "grid_residuals.gpkg"), quiet = TRUE) |>
-  st_transform(4326) |>
+grid_raw <- st_read(file.path(DATA_PROC, "grid_residuals.gpkg"), quiet = TRUE) |>
+  st_transform(4326)
+
+if (!"is_habitat" %in% names(grid_raw)) {
+  grid_raw$is_habitat <- grid_raw$habitat_quality > 0
+}
+if (!"species_richness" %in% names(grid_raw)) {
+  grid_raw$species_richness <- grid_raw$richness_corrected
+}
+if (!"taxonomic_shannon" %in% names(grid_raw) && "species_shannon" %in% names(grid_raw)) {
+  grid_raw$taxonomic_shannon <- grid_raw$species_shannon
+}
+
+grid <- grid_raw |>
   select(
-    cell_id, habitat_quality, ndvi_mean, green_fraction, lst_rank,
+    # Core
+    cell_id, habitat_quality, impact_score, composite, intervention_rank, is_habitat,
+    # Landcover (WorldCover + EMC-BUILT — NA when step 01 rasters not available)
+    any_of(c("tree_fraction", "shrub_fraction", "grass_fraction",
+             "built_fraction_wc", "green_fraction_wc",
+             "impervious_fraction", "osm_green_fraction")),
+    # Legacy optional fields (present only when Sentinel-2/Landsat was run)
+    any_of(c("ndvi_mean", "lst_rank")),
+    # Connectivity
     corridor_importance, fragmentation_index, patch_area_ha,
+    # Biodiversity observations
     n_obs, species_richness, richness_corrected, taxonomic_shannon,
-    expected_richness, ecological_residual, impact_score, composite, intervention_rank,
-    is_habitat
+    # Residuals
+    expected_richness, ecological_residual
   )
 
 geojson_path <- file.path(DATA_EXPORT, "grid_yokohama.geojson")
-st_write(grid, geojson_path, delete_dsn = TRUE)
+write_geojson(grid, geojson_path)
 cat(sprintf("Written: %s\n", geojson_path))
 
 hexgrid <- grid |>
@@ -120,7 +211,7 @@ hexgrid <- grid |>
   )
 
 hexgrid_path <- file.path(DATA_EXPORT, "hexgrid.geojson")
-st_write(hexgrid, hexgrid_path, delete_dsn = TRUE)
+write_geojson(hexgrid, hexgrid_path)
 cat(sprintf("Written: %s\n", hexgrid_path))
 
 # ── 4. Top interventions → JSON (for Supabase) ───────────────────────────────

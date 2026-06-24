@@ -29,7 +29,7 @@ TOP_N         <- 20    # number of cells for counterfactual connectivity
 hab  <- st_read(file.path(DATA_PROC, "grid_habitat.gpkg"),     quiet = TRUE)
 obs  <- st_read(file.path(DATA_PROC, "grid_observations.gpkg"),quiet = TRUE) |>
   st_drop_geometry() |>
-  select(cell_id, richness_corrected, n_obs, taxonomic_shannon)
+  select(cell_id, richness_corrected, n_obs, species_shannon)
 
 conn <- st_read(file.path(DATA_PROC, "grid_connectivity.gpkg"),quiet = TRUE) |>
   st_drop_geometry() |>
@@ -58,14 +58,24 @@ grid <- grid |>
   )
 
 max_abs_residual <- max(abs(grid$ecological_residual), na.rm = TRUE)
-grid <- grid |>
-  mutate(
-    impact_score = if_else(
-      max_abs_residual == 0,
-      0,
-      round(ecological_residual / max_abs_residual * 50)
-    )
-  )
+# grid <- grid |>
+#   mutate(
+#     impact_score = if_else(
+#       max_abs_residual == 0,
+#       0,
+#       round(ecological_residual / max_abs_residual * 50)
+#     )
+#   )
+
+m <- max_abs_residual
+
+if (m == 0) {
+  grid <- grid |>
+    mutate(impact_score = 0)
+} else {
+  grid <- grid |>
+    mutate(impact_score = round(ecological_residual / m * 50))
+}
 
 # ── 3. Normalise components for composite score ───────────────────────────────
 
@@ -114,11 +124,16 @@ top_cells <- top_cells |>
 top_cells <- top_cells |>
   mutate(
     primary_action = case_when(
-      corridor_importance > 0.7  ~ "Create or restore habitat corridor",
-      fragmentation_index > 0.8  ~ "Reduce isolation — connect to nearest patch",
-      ndvi_mean < 0.2            ~ "Increase canopy and green cover",
-      lst_rank  > 0.8            ~ "Add shade trees to reduce heat",
-      TRUE                       ~ "Increase native plant diversity"
+      corridor_importance > 0.7 ~ "Create or restore habitat corridor",
+      fragmentation_index > 0.8 ~ "Reduce isolation — connect to nearest patch",
+
+      coalesce(tree_fraction, green_fraction_wc, 0) < 0.10 ~
+        "Increase canopy and green cover",
+
+      coalesce(impervious_fraction, built_fraction_wc, 0) > 0.70 ~
+        "Add shade trees to reduce heat",
+
+      TRUE ~ "Increase native plant diversity"
     )
   )
 

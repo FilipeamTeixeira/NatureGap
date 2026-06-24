@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn, getScoreLabel } from '@/lib/utils';
+import { SCORE_THRESHOLDS, CITY } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import ScoreGauge from './ScoreGauge';
 import TrendChart from './TrendChart';
@@ -60,7 +61,7 @@ function CardSubtitle({ children }: { children: React.ReactNode }) {
 
 export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview');
-  const isUnder = cell.impactScore < -5;
+  const isUnder = cell.impactScore < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
 
   const trendDir =
     cell.trendData.length >= 2
@@ -83,7 +84,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           <div className="flex-1 min-w-0 pr-3">
             <h2 className="font-semibold text-[#1F2A1F] text-[18px] leading-tight">{cell.name}</h2>
             <p className="text-[13px] text-[#667066] mt-0.5">
-              {cell.nameJa} · Yokohama
+              {cell.nameJa} · {CITY.name}
             </p>
           </div>
           <button

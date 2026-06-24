@@ -1,17 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { MousePointerClick } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import LayerControls from '@/components/map/LayerControls';
 import CellDetailPanel from '@/components/detail/CellDetailPanel';
+import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
 import { MAP_LAYERS } from '@/lib/mock-data';
 import { GREEN_SPACES } from '@/lib/green-spaces';
-import { parkToCellData } from '@/lib/park-data';
-import type { CellData, MapLayer } from '@/lib/types';
+import { parkToCellData, initParkStats } from '@/lib/park-data';
+import { initData } from '@/lib/data';
+import { medianScoreForPark, initHexGrid } from '@/lib/hex-grid';
+import { IMPACT_LEGEND } from '@/lib/utils';
+import type { CellData, MapLayer, WardFeature } from '@/lib/types';
+import type { GreenSpace } from '@/lib/green-spaces';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
+
+function centroid(ring: [number, number][]): [number, number] {
+  const pts = ring.slice(0, -1);
+  const lng = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  return [lng, lat];
+}
 
 function InsightPanelEmpty() {
   return (
@@ -27,15 +39,8 @@ function InsightPanelEmpty() {
         </p>
       </div>
 
-      {/* Hint cards */}
       <div className="p-5 flex flex-col gap-3">
-        {[
-          { color: '#2E6F40', label: 'Much better than expected' },
-          { color: '#73A56D', label: 'Better than expected' },
-          { color: '#B8C9AE', label: 'As expected' },
-          { color: '#E8A44C', label: 'Worse than expected' },
-          { color: '#C95B4B', label: 'Much worse than expected' },
-        ].map(({ color, label }) => (
+        {IMPACT_LEGEND.map(({ color, label }) => (
           <div key={label} className="flex items-center gap-3">
             <div
               className="w-3 h-3 rounded-[3px] flex-shrink-0"
@@ -54,16 +59,51 @@ function InsightPanelEmpty() {
 
 export default function Page() {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
+  const [selectedWard, setSelectedWard] = useState<WardFeature | null>(null);
   const [layers, setLayers] = useState<MapLayer[]>(MAP_LAYERS);
+  const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [dataRevision, setDataRevision] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([initParkStats(), initData(), initHexGrid()]).finally(() => {
+      if (!cancelled) setDataRevision((r) => r + 1);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const toggleLayer = (id: string) => {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
   };
 
   const handleHexClick = (parkId: string, cellId: string, score: number) => {
-    const park = GREEN_SPACES.find((p) => p.id === parkId);
-    if (!park) return;
+    const park = GREEN_SPACES.find((p) => p.id === parkId) ?? {
+      id: parkId,
+      name: 'Yokohama',
+      nameJa: '横浜市',
+      wardId: '',
+      ring: [] as [number, number][],
+    };
     setSelectedCell(parkToCellData(park, score, cellId));
+    setSelectedWard(null);
+  };
+
+  const handleParkSelect = (park: GreenSpace) => {
+    const score = medianScoreForPark(park.id);
+    setSelectedCell(parkToCellData(park, score, park.id));
+    setSelectedWard(null);
+    setFlyToTarget({ center: centroid(park.ring), zoom: 17 });
+  };
+
+  const handleWardSelect = (ward: WardFeature) => {
+    setSelectedWard(ward);
+    setSelectedCell(null);
+    setFlyToTarget({ center: ward.coordinates, zoom: 13 });
+  };
+
+  const handleClosePanel = () => {
+    setSelectedCell(null);
+    setSelectedWard(null);
   };
 
   return (
@@ -71,18 +111,27 @@ export default function Page() {
       <Navbar activePath="/" />
 
       <div className="flex flex-1 min-h-0">
-        <LayerControls layers={layers} onToggle={toggleLayer} />
+        <LayerControls
+          layers={layers}
+          onToggle={toggleLayer}
+          onParkSelect={handleParkSelect}
+          onWardSelect={handleWardSelect}
+        />
 
         <div className="flex-1 relative min-w-0">
           <MapView
             layers={layers}
             selectedCellId={selectedCell?.id ?? null}
             onHexClick={handleHexClick}
+            flyToTarget={flyToTarget}
+            dataRevision={dataRevision}
           />
         </div>
 
         {selectedCell ? (
-          <CellDetailPanel cell={selectedCell} onClose={() => setSelectedCell(null)} />
+          <CellDetailPanel cell={selectedCell} onClose={handleClosePanel} />
+        ) : selectedWard ? (
+          <WardSummaryPanel ward={selectedWard} onClose={handleClosePanel} />
         ) : (
           <InsightPanelEmpty />
         )}

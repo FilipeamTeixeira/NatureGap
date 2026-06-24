@@ -6,6 +6,8 @@ interface TrendChartProps {
 }
 
 export default function TrendChart({ data }: TrendChartProps) {
+  if (data.length < 2) return null;
+
   const W = 280;
   const H = 72;
   const padX = 8;

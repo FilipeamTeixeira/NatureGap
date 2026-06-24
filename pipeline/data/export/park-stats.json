@@ -1,0 +1,41 @@
+{
+  "yokohama-grid": {
+    "impactScore": -13,
+    "habitatQuality": 35,
+    "observedRichness": 530,
+    "expectedRichness": 68654,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 8,
+    "taxonomicDiversity": 0.9,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 38,
+    "pressures": [
+      "Pipeline export is city-grid level; park aggregation is not yet configured."
+    ],
+    "trendData": [-13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13, -13],
+    "interventions": []
+  }
+}

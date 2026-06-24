@@ -14,4 +14,11 @@ export interface GreenSpace {
   ring: [number, number][];
 }
 
-export const GREEN_SPACES = parseGreenSpaces(greenSpacesData);
+let GREEN_SPACES: GreenSpace[] = [];
+try {
+  GREEN_SPACES = parseGreenSpaces(greenSpacesData);
+} catch (e) {
+  console.error('[green-spaces] Invalid bundled green-spaces.json:', e);
+}
+
+export { GREEN_SPACES };
