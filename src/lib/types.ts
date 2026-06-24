@@ -46,6 +46,12 @@ export interface CellStatsFields {
   species: Species[];
   corridorImportance: number;
   fragmentationIndex: number;
+  /** 0–100 tree canopy fraction (from pipeline WorldCover). */
+  treeCover?: number;
+  /** 0–100 heat exposure rank (from Landsat LST when available). */
+  heatExposure?: number;
+  /** 0–100 vegetated land-cover fraction. */
+  landUseGreen?: number;
   pressures: string[];
   interventions: Intervention[];
 }

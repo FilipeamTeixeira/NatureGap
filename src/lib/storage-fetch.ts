@@ -72,26 +72,3 @@ export function mergeGeoJsonChunks(parts: unknown[]): GeoJSON.FeatureCollection 
   });
   return { type: 'FeatureCollection', features };
 }
-
-/** Resolve a pipeline asset URL — public folder first, then Supabase blob URL. */
-export async function resolvePipelineAssetUrl(fileName: string): Promise<string | null> {
-  const publicPath = `/pipeline/${STORAGE.CITY_ID}/${fileName}`;
-
-  if (typeof window !== 'undefined') {
-    try {
-      const head = await fetch(publicPath, { method: 'HEAD' });
-      if (head.ok) return publicPath;
-    } catch {
-      /* try storage next */
-    }
-  }
-
-  if (supabase) {
-    const { data, error } = await supabase.storage
-      .from(STORAGE.PIPELINE_BUCKET)
-      .download(`${STORAGE.CITY_ID}/${fileName}`);
-    if (!error && data) return URL.createObjectURL(data);
-  }
-
-  return null;
-}

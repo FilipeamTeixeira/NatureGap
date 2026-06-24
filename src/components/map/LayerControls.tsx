@@ -243,9 +243,8 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
         <div className="flex items-start gap-2">
           <Info size={11} className="text-[#A8B4A8] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-[11px] text-[#A8B4A8] leading-relaxed">
-            Raster layers (Tree Cover, Biodiversity, Connectivity, Heat Exposure,
-            Land Use) appear once the corresponding PMTiles are exported and
-            uploaded to Supabase Storage.
+            Map layers are painted from hex cells using stats in cells.json.
+            Upload hexgrid, parks, park-stats, and cells chunks to Supabase Storage.
           </p>
         </div>
       </div>

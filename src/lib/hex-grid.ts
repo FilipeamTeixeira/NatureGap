@@ -1,4 +1,5 @@
 import { getParks } from './green-spaces';
+import { getCellStats } from './park-data';
 import { STORAGE } from './config';
 import {
   fetchPipelineJson,
@@ -130,6 +131,40 @@ export function filterHexGridToParks(): void {
 
   filteredHexGrid = { ...raw, features };
   console.info(`[hex-grid] ${features.length} cells retained inside named parks`);
+}
+
+/**
+ * Merge per-cell stats from cells.json onto hex features for map layer styling.
+ * Must run after initParkStats() and filterHexGridToParks().
+ */
+export function enrichHexGridWithCellStats(): void {
+  const base = filteredHexGrid ?? rawRuntimeHexGrid;
+  if (!base) return;
+
+  const stats = getCellStats();
+  if (Object.keys(stats).length === 0) return;
+
+  const features = base.features.map((f) => {
+    const cellId = String(f.properties?.cellId ?? '');
+    const cell = stats[cellId];
+    if (!cell) return f;
+
+    return {
+      ...f,
+      properties: {
+        ...f.properties,
+        habitatQuality: cell.habitatQuality,
+        observedRichness: cell.observedRichness,
+        corridorImportance: cell.corridorImportance,
+        treeCover: cell.treeCover ?? 0,
+        heatExposure: cell.heatExposure ?? 0,
+        landUseGreen: cell.landUseGreen ?? 0,
+      },
+    };
+  });
+
+  filteredHexGrid = { ...base, features };
+  console.info(`[hex-grid] Enriched ${features.length} cells with layer stats`);
 }
 
 export function getHexGrid(): GeoJSON.FeatureCollection {

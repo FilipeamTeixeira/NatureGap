@@ -11,7 +11,7 @@ import { MAP_LAYERS } from '@/lib/mock-data';
 import { getParks, initParks, type GreenSpace } from '@/lib/green-spaces';
 import { parkToCellData, cellToCellData, initParkStats } from '@/lib/park-data';
 import { initData } from '@/lib/data';
-import { initHexGrid, filterHexGridToParks } from '@/lib/hex-grid';
+import { initHexGrid, filterHexGridToParks, enrichHexGridWithCellStats } from '@/lib/hex-grid';
 import { IMPACT_LEGEND } from '@/lib/utils';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 
@@ -71,6 +71,7 @@ export default function Page() {
         // that the pipeline left as "city-green". Must run after both initHexGrid
         // and initParks have settled so park polygons are available.
         filterHexGridToParks();
+        enrichHexGridWithCellStats();
         setDataRevision((r) => r + 1);
       }
     });
@@ -78,7 +79,21 @@ export default function Page() {
   }, []);
 
   const toggleLayer = (id: string) => {
-    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
+    setLayers((prev) => {
+      const target = prev.find((l) => l.id === id);
+      if (!target) return prev;
+
+      // One thematic layer at a time — toggling on disables the others.
+      if (!target.enabled) {
+        return prev.map((l) => ({ ...l, enabled: l.id === id }));
+      }
+
+      const next = prev.map((l) => (l.id === id ? { ...l, enabled: false } : l));
+      if (!next.some((l) => l.enabled)) {
+        return next.map((l) => (l.id === 'impact' ? { ...l, enabled: true } : l));
+      }
+      return next;
+    });
   };
 
   const handleHexClick = (

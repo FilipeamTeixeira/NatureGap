@@ -1,70 +1,16 @@
 # NatureGap — Step 06: Export for Visualisation
-# Converts processed outputs to web-ready formats:
-#   - PMTiles (from Cloud-Optimised GeoTIFF) for raster layers
-#   - GeoJSON / PostGIS import for vector layers
+# Converts processed outputs to Supabase-ready JSON + GeoJSON:
+#   hexgrid.geojson (+ manifest/chunks), parks.geojson,
+#   park-stats.json, cells.json (+ manifest/chunks)
 #
-# Prerequisites:
-#   - pmtiles CLI: `pip install pmtiles` or `brew install felt/tap/tippecanoe`
-#   - GDAL >= 3.1 for COG output
-#   - Supabase project with PostGIS enabled
+# Map layers are painted client-side from cells.json stats on the hex grid.
 
 library(sf)
-library(terra)
 library(tidyverse)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
-
-run_pmtiles_convert <- function(input_path, output_path) {
-  pmtiles_bin <- Sys.which("pmtiles")
-  if (!nzchar(pmtiles_bin)) {
-    stop("pmtiles CLI not found on PATH. Install it before running export.R.", call. = FALSE)
-  }
-
-  args <- shQuote(c("convert", input_path, output_path))
-  cat(sprintf("Running: %s %s\n", pmtiles_bin, paste(args, collapse = " ")))
-  status <- system2(pmtiles_bin, args = args)
-  if (!identical(status, 0L)) {
-    stop(sprintf("pmtiles convert failed with exit status %s", status), call. = FALSE)
-  }
-}
-
-run_gdal_translate_mbtiles <- function(input_path, output_path) {
-  gdal_translate_bin <- Sys.which("gdal_translate")
-  if (!nzchar(gdal_translate_bin)) {
-    stop("gdal_translate not found on PATH. Install GDAL before running export.R.", call. = FALSE)
-  }
-
-  if (file.exists(output_path)) unlink(output_path)
-  args <- shQuote(c(
-    "-of", "MBTILES",
-    "-ot", "Byte",
-    "-scale", "0", "1", "0", "255",
-    "-co", "TILE_FORMAT=PNG",
-    input_path,
-    output_path
-  ))
-  cat(sprintf("Running: %s %s\n", gdal_translate_bin, paste(args, collapse = " ")))
-  status <- system2(gdal_translate_bin, args = args)
-  if (!identical(status, 0L)) {
-    stop(sprintf("gdal_translate MBTiles export failed with exit status %s", status), call. = FALSE)
-  }
-}
-
-run_gdaladdo <- function(input_path) {
-  gdaladdo_bin <- Sys.which("gdaladdo")
-  if (!nzchar(gdaladdo_bin)) {
-    stop("gdaladdo not found on PATH. Install GDAL before running export.R.", call. = FALSE)
-  }
-
-  args <- shQuote(c("-r", "average", input_path, "2", "4", "8", "16"))
-  cat(sprintf("Running: %s %s\n", gdaladdo_bin, paste(args, collapse = " ")))
-  status <- system2(gdaladdo_bin, args = args)
-  if (!identical(status, 0L)) {
-    stop(sprintf("gdaladdo failed with exit status %s", status), call. = FALSE)
-  }
-}
 
 write_geojson <- function(value, output_path) {
   if (file.exists(output_path)) unlink(output_path)
@@ -328,6 +274,9 @@ cell_stats_row <- function(row, max_expected) {
     species            = species_list(row$plant, row$bird, row$insect, row$mammal, row$fungi),
     corridorImportance = pct_index(row$corridor_importance),
     fragmentationIndex = pct_index(row$fragmentation_index),
+    treeCover          = pct_index(row$tree_fraction),
+    heatExposure       = pct_index(row$lst_rank),
+    landUseGreen       = pct_index(row$green_fraction_wc),
     pressures          = as.list(derive_pressures(
       row$n_obs, row$n_survey_dates, row$richness_corrected,
       row$expected_richness, row$ecological_residual,
@@ -378,121 +327,7 @@ aggregate_park_stats <- function(rows, max_expected) {
   )
 }
 
-# ── 1. Rasters → Cloud-Optimised GeoTIFF → PMTiles ───────────────────────────
-#
-# Map layer → pipeline source (must match src/lib/config.ts RASTER_LAYERS filenames):
-#   habitat_quality.pmtiles  ← habitat_quality.tif        (step 02)
-#   treecover.pmtiles        ← tree_fraction              (step 02 grid)
-#   biodiversity.pmtiles     ← richness_corrected       (step 05 grid, normalised)
-#   connectivity.pmtiles     ← corridor_importance      (step 04 grid)
-#   landuse.pmtiles          ← green_fraction_wc        (step 02 grid)
-#   lst.pmtiles              ← lst.tif                  (step 01 ingest, optional)
-
-rasterize_grid_field <- function(grid_sf, field, out_path) {
-  if (!field %in% names(grid_sf)) {
-    message(sprintf("Skipping raster — field '%s' not in grid", field))
-    return(invisible(FALSE))
-  }
-  v <- vect(grid_sf)
-  template <- rast(ext(v), res = CELL_SIZE, crs = CRS_LOCAL)
-  r <- rasterize(v, template, field = field)
-  writeRaster(r, out_path, overwrite = TRUE)
-  cat(sprintf("Written: %s (field: %s)\n", out_path, field))
-  invisible(TRUE)
-}
-
-#' Rasterise a grid column scaled to 0–1 for web colour ramps.
-rasterize_grid_normalized <- function(grid_sf, field, out_path, cap_quantile = 0.99) {
-  if (!field %in% names(grid_sf)) {
-    message(sprintf("Skipping raster — field '%s' not in grid", field))
-    return(invisible(FALSE))
-  }
-  vals <- grid_sf[[field]]
-  vals <- vals[!is.na(vals) & vals > 0]
-  if (length(vals) == 0) {
-    message(sprintf("Skipping raster — no positive values for '%s'", field))
-    return(invisible(FALSE))
-  }
-  cap <- as.numeric(stats::quantile(vals, cap_quantile, na.rm = TRUE))
-  if (!is.finite(cap) || cap <= 0) cap <- max(vals, na.rm = TRUE)
-  grid_norm <- grid_sf |>
-    mutate(.export_val = pmin(replace_na(.data[[field]], 0), cap) / cap)
-  rasterize_grid_field(grid_norm, ".export_val", out_path)
-}
-
-prepare_layer_rasters <- function() {
-  treecover_tif    <- file.path(DATA_EXPORT, "treecover.tif")
-  biodiversity_tif <- file.path(DATA_EXPORT, "biodiversity.tif")
-  connectivity_tif <- file.path(DATA_EXPORT, "connectivity.tif")
-  landuse_tif      <- file.path(DATA_EXPORT, "landuse.tif")
-
-  if (file.exists(PROC_GRID_HABITAT)) {
-    grid_hab <- st_read(PROC_GRID_HABITAT, quiet = TRUE)
-    rasterize_grid_field(grid_hab, "tree_fraction", treecover_tif)
-    rasterize_grid_field(grid_hab, "green_fraction_wc", landuse_tif)
-  } else {
-    message(sprintf("Skipping treecover/landuse — %s not found", PROC_GRID_HABITAT))
-  }
-
-  if (file.exists(PROC_GRID_RESID)) {
-    grid_resid <- st_read(PROC_GRID_RESID, quiet = TRUE) |>
-      filter(habitat_quality > 0)
-    rasterize_grid_normalized(grid_resid, "richness_corrected", biodiversity_tif)
-  } else {
-    message(sprintf("Skipping biodiversity — %s not found", PROC_GRID_RESID))
-  }
-
-  if (file.exists(PROC_GRID_CONN)) {
-    grid_conn <- st_read(PROC_GRID_CONN, quiet = TRUE)
-    rasterize_grid_field(grid_conn, "corridor_importance", connectivity_tif)
-  } else {
-    message(sprintf("Skipping connectivity — %s not found", PROC_GRID_CONN))
-  }
-
-  invisible(list(
-    treecover = treecover_tif,
-    biodiversity = biodiversity_tif,
-    connectivity = connectivity_tif,
-    landuse = landuse_tif
-  ))
-}
-
-layer_tifs <- prepare_layer_rasters()
-
-raster_layers <- c(
-  "habitat_quality" = PROC_HABITAT_TIF,
-  "treecover"       = layer_tifs$treecover,
-  "biodiversity"    = layer_tifs$biodiversity,
-  "connectivity"    = layer_tifs$connectivity,
-  "landuse"         = layer_tifs$landuse,
-  "lst"             = RAW_LST
-)
-
-for (layer_name in names(raster_layers)) {
-  input_tif <- raster_layers[[layer_name]]
-  if (!file.exists(input_tif)) {
-    message(sprintf("Skipping %s — file not found", input_tif))
-    next
-  }
-
-  cog_path    <- file.path(DATA_EXPORT, paste0(layer_name, "_cog.tif"))
-  mbtiles_path <- file.path(DATA_EXPORT, paste0(layer_name, ".mbtiles"))
-  pmtiles_path <- file.path(DATA_EXPORT, paste0(layer_name, ".pmtiles"))
-
-  # Reproject to WGS84 (required for PMTiles web serving)
-  r <- rast(input_tif) |> project("EPSG:4326")
-  writeRaster(r, cog_path, gdal = c("COMPRESS=DEFLATE", "TILED=YES",
-                                     "BLOCKXSIZE=512", "BLOCKYSIZE=512",
-                                     "COPY_SRC_OVERVIEWS=YES"),
-              overwrite = TRUE)
-
-  # Convert COG → MBTiles → PMTiles (pmtiles CLI expects MBTiles input)
-  run_gdal_translate_mbtiles(cog_path, mbtiles_path)
-  run_gdaladdo(mbtiles_path)
-  run_pmtiles_convert(mbtiles_path, pmtiles_path)
-}
-
-# ── 2. Park polygons → GeoJSON ───────────────────────────────────────────────
+# ── 1. Park polygons → GeoJSON ───────────────────────────────────────────────
 
 green_path <- RAW_OSM_GREEN
 if (file.exists(green_path)) {

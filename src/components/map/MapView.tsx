@@ -5,10 +5,13 @@ import maplibregl from 'maplibre-gl';
 import { wardCentroidsGeoJSON } from '@/lib/data';
 import { getHexGrid } from '@/lib/hex-grid';
 import { getParks } from '@/lib/green-spaces';
-import { IMPACT_LEGEND } from '@/lib/utils';
-import { MAP_CONFIG, type RasterLayerId } from '@/lib/config';
+import { MAP_CONFIG } from '@/lib/config';
 import type { MapLayer } from '@/lib/types';
-import { syncRasterLayers } from '@/lib/pmtiles-loader';
+import {
+  getActiveLayerId,
+  hexFillColorExpression,
+  LAYER_STYLE_SPECS,
+} from '@/lib/layer-styles';
 
 interface MapViewProps {
   layers: MapLayer[];
@@ -22,17 +25,6 @@ interface MapViewProps {
   flyToTarget?: { center: [number, number]; zoom: number } | null;
   dataRevision?: number;
 }
-
-
-const LAYER_MAP: Partial<Record<string, string[]>> = {
-  impact:       ['hex-fill', 'hex-outline', 'hex-selected', 'park-area'],
-  habitat:      ['raster-habitat'],
-  treecover:    ['raster-treecover'],
-  biodiversity: ['raster-biodiversity'],
-  connectivity: ['raster-connectivity'],
-  heat:         ['raster-heat'],
-  landuse:      ['raster-landuse'],
-};
 
 /** Build a GeoJSON FeatureCollection from parks for park-level click zones. */
 function parkPolygonsGeoJSON() {
@@ -48,6 +40,14 @@ function parkPolygonsGeoJSON() {
 
 function safeColor(color: unknown) {
   return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : '#3d6b2f';
+}
+
+function applyHexLayerStyle(map: maplibregl.Map, layers: MapLayer[]) {
+  const activeId = getActiveLayerId(layers);
+  const fillColor = hexFillColorExpression(activeId);
+  map.setPaintProperty('hex-fill', 'fill-color', fillColor);
+  map.setPaintProperty('hex-outline', 'line-color', fillColor);
+  map.setPaintProperty('hex-selected', 'fill-color', fillColor);
 }
 
 function medianHexForPark(parkId: string) {
@@ -130,11 +130,10 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const onClickRef = useRef(onHexClick);
-  /** Set to true once our custom sources/layers have been added to the map. */
   const layersAddedRef = useRef(false);
-  /** Latest layers prop — readable inside async map callbacks without stale closures. */
   const layersRef = useRef(layers);
-  const impactLayerEnabled = layers.some((layer) => layer.id === 'impact' && layer.enabled);
+  const activeLayerId = getActiveLayerId(layers);
+  const activeLegend = LAYER_STYLE_SPECS[activeLayerId];
 
   useEffect(() => {
     onClickRef.current = onHexClick;
@@ -162,10 +161,8 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
     map.on('load', () => {
-      // ── Park polygon source (click zones + boundary) ───────────────────────
       map.addSource('parks', { type: 'geojson', data: parkPolygonsGeoJSON() });
 
-      // Transparent fill — the primary click target (works at any zoom)
       map.addLayer({
         id: 'park-area',
         type: 'fill',
@@ -173,23 +170,24 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
         paint: { 'fill-color': '#3d6b2f', 'fill-opacity': 0 },
       });
 
-      // ── Hex grid source ────────────────────────────────────────────────────
       const hexGrid = getHexGrid();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addSource('hexgrid', { type: 'geojson', data: hexGrid as any });
+
+      const initialFill = hexFillColorExpression(getActiveLayerId(layersRef.current));
 
       map.addLayer({
         id: 'hex-fill',
         type: 'fill',
         source: 'hexgrid',
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.65 },
+        paint: { 'fill-color': initialFill, 'fill-opacity': 0.65 },
       });
 
       map.addLayer({
         id: 'hex-outline',
         type: 'line',
         source: 'hexgrid',
-        paint: { 'line-color': ['get', 'color'], 'line-width': 0.5, 'line-opacity': 0.8 },
+        paint: { 'line-color': initialFill, 'line-width': 0.5, 'line-opacity': 0.8 },
       });
 
       map.addLayer({
@@ -197,10 +195,9 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
         type: 'fill',
         source: 'hexgrid',
         filter: ['==', ['get', 'cellId'], ''],
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 },
+        paint: { 'fill-color': initialFill, 'fill-opacity': 0.85 },
       });
 
-      // ── Ward labels (on top) ───────────────────────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addSource('ward-labels', { type: 'geojson', data: wardCentroidsGeoJSON() as any });
       map.addLayer({
@@ -221,18 +218,8 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
         },
       });
 
-      // Mark our layers as ready and apply current visibility state
       layersAddedRef.current = true;
-      for (const layer of layersRef.current) {
-        const mlIds = LAYER_MAP[layer.id];
-        if (!mlIds) continue;
-        const vis = layer.enabled ? 'visible' : 'none';
-        for (const id of mlIds) {
-          try { map.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
-        }
-      }
 
-      // ── Cursor ────────────────────────────────────────────────────────────
       map.on('mouseenter', 'park-area', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'park-area', () => {
         map.getCanvas().style.cursor = '';
@@ -240,7 +227,6 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
         popupRef.current = null;
       });
 
-      // ── Hover tooltip — hex score when close enough, park name otherwise ──
       map.on('mousemove', 'hex-fill', (e) => {
         const f = e.features?.[0];
         if (!f) return;
@@ -258,13 +244,12 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
             parkName,
             score: numericScore,
             color,
-            showScore: !Number.isNaN(numericScore),
+            showScore: !Number.isNaN(numericScore) && getActiveLayerId(layersRef.current) === 'impact',
           }))
           .addTo(map);
       });
 
       map.on('mousemove', 'park-area', (e) => {
-        // Only show park-level tooltip when not over a hex (hex tooltip takes priority)
         const hexFeatures = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] });
         if (hexFeatures.length > 0) return;
 
@@ -281,7 +266,6 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
           .addTo(map);
       });
 
-      // ── Click — hex takes priority, park boundary is fallback ─────────────
       map.on('click', 'hex-fill', (e) => {
         e.preventDefault();
         const props = e.features?.[0]?.properties;
@@ -306,13 +290,13 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     });
 
     return () => {
+      layersAddedRef.current = false;
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // ── Sync selected highlight ────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -325,33 +309,20 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     else map.once('load', apply);
   }, [selectedCellId]);
 
-  // ── Sync layer visibility ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current || !layersAddedRef.current) return;
     const map = mapRef.current;
+    if (!map || !layersAddedRef.current) return;
 
-    for (const layer of layers) {
-      const mlIds = LAYER_MAP[layer.id];
-      if (!mlIds) continue;
-      const vis = layer.enabled ? 'visible' : 'none';
-      for (const id of mlIds) {
-        try { map.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
-      }
-    }
+    const apply = () => {
+      try {
+        applyHexLayerStyle(map, layers);
+      } catch { /* layers not ready yet */ }
+    };
 
-    const rasterEnabled = {
-      habitat:      layers.some((l) => l.id === 'habitat'      && l.enabled),
-      treecover:    layers.some((l) => l.id === 'treecover'    && l.enabled),
-      biodiversity: layers.some((l) => l.id === 'biodiversity' && l.enabled),
-      connectivity: layers.some((l) => l.id === 'connectivity' && l.enabled),
-      heat:         layers.some((l) => l.id === 'heat'         && l.enabled),
-      landuse:      layers.some((l) => l.id === 'landuse'      && l.enabled),
-    } satisfies Record<RasterLayerId, boolean>;
-
-    void syncRasterLayers(map, rasterEnabled);
+    if (map.isStyleLoaded()) apply();
+    else map.once('load', apply);
   }, [layers]);
 
-  // ── Refresh hex + park sources when pipeline data loads from Storage ────────
   useEffect(() => {
     if (!mapRef.current || !layersAddedRef.current || dataRevision === 0) return;
     const map = mapRef.current;
@@ -361,9 +332,11 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     const parkSrc = map.getSource('parks') as maplibregl.GeoJSONSource | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     parkSrc?.setData(parkPolygonsGeoJSON() as any);
+    try {
+      applyHexLayerStyle(map, layersRef.current);
+    } catch { /* ignore */ }
   }, [dataRevision]);
 
-  // ── Fly to a programmatic target (search selection) ───────────────────────
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;
     mapRef.current.flyTo({ center: flyToTarget.center, zoom: flyToTarget.zoom, duration: 900 });
@@ -373,21 +346,19 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     <div className="relative w-full h-full" style={{ minHeight: 0 }}>
       <div ref={containerRef} className="w-full h-full" style={{ position: 'absolute', inset: 0 }} />
 
-      {impactLayerEnabled && (
-        <div className="absolute top-3 right-3 bg-white/96 backdrop-blur-sm rounded-2xl border border-[#E4E7E1] p-4" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
-          <p className="text-[9px] font-semibold text-[#667066] uppercase tracking-widest mb-3">
-            Nature Impact Gap
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {IMPACT_LEGEND.map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-2.5">
-                <div className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-[10px] text-[#667066] leading-tight">{label}</span>
-              </div>
-            ))}
-          </div>
+      <div className="absolute top-3 right-3 bg-white/96 backdrop-blur-sm rounded-2xl border border-[#E4E7E1] p-4" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+        <p className="text-[9px] font-semibold text-[#667066] uppercase tracking-widest mb-3">
+          {activeLegend.title}
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {activeLegend.legend.map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ backgroundColor: color }} />
+              <span className="text-[10px] text-[#667066] leading-tight">{label}</span>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }

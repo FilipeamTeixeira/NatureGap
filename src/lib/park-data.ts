@@ -139,3 +139,8 @@ export function hasCellStats(cellId: string): boolean {
 export function getLoadedCellCount(): number {
   return Object.keys(runtimeCellStats).length;
 }
+
+/** Cell stats keyed by cellId — used to paint hex layers. */
+export function getCellStats(): Record<string, CellStatsFields> {
+  return runtimeCellStats;
+}
