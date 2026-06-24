@@ -1,87 +1,96 @@
 import Navbar from '@/components/layout/Navbar';
-import { Users, MapPin, CalendarDays } from 'lucide-react';
+import { Calendar, MapPin, Users } from 'lucide-react';
 
 const EVENTS = [
   {
-    title: 'Honmoku Bioblitz',
-    location: 'Sancho Park, Naka Ward',
-    date: 'Sat 12 Jul 2026 · 08:00',
-    description: 'Morning survey of Sancho and Shinhonmoku parks. All levels welcome. Bring the iNaturalist app.',
-    spots: 18,
+    title: 'Satoyama walk — Yokohama',
+    date: 'Sat 5 Jul 2025 · 09:00',
+    location: 'Sankei-en, Naka Ward',
+    attendees: 14,
+    type: 'Guided walk',
   },
   {
-    title: 'Yokohama Nature Walk',
-    location: 'Negishi Forest Park, Isogo',
-    date: 'Sun 20 Jul 2026 · 09:30',
-    description: 'Guided walk focusing on birds and summer insects. Led by local naturalist group.',
-    spots: 12,
+    title: 'iNaturalist bioblitz',
+    date: 'Sun 6 Jul 2025 · all day',
+    location: 'Kohoku Ward green belt',
+    attendees: 31,
+    type: 'Citizen science',
   },
   {
-    title: 'Kishine Park Planting Day',
-    location: 'Kishine Park, Kohoku Ward',
-    date: 'Sat 2 Aug 2026 · 09:00',
-    description: 'Native understorey planting to close the Kohoku corridor gap. Tools and gloves provided.',
-    spots: 24,
+    title: 'Pollinator corridor planting',
+    date: 'Sat 12 Jul 2025 · 10:00',
+    location: 'Honmoku Futo, Naka Ward',
+    attendees: 8,
+    type: 'Restoration',
+  },
+  {
+    title: 'Urban ecology talk',
+    date: 'Thu 17 Jul 2025 · 19:00',
+    location: 'Kanagawa University',
+    attendees: 55,
+    type: 'Event',
   },
 ];
+
+const TYPE_COLOR: Record<string, string> = {
+  'Guided walk':    'text-[#2E6F40] bg-[#DDEAD8]',
+  'Citizen science':'text-[#3A6A8A] bg-[#E3EDF5]',
+  'Restoration':    'text-[#9B6A1A] bg-[#FDF0DC]',
+  'Event':          'text-[#667066] bg-[#F0F2EE]',
+};
 
 export default function CommunityPage() {
   return (
     <div className="h-full flex flex-col">
       <Navbar activePath="/community" />
 
-      <div className="flex-1 overflow-y-auto bg-[#f7f8f6]">
+      <div className="flex-1 overflow-y-auto bg-[#F7F8F5]">
         <div className="max-w-2xl mx-auto px-6 py-12">
-          <h1 className="text-2xl font-semibold text-neutral-900 mb-2">Community</h1>
-          <p className="text-sm text-neutral-500 mb-10 leading-relaxed">
-            Local groups, upcoming events, and projects. The map is only as good as the observations
-            people contribute — here is how to get involved.
+          <h1 className="text-[24px] font-semibold text-[#1F2A1F] tracking-tight mb-2">
+            Community
+          </h1>
+          <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">
+            Local events and citizen science opportunities in Yokohama. Each event ties directly
+            to high-priority map cells.
           </p>
 
-          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-4">
-            Upcoming events
-          </h2>
+          <div className="flex flex-col gap-3">
+            {EVENTS.map(({ title, date, location, attendees, type }) => (
+              <div
+                key={title}
+                className="bg-white rounded-2xl p-5 border border-[#E4E7E1]"
+                style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h2 className="text-[14px] font-semibold text-[#1F2A1F] leading-snug">{title}</h2>
+                  <span
+                    className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLOR[type] ?? 'text-[#667066] bg-[#F0F2EE]'}`}
+                  >
+                    {type}
+                  </span>
+                </div>
 
-          <div className="flex flex-col gap-4 mb-12">
-            {EVENTS.map(({ title, location, date, description, spots }) => (
-              <div key={title} className="bg-white rounded-2xl p-6 border border-[#e4e7e3]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-neutral-900 mb-2">{title}</h3>
-                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 mb-1">
-                      <MapPin size={10} />
-                      {location}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 mb-3">
-                      <CalendarDays size={10} />
-                      {date}
-                    </div>
-                    <p className="text-xs text-neutral-500 leading-relaxed">{description}</p>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                    <Calendar size={11} className="text-[#A8B4A8]" />
+                    {date}
                   </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-400">
-                      <Users size={10} />
-                      {spots} spots
-                    </div>
-                    <span className="text-[10px] font-medium text-neutral-400 bg-[#f7f8f6] px-2.5 py-1 rounded-full">
-                      Sign-ups opening soon
-                    </span>
+                  <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                    <MapPin size={11} className="text-[#A8B4A8]" />
+                    {location}
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                    <Users size={11} className="text-[#A8B4A8]" />
+                    {attendees} registered
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-[#e4e7e3]">
-            <h2 className="text-sm font-semibold text-neutral-900 mb-1">Suggest an event</h2>
-            <p className="text-xs text-neutral-500 leading-relaxed">
-              Running a survey, planting session, or community clean-up? Add it here so others
-              can find and join.
-            </p>
-            <p className="mt-3 text-[11px] text-neutral-400">
-              Event submission will be enabled after community accounts are connected.
-            </p>
-          </div>
+          <p className="text-[11px] text-[#A8B4A8] mt-10 text-center">
+            To list an event, open an issue on GitHub with the tag <code className="font-mono">community-event</code>.
+          </p>
         </div>
       </div>
     </div>

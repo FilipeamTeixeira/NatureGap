@@ -11,11 +11,11 @@ export function formatScore(score: number): string {
 }
 
 export function getScoreColor(score: number): string {
-  if (score <= -20) return '#dc2626';
-  if (score <= -10) return '#f59e0b';
-  if (score < 5) return '#fbbf24';
-  if (score < 15) return '#22c55e';
-  return '#16a34a';
+  if (score <= -20) return '#C95B4B';
+  if (score <= -10) return '#E8A44C';
+  if (score < 5)    return '#B8C9AE';
+  if (score < 15)   return '#73A56D';
+  return '#2E6F40';
 }
 
 export function getScoreLabel(score: number): string {

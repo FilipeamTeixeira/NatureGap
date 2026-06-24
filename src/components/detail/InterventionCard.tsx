@@ -11,9 +11,9 @@ const CATEGORY_ICONS = {
 };
 
 const IMPACT_STYLES: Record<string, string> = {
-  high: 'text-[#3d6b2f] bg-[#3d6b2f]/8',
-  medium: 'text-amber-700 bg-amber-50',
-  low: 'text-neutral-500 bg-neutral-100',
+  high:   'text-[#2E6F40] bg-[#DDEAD8]',
+  medium: 'text-[#9B6A1A] bg-[#FDF0DC]',
+  low:    'text-[#667066] bg-[#F0F2EE]',
 };
 
 interface InterventionCardProps {
@@ -24,14 +24,14 @@ export default function InterventionCard({ intervention }: InterventionCardProps
   const Icon = CATEGORY_ICONS[intervention.category];
 
   return (
-    <div className="flex gap-3 py-3 border-b border-[#e4e7e3] last:border-0">
-      <div className="flex-shrink-0 w-7 h-7 bg-[#f7f8f6] rounded-md flex items-center justify-center mt-0.5">
-        <Icon size={13} className="text-neutral-400" />
+    <div className="flex gap-3 py-3.5 border-b border-[#E4E7E1] last:border-0 px-1">
+      <div className="flex-shrink-0 w-7 h-7 bg-[#F7F8F5] rounded-lg flex items-center justify-center mt-0.5">
+        <Icon size={13} className="text-[#667066]" strokeWidth={1.5} />
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2 justify-between">
-          <span className="text-sm font-medium text-neutral-800 leading-snug">{intervention.title}</span>
+        <div className="flex items-start gap-2 justify-between mb-0.5">
+          <span className="text-[13px] font-medium text-[#1F2A1F] leading-snug">{intervention.title}</span>
           <span
             className={cn(
               'text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 capitalize',
@@ -41,9 +41,9 @@ export default function InterventionCard({ intervention }: InterventionCardProps
             {intervention.impact}
           </span>
         </div>
-        <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">{intervention.description}</p>
+        <p className="text-[11px] text-[#667066] leading-relaxed">{intervention.description}</p>
         {intervention.connectivityGain && (
-          <div className="mt-1.5 text-[10px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full inline-block">
+          <div className="mt-1.5 text-[10px] font-semibold text-[#3A6A8A] bg-[#E3EDF5] px-2 py-0.5 rounded-full inline-block">
             +{intervention.connectivityGain}% network connectivity
           </div>
         )}

@@ -16,11 +16,11 @@ interface MapViewProps {
 }
 
 const LEGEND = [
-  { color: '#16a34a', label: 'Much better than expected' },
-  { color: '#22c55e', label: 'Better than expected' },
-  { color: '#fbbf24', label: 'As expected' },
-  { color: '#f59e0b', label: 'Worse than expected' },
-  { color: '#dc2626', label: 'Much worse than expected' },
+  { color: '#2E6F40', label: 'Much better than expected' },
+  { color: '#73A56D', label: 'Better than expected' },
+  { color: '#B8C9AE', label: 'As expected' },
+  { color: '#E8A44C', label: 'Worse than expected' },
+  { color: '#C95B4B', label: 'Much worse than expected' },
 ];
 
 const LAYER_MAP: Partial<Record<string, string[]>> = {
@@ -55,40 +55,51 @@ function createPopupContent({
   showScore: boolean;
 }) {
   const root = document.createElement('div');
-  root.style.fontFamily = 'system-ui,-apple-system,sans-serif';
-  root.style.padding = '8px 10px';
+  root.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
+  root.style.padding = '10px 14px';
+  root.style.minWidth = '140px';
 
   if (parkName) {
     const title = document.createElement('div');
     title.textContent = parkName;
     title.style.fontSize = '12px';
     title.style.fontWeight = '600';
-    title.style.color = '#1a1a1a';
-    title.style.marginBottom = showScore ? '3px' : '2px';
+    title.style.color = '#1F2A1F';
+    title.style.marginBottom = showScore ? '6px' : '4px';
+    title.style.lineHeight = '1.4';
     root.append(title);
   }
 
   if (showScore && typeof score === 'number') {
-    const label = document.createElement('div');
-    label.textContent = 'Nature impact score';
-    label.style.fontSize = '10px';
-    label.style.color = '#9ca3af';
-    label.style.marginBottom = '1px';
-    root.append(label);
+    const labelEl = document.createElement('div');
+    labelEl.textContent = 'Nature impact score';
+    labelEl.style.fontSize = '10px';
+    labelEl.style.fontWeight = '500';
+    labelEl.style.color = '#667066';
+    labelEl.style.letterSpacing = '0.03em';
+    labelEl.style.marginBottom = '2px';
+    root.append(labelEl);
 
     const value = document.createElement('div');
     value.textContent = score > 0 ? `+${score}` : String(score);
-    value.style.fontSize = '15px';
+    value.style.fontSize = '18px';
     value.style.fontWeight = '700';
     value.style.color = safeColor(color);
+    value.style.lineHeight = '1.2';
     root.append(value);
   }
 
+  const divider = document.createElement('div');
+  divider.style.height = '1px';
+  divider.style.background = '#E4E7E1';
+  divider.style.margin = showScore ? '8px -14px 6px' : '6px -14px 4px';
+  root.append(divider);
+
   const hint = document.createElement('div');
-  hint.textContent = 'Click to explore';
+  hint.textContent = 'Click to explore →';
   hint.style.fontSize = '10px';
-  hint.style.color = '#b0b0b0';
-  hint.style.marginTop = showScore ? '3px' : '0';
+  hint.style.fontWeight = '500';
+  hint.style.color = '#2E6F40';
   root.append(hint);
 
   return root;
@@ -310,33 +321,35 @@ export default function MapView({ layers, selectedCellId, onHexClick }: MapViewP
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Stats */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-[#e4e7e3] pointer-events-none">
-        <div className="flex items-center gap-8 px-5 py-2.5">
+      {/* Stats bar */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white/96 backdrop-blur-sm border-t border-[#E4E7E1] pointer-events-none">
+        <div className="flex items-center gap-8 px-6 py-3">
           {[
             { label: 'Observations today', value: formatNumber(GLOBAL_STATS.observationsToday) },
             { label: 'Species observed',   value: formatNumber(GLOBAL_STATS.speciesObserved) },
             { label: 'Areas improving',    value: String(GLOBAL_STATS.areasImproving) },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold text-neutral-900">{value}</span>
-              <span className="text-[11px] text-neutral-400">{label}</span>
+              <span className="text-[13px] font-semibold text-[#1F2A1F]">{value}</span>
+              <span className="text-[11px] text-[#667066]">{label}</span>
             </div>
           ))}
         </div>
       </div>
 
       {impactLayerEnabled && (
-        <div className="absolute top-12 right-3 bg-white/95 rounded-xl shadow-sm border border-[#e4e7e3] p-3">
-          <p className="text-[9px] font-semibold text-neutral-400 uppercase tracking-widest mb-2.5">
-            Nature Impact (gap)
+        <div className="absolute top-3 right-3 bg-white/96 backdrop-blur-sm rounded-2xl border border-[#E4E7E1] p-4" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+          <p className="text-[9px] font-semibold text-[#667066] uppercase tracking-widest mb-3">
+            Nature Impact Gap
           </p>
-          {LEGEND.map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-2 py-0.5">
-              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-              <span className="text-[10px] text-neutral-500">{label}</span>
-            </div>
-          ))}
+          <div className="flex flex-col gap-1.5">
+            {LEGEND.map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-[10px] text-[#667066] leading-tight">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -7,7 +7,7 @@ interface TrendChartProps {
 
 export default function TrendChart({ data }: TrendChartProps) {
   const W = 280;
-  const H = 70;
+  const H = 72;
   const padX = 8;
   const padY = 8;
   const innerW = W - padX * 2;
@@ -36,14 +36,14 @@ export default function TrendChart({ data }: TrendChartProps) {
   const showZero = min < 0 && max > 0;
 
   const isPositive = data[data.length - 1] >= data[0];
-  const lineColor = isPositive ? '#3d6b2f' : '#f59e0b';
+  const lineColor = isPositive ? '#2E6F40' : '#E8A44C';
   const fillId = `grad-${isPositive ? 'pos' : 'neg'}`;
 
   return (
     <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full">
       <defs>
         <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={lineColor} stopOpacity="0.18" />
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.12" />
           <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -54,7 +54,7 @@ export default function TrendChart({ data }: TrendChartProps) {
           y1={zeroY}
           x2={W - padX}
           y2={zeroY}
-          stroke="#e4e7e3"
+          stroke="#E4E7E1"
           strokeWidth="1"
           strokeDasharray="3 3"
         />
@@ -71,18 +71,16 @@ export default function TrendChart({ data }: TrendChartProps) {
         strokeLinecap="round"
       />
 
-      {/* First and last dots */}
       <circle cx={pts[0].x} cy={pts[0].y} r={2.5} fill={lineColor} />
       <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r={2.5} fill={lineColor} />
 
-      {/* Month labels */}
       {MONTH_INDICES.map((i) => (
         <text
           key={i}
-          x={pts[i].x}
+          x={pts[i]?.x ?? 0}
           y={H + 14}
           textAnchor="middle"
-          fill="#b0b0ae"
+          fill="#A8B4A8"
           style={{ fontSize: 8, fontFamily: 'inherit' }}
         >
           {MONTHS[i]}
