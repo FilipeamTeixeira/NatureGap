@@ -21,14 +21,9 @@ library(terra)
 library(tidyverse)
 library(landscapemetrics)
 
-DATA_RAW  <- here::here("data/raw")
-DATA_PROC <- here::here("data/processed")
-dir.create(DATA_PROC, recursive = TRUE, showWarnings = FALSE)
+if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
-# Yokohama city extent — must match BBOX_CITY in ingest.R
-BBOX_CITY <- c(xmin = 139.640415, ymin = 35.415460, xmax = 139.672859, ymax = 35.430148)
-CRS_LOCAL <- "EPSG:6674"   # JGD2011 / Japan Plane Rectangular CS VI
-CELL_SIZE <- 50            # metres — reduce for finer resolution (re-run full pipeline after changing)
+dir.create(DATA_PROC, recursive = TRUE, showWarnings = FALSE)
 
 # WorldCover class codes
 WC_TREE     <- 10L
@@ -77,7 +72,7 @@ cat(sprintf("Grid: %d cells at %dm resolution\n", nrow(grid), CELL_SIZE))
 #   built_fraction_wc  — proportion with class 50 (built-up, from WorldCover)
 #   green_fraction_wc  — proportion with any of: tree, shrub, grass, wetland, mangrove
 
-lc_path <- file.path(DATA_RAW, "landcover.tif")
+lc_path <- RAW_LANDCOVER
 
 if (file.exists(lc_path)) {
   cat("Extracting WorldCover class fractions...\n")
@@ -120,7 +115,7 @@ if (file.exists(lc_path)) {
 # Provides higher-accuracy built-up fraction than WorldCover alone.
 # Values already normalised to 0–1 by step 01.
 
-imp_path <- file.path(DATA_RAW, "impervious.tif")
+imp_path <- RAW_IMPERVIOUS
 
 if (file.exists(imp_path)) {
   cat("Extracting impervious surface fractions...\n")
@@ -135,7 +130,7 @@ if (file.exists(imp_path)) {
 # ── 4. OSM green space: supplemental area fraction ───────────────────────────
 # Provides fine-grained park boundary data to supplement WorldCover at 250m.
 
-green <- st_read(file.path(DATA_RAW, "osm_green_spaces.gpkg"), quiet = TRUE)
+green <- st_read(RAW_OSM_GREEN, quiet = TRUE)
 cell_area <- CELL_SIZE^2
 
 inter <- st_intersection(green, grid)
@@ -157,7 +152,7 @@ grid <- grid |>
 
 # ── 5. OSM path density (observer effort denominator) ────────────────────────
 
-paths <- st_read(file.path(DATA_RAW, "osm_paths.gpkg"), quiet = TRUE)
+paths <- st_read(RAW_OSM_PATHS, quiet = TRUE)
 
 inter <- st_intersection(paths, grid)
 
@@ -176,25 +171,29 @@ grid <- grid |>
   ) |>
   select(-path_length_m)
 
-# ── 6. Optional: NDVI and LST (uncomment if available) ───────────────────────
-# These supplement the WorldCover-based vegetation index with reflectance data.
+# ── 6. Optional: NDVI and LST ────────────────────────────────────────────────
+# Paths configured in pipeline/config.R (RAW_NDVI, RAW_LST).
 
 grid$ndvi_mean <- NA_real_
 grid$lst_rank  <- NA_real_
 
-# if (file.exists(file.path(DATA_RAW, "ndvi.tif"))) {
-#   ndvi <- rast(file.path(DATA_RAW, "ndvi.tif")) |> project(CRS_LOCAL)
-#   ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
-#   grid$ndvi_mean <- ndvi_mean$ndvi
-# }
-#
-# if (file.exists(file.path(DATA_RAW, "lst.tif"))) {
-#   lst <- rast(file.path(DATA_RAW, "lst.tif")) |> project(CRS_LOCAL)
-#   lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
-#   grid$lst_celsius <- lst_mean$lst_celsius
-#   grid$lst_rank    <- rank(grid$lst_celsius, na.last = "keep") /
-#                       sum(!is.na(grid$lst_celsius))
-# }
+if (file.exists(RAW_NDVI)) {
+  cat("Extracting NDVI per cell...\n")
+  ndvi <- rast(RAW_NDVI) |> project(CRS_LOCAL, method = "bilinear")
+  ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
+  grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
+}
+
+if (file.exists(RAW_LST)) {
+  cat("Extracting LST per cell...\n")
+  lst <- rast(RAW_LST) |> project(CRS_LOCAL, method = "bilinear")
+  lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
+  grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
+  n_lst <- sum(!is.na(grid$lst_celsius))
+  if (n_lst > 0L) {
+    grid$lst_rank <- rank(grid$lst_celsius, na.last = "keep") / n_lst
+  }
+}
 
 # ── 7. Composite habitat quality index ───────────────────────────────────────
 #
@@ -232,8 +231,8 @@ cat(sprintf(
   max(grid$habitat_quality,  na.rm = TRUE)
 ))
 
-st_write(grid, file.path(DATA_PROC, "grid_habitat.gpkg"), delete_dsn = TRUE)
-cat(sprintf("Written: %s\n", file.path(DATA_PROC, "grid_habitat.gpkg")))
+st_write(grid, PROC_GRID_HABITAT, delete_dsn = TRUE)
+cat(sprintf("Written: %s\n", PROC_GRID_HABITAT))
 
 # ── 8. Export habitat quality raster for PMTiles ─────────────────────────────
 
@@ -242,6 +241,6 @@ hab_rast <- rasterize(
   rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
   field = "habitat_quality"
 )
-writeRaster(hab_rast, file.path(DATA_PROC, "habitat_quality.tif"), overwrite = TRUE)
+writeRaster(hab_rast, PROC_HABITAT_TIF, overwrite = TRUE)
 cat("Written: habitat_quality.tif\n")
 

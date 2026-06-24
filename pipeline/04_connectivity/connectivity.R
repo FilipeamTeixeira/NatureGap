@@ -17,25 +17,23 @@ library(tidyverse)
 library(igraph)
 library(landscapemetrics)
 
-DATA_PROC <- here::here("data/processed")
+if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
-HAB_THRESHOLD <- 0.40  # cells above this are "habitat" patches
+HAB_THRESHOLD    <- 0.40  # cells above this are "habitat" patches
+CONN_RASTER_RES  <- max(CELL_SIZE * 5, 250)  # connectivity raster: coarser than grid
 
 # ── 1. Load habitat grid ─────────────────────────────────────────────────────
 
-grid <- st_read(file.path(DATA_PROC, "grid_habitat.gpkg"), quiet = TRUE) |>
+grid <- st_read(PROC_GRID_HABITAT, quiet = TRUE) |>
   mutate(is_habitat = habitat_quality >= HAB_THRESHOLD)
 
 cat(sprintf("Habitat cells: %d / %d\n", sum(grid$is_habitat), nrow(grid)))
 
 # ── 2. Rasterize habitat class ───────────────────────────────────────────────
 
-CRS_LOCAL <- "EPSG:6674"
-CELL_SIZE  <- 250
-
 hab_rast <- rasterize(
   vect(grid),
-  rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
+  rast(ext(vect(grid)), res = CONN_RASTER_RES, crs = CRS_LOCAL),
   field = "is_habitat"
 )
 
@@ -63,35 +61,51 @@ grid <- grid |>
   mutate(patch_area_ha = replace_na(patch_area_ha, 0))
 
 # ── 4. Adjacency graph for connectivity ──────────────────────────────────────
-# Nodes = habitat cells; edges = adjacency (queen's case)
-# Edge weight = mean resistance of both cells = mean(1 - habitat_quality)
+# Nodes = habitat cells; edges = queen/diagonal neighbours within one cell step.
+# Use CELL_SIZE (grid resolution), not CONN_RASTER_RES (patch-analysis raster).
 
-hab_cells <- grid |> filter(is_habitat) |> st_drop_geometry()
+hab_sf <- grid |> filter(is_habitat)
+hab_pts <- st_centroid(hab_sf)
+cell_ids <- hab_sf$cell_id
+qualities <- hab_sf$habitat_quality
 
-# Build adjacency from queen's neighbour rook + diagonal
-grid_coords <- st_coordinates(st_centroid(grid |> filter(is_habitat)))
+adj_threshold <- sqrt(2) * CELL_SIZE * 1.05  # diagonal neighbour + tolerance
 
-# Simple nearest-neighbour graph (within √2 × cell_size)
-dist_mat <- as.matrix(dist(grid_coords))
-adj_threshold <- sqrt(2) * CELL_SIZE * 1.05  # diagonal + 5% tolerance
+within <- st_is_within_distance(hab_pts, hab_pts, dist = adj_threshold, sparse = TRUE)
 
-edges <- which(dist_mat > 0 & dist_mat <= adj_threshold, arr.ind = TRUE)
-edges <- edges[edges[, 1] < edges[, 2], ]  # upper triangle only
+edges_list <- lapply(seq_along(within), function(i) {
+  neighbors <- within[[i]]
+  neighbors <- neighbors[neighbors > i]
+  if (length(neighbors) == 0) return(NULL)
+  data.frame(
+    from = cell_ids[i],
+    to = cell_ids[neighbors],
+    from_idx = i,
+    to_idx = neighbors
+  )
+})
+edges_df <- bind_rows(edges_list)
 
-from_ids <- hab_cells$cell_id[edges[, 1]]
-to_ids   <- hab_cells$cell_id[edges[, 2]]
+edge_resistance <- (
+  (1 - qualities[edges_df$from_idx]) + (1 - qualities[edges_df$to_idx])
+) / 2
 
-resistance_from <- 1 - hab_cells$habitat_quality[edges[, 1]]
-resistance_to   <- 1 - hab_cells$habitat_quality[edges[, 2]]
-edge_resistance  <- (resistance_from + resistance_to) / 2
+edges_df$weight <- edge_resistance
 
 g <- graph_from_data_frame(
-  data.frame(from = from_ids, to = to_ids, weight = edge_resistance),
+  edges_df |> select(from, to, weight),
   directed = FALSE,
-  vertices = data.frame(name = hab_cells$cell_id)
+  vertices = data.frame(name = cell_ids)
 )
 
 cat(sprintf("Graph: %d nodes, %d edges\n", vcount(g), ecount(g)))
+
+if (ecount(g) > vcount(g) * 12L) {
+  warning(sprintf(
+    "Graph has %d edges (expected ~6–8 per habitat cell). Check CELL_SIZE.",
+    ecount(g)
+  ), call. = FALSE)
+}
 
 # ── 5. Betweenness centrality → corridor importance ──────────────────────────
 # Normalised betweenness: 0 = unimportant node, 1 = key corridor bottleneck
@@ -101,8 +115,8 @@ eps <- min(edge_resistance_clean[edge_resistance_clean > 0], na.rm = TRUE) * 0.0
 
 edge_resistance_clean[edge_resistance_clean <= 0] <- eps
 E(g)$weight <- edge_resistance_clean
-bc <- betweenness(g, weights = E(g)$weight, normalized = TRUE)
 
+cat("Computing betweenness centrality...\n")
 bc <- betweenness(g, weights = E(g)$weight, normalized = TRUE)
 
 bc_df <- tibble(
@@ -115,7 +129,7 @@ bc_df <- tibble(
 
 # For each habitat cell, count non-habitat neighbours
 nb_counts <- get.adjacency(g, sparse = FALSE) |> rowSums()
-max_possible <- 8  # queen's case
+max_possible <- if (CELL_SIZE <= 15) 6L else 8L  # hex ≈ 6 neighbours; square queen = 8
 
 fragmentation_df <- tibble(
   cell_id            = as.integer(V(g)$name),
@@ -133,5 +147,5 @@ grid_conn <- grid |>
     fragmentation_index = replace_na(fragmentation_index, 1)
   )
 
-st_write(grid_conn, file.path(DATA_PROC, "grid_connectivity.gpkg"), delete_dsn = TRUE)
+st_write(grid_conn, PROC_GRID_CONN, delete_dsn = TRUE)
 cat("Written: grid_connectivity.gpkg\n")

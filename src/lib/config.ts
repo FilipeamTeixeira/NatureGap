@@ -74,5 +74,41 @@ export const SCORE_COLORS = {
 
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
+  /** Must match CITY_ID in pipeline/config.R — files live at <BUCKET>/<CITY_ID>/filename */
+  CITY_ID:         'yokohama-honmoku',
   PARK_STATS_KEY:  'park-stats.json',
+  CELLS_KEY:       'cells.json',
+  CELLS_MANIFEST_KEY: 'cells.manifest.json',
+  HEXGRID_MANIFEST_KEY: 'hexgrid.manifest.json',
 } as const;
+
+/** Must match MAX_EXPECTED_RICHNESS in pipeline/config.R */
+export const MAX_EXPECTED_RICHNESS = 350;
+
+// ── Pipeline raster layers (PMTiles from export step 06) ─────────────────────
+
+export type RasterLayerId = 'habitat' | 'ndvi' | 'lst';
+
+export const RASTER_LAYERS: Record<
+  RasterLayerId,
+  { file: string; sourceId: string; layerId: string; opacity: number }
+> = {
+  habitat: {
+    file: 'habitat_quality.pmtiles',
+    sourceId: 'raster-habitat',
+    layerId: 'raster-habitat',
+    opacity: 0.55,
+  },
+  ndvi: {
+    file: 'ndvi.pmtiles',
+    sourceId: 'raster-ndvi',
+    layerId: 'raster-ndvi',
+    opacity: 0.6,
+  },
+  lst: {
+    file: 'lst.pmtiles',
+    sourceId: 'raster-lst',
+    layerId: 'raster-lst',
+    opacity: 0.55,
+  },
+};

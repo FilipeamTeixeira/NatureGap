@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn, formatNumber } from '@/lib/utils';
 import { Layers, Info, MapPin, Search, TreePine, Map } from 'lucide-react';
 import { getGlobalStats, getWards } from '@/lib/data';
-import { GREEN_SPACES } from '@/lib/green-spaces';
+import { getParks } from '@/lib/green-spaces';
 import { CITY } from '@/lib/config';
 import type { MapLayer } from '@/lib/types';
 import type { WardFeature } from '@/lib/types';
@@ -23,6 +23,9 @@ type SearchResult =
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
   impact: 'Observed vs expected biodiversity, corrected for observer effort.',
+  habitat: 'Composite habitat quality from land cover, NDVI, and heat.',
+  ndvi: 'Sentinel-2 vegetation index — greener = higher NDVI.',
+  lst: 'Landsat land-surface temperature — warmer = more heat exposure.',
 };
 
 export default function LayerControls({ layers, onToggle, onParkSelect, onWardSelect }: LayerControlsProps) {
@@ -34,7 +37,7 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
     const q = query.trim().toLowerCase();
     if (!q) return [];
 
-    const parks: SearchResult[] = GREEN_SPACES
+    const parks: SearchResult[] = getParks()
       .filter((p) =>
         p.name.toLowerCase().includes(q) ||
         p.nameJa.includes(q) ||
@@ -237,7 +240,8 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
         <div className="flex items-start gap-2">
           <Info size={11} className="text-[#A8B4A8] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-[11px] text-[#A8B4A8] leading-relaxed">
-            Habitat, heat exposure, and connectivity layers will appear once the data pipeline export is complete.
+            NDVI and LST rasters appear when those files are exported and uploaded
+            to Supabase Storage alongside habitat_quality.pmtiles.
           </p>
         </div>
       </div>

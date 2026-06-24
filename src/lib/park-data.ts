@@ -1,19 +1,23 @@
 /**
- * Per-park statistics — stand-in for the JSON produced by the R pipeline
- * (pipeline/05_residuals → data/export/park-stats.json).
+ * Pipeline cell and park statistics.
  *
- * initParkStats() fetches fresh data from Supabase Storage if available;
- * parkToCellData() always falls back to the bundled local JSON.
+ * Data sources (in priority order):
+ *   1. Supabase Storage — cells.json + park-stats.json
+ *   2. Bundled public assets — /pipeline/<CITY_ID>/cells.json
+ *   3. Bundled src/data/park-stats.json (park aggregates only)
  */
 
-import type { CellData, HabitatPotential, ImpactStatus, Species } from './types';
+import type { CellData, CellStatsFields } from './types';
 import type { GreenSpace } from './green-spaces';
 import parkStatsData from '@/data/park-stats.json';
-import { parseParkStats } from './data-validation';
+import { parseCellsJson, parseParkStats } from './data-validation';
 import { supabase } from './supabase';
-import { SCORE_THRESHOLDS, STORAGE } from './config';
+import { STORAGE } from './config';
+import {
+  fetchPipelineJson,
+  mergeCellChunks,
+} from './storage-fetch';
 
-/** Centroid of a closed polygon ring. */
 function centroid(ring: [number, number][]): [number, number] {
   const pts = ring.slice(0, -1);
   if (pts.length === 0) return [0, 0];
@@ -22,154 +26,116 @@ function centroid(ring: [number, number][]): [number, number] {
   return [lng, lat];
 }
 
-type ParkStatsMap = ReturnType<typeof parseParkStats>;
-
-// Bundled local JSON — safe fallback, never throws at module load
-let localStats: ParkStatsMap = {};
+let localParkStats: Record<string, CellStatsFields> = {};
 try {
-  localStats = parseParkStats(parkStatsData);
+  localParkStats = parseParkStats(parkStatsData);
 } catch (e) {
   console.error('[park-data] Invalid bundled park-stats.json:', e);
 }
 
-// Runtime stats — replaced by Supabase fetch when available
-let runtimeStats: ParkStatsMap = localStats;
+let runtimeParkStats: Record<string, CellStatsFields> = localParkStats;
+let runtimeCellStats: Record<string, CellStatsFields> = {};
+let initCalled = false;
+
+async function fetchJsonFromStorage(path: string): Promise<unknown | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage
+    .from(STORAGE.PIPELINE_BUCKET)
+    .download(`${STORAGE.CITY_ID}/${path}`);
+  if (error || !data) return null;
+  return JSON.parse(await data.text());
+}
 
 /**
- * Fetch the latest park-stats.json from Supabase Storage and update the
- * in-memory cache. Safe to call multiple times — subsequent calls are no-ops
- * once a successful fetch has completed.
- *
- * Call once at app boot (e.g. in a root useEffect).
+ * Load cells.json and park-stats.json from Supabase or bundled public assets.
+ * cells.json may be split into chunks listed in cells.manifest.json.
  */
-let initCalled = false;
 export async function initParkStats(): Promise<void> {
-  if (initCalled || !supabase) return;
+  if (initCalled) return;
   initCalled = true;
 
   try {
-    const { data, error } = await supabase.storage
-      .from(STORAGE.PIPELINE_BUCKET)
-      .download(STORAGE.PARK_STATS_KEY);
+    const [cellsRaw, parksRaw] = await Promise.all([
+      fetchPipelineJson(
+        STORAGE.CELLS_KEY,
+        STORAGE.CELLS_MANIFEST_KEY,
+        mergeCellChunks,
+      ),
+      fetchJsonFromStorage(STORAGE.PARK_STATS_KEY),
+    ]);
 
-    if (error || !data) return;
+    const parsedCells = parseCellsJson(cellsRaw ?? {});
+    if (Object.keys(parsedCells).length > 0) {
+      runtimeCellStats = parsedCells;
+      console.info(`[park-data] Loaded ${Object.keys(parsedCells).length} cells`);
+    }
 
-    const text = await data.text();
-    const parsed = parseParkStats(JSON.parse(text));
-    runtimeStats = parsed;
+    if (parksRaw) {
+      runtimeParkStats = parseParkStats(parksRaw);
+      console.info(`[park-data] Loaded ${Object.keys(runtimeParkStats).length} park aggregates`);
+    }
   } catch (e) {
-    console.warn('[park-data] Supabase fetch failed, using local data:', e);
+    console.warn('[park-data] Remote fetch failed, using bundled data:', e);
   }
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+function statsForCell(cellId: string, parkId: string): CellStatsFields | null {
+  return runtimeCellStats[cellId] ?? runtimeParkStats[parkId] ?? null;
 }
 
-function statusFromScore(score: number): ImpactStatus {
-  const t = SCORE_THRESHOLDS;
-  if (score < t.MUCH_WORSE)  return 'much-worse';
-  if (score < t.WORSE)       return 'worse';
-  if (score < t.AS_EXPECTED) return 'as-expected';
-  if (score < t.BETTER)      return 'better';
-  return 'much-better';
-}
+/**
+ * Build CellData from a hex click — does not require a matching parks.geojson entry.
+ */
+export function cellToCellData(
+  cellId: string,
+  parkId: string,
+  parkName: string,
+  coordinates: [number, number],
+): CellData | null {
+  const stats = statsForCell(cellId, parkId);
+  if (!stats) return null;
 
-function habitatPotentialFromScore(score: number): HabitatPotential {
-  if (score >= 10)  return 'high';
-  if (score >= -12) return 'moderate';
-  return 'low';
-}
-
-function speciesFromObserved(observed: number): Species[] {
-  return [
-    { type: 'plant',  count: Math.max(0, Math.round(observed * 0.38)) },
-    { type: 'bird',   count: Math.max(0, Math.round(observed * 0.30)) },
-    { type: 'insect', count: Math.max(0, Math.round(observed * 0.18)) },
-    { type: 'mammal', count: Math.max(0, Math.round(observed * 0.08)) },
-    { type: 'fungi',  count: Math.max(0, Math.round(observed * 0.06)) },
-  ];
-}
-
-function scoreDrivenFields(score: number) {
-  const habitatQuality    = Math.round(clamp(58 + score * 1.2, 8, 96));
-  const expectedRichness  = Math.round(clamp(habitatQuality * 2.0, 18, 180));
-  const observedRichness  = Math.round(clamp(expectedRichness + score * 1.6, 6, 220));
+  const displayName =
+    parkName && parkName !== 'city-green'
+      ? parkName
+      : parkId === 'city-green'
+        ? 'Green area'
+        : parkName || parkId;
 
   return {
-    impactScore:       score,
-    habitatQuality,
-    observedRichness,
-    expectedRichness,
-    status:            statusFromScore(score),
-    habitatPotential:  habitatPotentialFromScore(score),
-    taxonomicDiversity: Number(clamp(2.1 + score / 35, 0.7, 4.2).toFixed(1)),
-    species:           speciesFromObserved(observedRichness),
-    corridorImportance: Math.round(clamp(71 + score * 0.8, 15, 95)),
-    fragmentationIndex: Math.round(clamp(75 - score * 0.9, 5, 95)),
-    trendData: Array.from({ length: 12 }, (_, i) =>
-      Math.round(score - 3 + i * 0.25 + Math.sin(i * 0.9) * 1.5),
-    ),
+    id: cellId,
+    name: displayName,
+    nameJa: displayName,
+    coordinates,
+    ...stats,
   };
 }
 
 /**
- * Return full CellData for a park.
- * Uses the latest fetched or bundled pipeline stats, with the clicked hex
- * score driving the cell-level biodiversity values.
+ * Build CellData for a map cell or park selection using pipeline stats only.
+ * Returns null when no pipeline data exists for the selection.
  */
-export function parkToCellData(park: GreenSpace, score: number, cellId = park.id): CellData {
-  const base = runtimeStats[park.id];
-  if (base) {
-    return {
-      id: cellId,
-      name: park.name,
-      nameJa: park.nameJa,
-      coordinates: centroid(park.ring),
-      ...base,
-      ...scoreDrivenFields(score),
-    };
-  }
+export function parkToCellData(
+  park: GreenSpace,
+  cellId: string,
+  coordinates?: [number, number],
+): CellData | null {
+  const stats = statsForCell(cellId, park.id);
+  if (!stats) return null;
 
-  // Generic fallback — for any park not yet in the pipeline output
-  const hq       = clamp(50 + score, 0, 100);
-  const expected = Math.round(hq * 2.8);
-  const observed = Math.max(0, Math.round(expected + score * 1.4));
   return {
     id: cellId,
     name: park.name,
     nameJa: park.nameJa,
-    coordinates: centroid(park.ring),
-    impactScore:        score,
-    habitatQuality:     hq,
-    observedRichness:   observed,
-    expectedRichness:   expected,
-    status:             statusFromScore(score),
-    habitatPotential:   habitatPotentialFromScore(score),
-    observerEffortScore: 3.1,
-    taxonomicDiversity:  2.0,
-    species:            speciesFromObserved(observed),
-    corridorImportance: clamp(60 + score, 10, 95),
-    fragmentationIndex: clamp(55 - score, 5, 95),
-    pressures: score < 0 ? ['Low native plant diversity', 'Below-average observer effort'] : [],
-    trendData: Array.from({ length: 12 }, (_, i) =>
-      Math.round(score + Math.sin(i * 0.8) * 2),
-    ),
-    interventions: [
-      {
-        id: 'i1',
-        title: 'Increase native plant cover',
-        description: 'Replace ornamental ground cover with species native to the Kanto region.',
-        impact: 'high',
-        category: 'pollinator',
-      },
-      {
-        id: 'i2',
-        title: 'Reduce mowing frequency',
-        description: 'Switch to biannual mowing to allow wildflower and insect establishment.',
-        impact: 'medium',
-        category: 'ground',
-      },
-    ],
+    coordinates: coordinates ?? centroid(park.ring),
+    ...stats,
   };
+}
+
+export function hasCellStats(cellId: string): boolean {
+  return cellId in runtimeCellStats;
+}
+
+export function getLoadedCellCount(): number {
+  return Object.keys(runtimeCellStats).length;
 }

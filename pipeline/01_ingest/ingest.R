@@ -19,19 +19,55 @@ library(rgbif)
 library(osmdata)
 library(tidyverse)
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-
-# Yokohama city extent (WGS84) — used for raster crop and habitat grid
-BBOX_CITY <- c(xmin = 139.640415, ymin = 35.415460, xmax = 139.672859, ymax = 35.430148)
-
-# Narrower fetch window for API calls (observation density is high enough here)
-BBOX_FETCH <- c(xmin = 139.640415, ymin = 35.415460, xmax = 139.672859, ymax = 35.430148)
-
-CRS_LOCAL    <- "EPSG:6674"   # JGD2011 / Japan Plane Rectangular CS VI
-DATA_RAW     <- here::here("data/raw")
-DATA_TO_IMP  <- here::here("data/to_import")
+if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 dir.create(DATA_RAW, recursive = TRUE, showWarnings = FALSE)
+
+config_path_exists <- function(path) {
+  !is.null(path) && length(path) == 1L && !is.na(path) && nzchar(path) && file.exists(path)
+}
+
+fetch_osm_sf <- function(query_fn, label) {
+  fallback_urls <- if (exists("OVERPASS_FALLBACK_URLS")) {
+    OVERPASS_FALLBACK_URLS
+  } else {
+    c(
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter"
+    )
+  }
+  primary_url <- if (exists("OVERPASS_URL")) {
+    OVERPASS_URL
+  } else {
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+  }
+  urls <- unique(c(primary_url, fallback_urls))
+  last_err <- NULL
+  for (url in urls) {
+    cat(sprintf("  → Fetching %s via %s\n", label, url))
+    set_overpass_url(url)
+    result <- tryCatch(query_fn(), error = function(e) {
+      last_err <<- e
+      NULL
+    })
+    if (!is.null(result)) return(result)
+    warning(sprintf(
+      "%s failed on %s: %s", label, url, conditionMessage(last_err)
+    ), call. = FALSE)
+  }
+  stop(sprintf(
+    "All Overpass endpoints failed for %s. Last error: %s",
+    label, conditionMessage(last_err)
+  ))
+}
+
+city_raster_ext <- function() {
+  ext(BBOX_CITY["xmin"], BBOX_CITY["xmax"], BBOX_CITY["ymin"], BBOX_CITY["ymax"])
+}
+
+crop_to_city <- function(r) {
+  crop(r, city_raster_ext())
+}
 
 # ── 1. iNaturalist observations ───────────────────────────────────────────────
 
@@ -48,7 +84,7 @@ inat_sf <- inat_obs |>
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |>
   st_transform(CRS_LOCAL)
 
-st_write(inat_sf, file.path(DATA_RAW, "inat_observations.gpkg"), delete_dsn = TRUE)
+st_write(inat_sf, RAW_INAT, delete_dsn = TRUE)
 cat(sprintf("  → %d iNaturalist records written\n", nrow(inat_sf)))
 
 # ── 2. GBIF observations ──────────────────────────────────────────────────────
@@ -66,31 +102,47 @@ gbif_sf <- gbif_raw |>
   st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) |>
   st_transform(CRS_LOCAL)
 
-st_write(gbif_sf, file.path(DATA_RAW, "gbif_observations.gpkg"), delete_dsn = TRUE)
+st_write(gbif_sf, RAW_GBIF, delete_dsn = TRUE)
 cat(sprintf("  → %d GBIF records written\n", nrow(gbif_sf)))
 
 # ── 3. OpenStreetMap: green spaces + path network ─────────────────────────────
 
 cat("Fetching OpenStreetMap features...\n")
+
 osm_bbox <- c(BBOX_FETCH["xmin"], BBOX_FETCH["ymin"],
               BBOX_FETCH["xmax"], BBOX_FETCH["ymax"])
 
-osm_green <- opq(bbox = osm_bbox) |>
-  add_osm_feature(key = "leisure",
-                  value = c("park", "nature_reserve", "garden")) |>
-  osmdata_sf()
+osm_green <- fetch_osm_sf(function() {
+  opq(bbox = osm_bbox) |>
+    add_osm_feature(key = "leisure",
+                    value = c("park", "nature_reserve", "garden")) |>
+    osmdata_sf()
+}, "OSM green spaces")
 
-green_polygons <- osm_green$osm_polygons |> st_transform(CRS_LOCAL)
-st_write(green_polygons, file.path(DATA_RAW, "osm_green_spaces.gpkg"), delete_dsn = TRUE)
+green_polygons <- if (!is.null(osm_green$osm_polygons)) {
+  osm_green$osm_polygons |> st_transform(CRS_LOCAL)
+} else {
+  warning("No OSM green space polygons returned — writing empty layer")
+  st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+}
+st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
+cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
 
-osm_paths <- opq(bbox = osm_bbox) |>
-  add_osm_feature(key = "highway",
-                  value = c("path", "footway", "pedestrian", "steps", "track")) |>
-  osmdata_sf()
+osm_paths <- fetch_osm_sf(function() {
+  opq(bbox = osm_bbox) |>
+    add_osm_feature(key = "highway",
+                    value = c("path", "footway", "pedestrian", "steps", "track")) |>
+    osmdata_sf()
+}, "OSM paths")
 
-path_lines <- osm_paths$osm_lines |> st_transform(CRS_LOCAL)
-st_write(path_lines, file.path(DATA_RAW, "osm_paths.gpkg"), delete_dsn = TRUE)
-cat("  → OSM features written\n")
+path_lines <- if (!is.null(osm_paths$osm_lines)) {
+  osm_paths$osm_lines |> st_transform(CRS_LOCAL)
+} else {
+  warning("No OSM path lines returned — writing empty layer")
+  st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+}
+st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
+cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
 
 # ── 4. ESA WorldCover 10m landcover classification ───────────────────────────
 #
@@ -104,16 +156,13 @@ cat("  → OSM features written\n")
 #
 # Output: data/raw/landcover.tif (cropped to Yokohama, kept in WGS84)
 
-wc_path <- file.path(DATA_TO_IMP, "worldcover",
-                     "ESA_WorldCover_10m_2021_v200_N33E138_Map.tif")
+wc_path <- WC_FILE
 
 if (file.exists(wc_path)) {
   cat("Processing ESA WorldCover...\n")
   lc_raw  <- rast(wc_path)
-  lc_ext  <- ext(BBOX_CITY["xmin"], BBOX_CITY["xmax"],
-                 BBOX_CITY["ymin"], BBOX_CITY["ymax"])
-  lc_crop <- crop(lc_raw, lc_ext)
-  writeRaster(lc_crop, file.path(DATA_RAW, "landcover.tif"), overwrite = TRUE,
+  lc_crop <- crop_to_city(lc_raw)
+  writeRaster(lc_crop, RAW_LANDCOVER, overwrite = TRUE,
               datatype = "INT1U")
   cat(sprintf("  → WorldCover written: %d × %d pixels at %.0fm resolution\n",
               nrow(lc_crop), ncol(lc_crop),
@@ -135,8 +184,7 @@ if (file.exists(wc_path)) {
 #
 # Output: data/raw/impervious.tif (cropped + reprojected to WGS84, values 0–1)
 
-emc_path <- file.path(DATA_TO_IMP, "emc_built",
-                      "EMC_BUILT_S_E2022_GLOBE_R2025A_54009_10_V1_0_R5_C31.tif")
+emc_path <- EMC_FILE
 
 if (file.exists(emc_path)) {
   cat("Processing EMC-BUILT impervious surface...\n")
@@ -162,7 +210,7 @@ if (file.exists(emc_path)) {
   impervious <- clamp(emc_wgs84 / scale_fac, 0, 1)
   names(impervious) <- "impervious_fraction"
 
-  writeRaster(impervious, file.path(DATA_RAW, "impervious.tif"), overwrite = TRUE,
+  writeRaster(impervious, RAW_IMPERVIOUS, overwrite = TRUE,
               datatype = "FLT4S")
   cat(sprintf(
     "  → Impervious surface written (scale factor: %g, city mean: %.2f)\n",
@@ -175,33 +223,66 @@ if (file.exists(emc_path)) {
   ))
 }
 
-# ── 6. Sentinel-2 NDVI (optional — manual download required) ─────────────────
-# Download a cloud-free Sentinel-2 L2A tile for Yokohama from:
-#   https://browser.dataspace.copernicus.eu/
-# Place the .SAFE folder at: data/raw/sentinel2/T54SUE_*.SAFE
-# Then uncomment and run.
+# ── 6. Sentinel-2 NDVI (optional) ───────────────────────────────────────────
+# Configure paths in pipeline/config.R (S2_NDVI_FILE or S2_SAFE_DIR).
 
-# sentinel_dir <- file.path(DATA_RAW, "sentinel2")
-# s2_bands <- list.files(sentinel_dir, pattern = "B0[48]_10m\\.jp2$",
-#                        recursive = TRUE, full.names = TRUE)
-# s2 <- rast(s2_bands)
-# ndvi <- (s2[[2]] - s2[[1]]) / (s2[[2]] + s2[[1]])
-# names(ndvi) <- "ndvi"
-# writeRaster(ndvi, file.path(DATA_RAW, "ndvi.tif"), overwrite = TRUE)
-# cat("  → NDVI raster written\n")
+ndvi_written <- FALSE
 
-# ── 7. Landsat LST (optional — manual download required) ─────────────────────
-# Download Landsat 8/9 Collection 2 Level-2 product for path/row 107/035 from:
-#   https://earthexplorer.usgs.gov/
-# Place the ST_B10 band at: data/raw/landsat/LC09_*_ST_B10.TIF
-# Then uncomment and run.
+if (config_path_exists(S2_NDVI_FILE)) {
+  cat(sprintf("Processing pre-computed NDVI: %s\n", S2_NDVI_FILE))
+  ndvi_crop <- crop_to_city(rast(S2_NDVI_FILE))
+  names(ndvi_crop) <- "ndvi"
+  writeRaster(ndvi_crop, RAW_NDVI, overwrite = TRUE, datatype = "FLT4S")
+  ndvi_written <- TRUE
+  cat(sprintf("  → NDVI written (%d m resolution configured)\n", NDVI_RES_M))
+} else if (config_path_exists(S2_SAFE_DIR)) {
+  b4 <- list.files(S2_SAFE_DIR, pattern = S2_RED_BAND_PATTERN,
+                   recursive = TRUE, full.names = TRUE)
+  b8 <- list.files(S2_SAFE_DIR, pattern = S2_NIR_BAND_PATTERN,
+                   recursive = TRUE, full.names = TRUE)
+  if (length(b4) > 0L && length(b8) > 0L) {
+    cat(sprintf("Building NDVI from Sentinel-2 SAFE in %s\n", S2_SAFE_DIR))
+    red <- rast(b4[1])
+    nir <- rast(b8[1])
+    ndvi <- (nir - red) / (nir + red)
+    names(ndvi) <- "ndvi"
+    ndvi_crop <- crop_to_city(ndvi)
+    writeRaster(ndvi_crop, RAW_NDVI, overwrite = TRUE, datatype = "FLT4S")
+    ndvi_written <- TRUE
+    cat(sprintf("  → NDVI written from %s / %s\n", basename(b4[1]), basename(b8[1])))
+  }
+}
 
-# lst_file <- list.files(file.path(DATA_RAW, "landsat"),
-#                        pattern = "ST_B10\\.TIF$", full.names = TRUE)[1]
-# lst <- rast(lst_file) * 0.00341802 + 149 - 273.15   # DN → Celsius
-# names(lst) <- "lst_celsius"
-# writeRaster(lst, file.path(DATA_RAW, "lst.tif"), overwrite = TRUE)
-# cat("  → LST raster written\n")
+if (!ndvi_written) {
+  message(
+    "Skipping NDVI — set S2_NDVI_FILE or add a .SAFE product under S2_SAFE_DIR in config.R"
+  )
+}
+
+# ── 7. Landsat LST (optional) ───────────────────────────────────────────────
+# Configure LST_FILE (or LST_DIR + LST_BAND_PATTERN) in pipeline/config.R.
+
+lst_written <- FALSE
+lst_source  <- NA_character_
+
+if (config_path_exists(LST_FILE)) {
+  lst_source <- LST_FILE
+} else if (config_path_exists(LST_DIR)) {
+  matches <- list.files(LST_DIR, pattern = LST_BAND_PATTERN, full.names = TRUE)
+  if (length(matches) > 0L) lst_source <- matches[1]
+}
+
+if (!is.na(lst_source)) {
+  cat(sprintf("Processing Landsat LST: %s\n", lst_source))
+  lst_raw <- rast(lst_source) * LST_DN_SCALE + LST_DN_OFFSET - 273.15
+  names(lst_raw) <- "lst_celsius"
+  lst_crop <- crop_to_city(lst_raw)
+  writeRaster(lst_crop, RAW_LST, overwrite = TRUE, datatype = "FLT4S")
+  lst_written <- TRUE
+  cat("  → LST raster written (°C)\n")
+} else {
+  message("Skipping LST — set LST_FILE or add ST_B10 under LST_DIR in config.R")
+}
 
 cat("\nIngestion complete. Check data/raw/ for outputs.\n")
 

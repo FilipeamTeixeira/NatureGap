@@ -4,15 +4,21 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import { wardCentroidsGeoJSON } from '@/lib/data';
 import { getHexGrid } from '@/lib/hex-grid';
-import { GREEN_SPACES } from '@/lib/green-spaces';
+import { getParks } from '@/lib/green-spaces';
 import { IMPACT_LEGEND } from '@/lib/utils';
-import { MAP_CONFIG } from '@/lib/config';
+import { MAP_CONFIG, type RasterLayerId } from '@/lib/config';
 import type { MapLayer } from '@/lib/types';
+import { syncRasterLayers } from '@/lib/pmtiles-loader';
 
 interface MapViewProps {
   layers: MapLayer[];
   selectedCellId: string | null;
-  onHexClick: (parkId: string, cellId: string, score: number) => void;
+  onHexClick: (
+    parkId: string,
+    cellId: string,
+    coordinates: [number, number],
+    parkName?: string,
+  ) => void;
   flyToTarget?: { center: [number, number]; zoom: number } | null;
   dataRevision?: number;
 }
@@ -20,13 +26,16 @@ interface MapViewProps {
 
 const LAYER_MAP: Partial<Record<string, string[]>> = {
   impact: ['hex-fill', 'hex-outline', 'hex-selected', 'park-area'],
+  habitat: ['raster-habitat'],
+  ndvi: ['raster-ndvi'],
+  lst: ['raster-lst'],
 };
 
-/** Build a GeoJSON FeatureCollection from GREEN_SPACES for park-level click zones. */
+/** Build a GeoJSON FeatureCollection from parks for park-level click zones. */
 function parkPolygonsGeoJSON() {
   return {
     type: 'FeatureCollection' as const,
-    features: GREEN_SPACES.map((p) => ({
+    features: getParks().map((p) => ({
       type: 'Feature' as const,
       properties: { parkId: p.id, parkName: p.name, wardId: p.wardId },
       geometry: { type: 'Polygon' as const, coordinates: [p.ring] },
@@ -271,28 +280,25 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
 
       // ── Click — hex takes priority, park boundary is fallback ─────────────
       map.on('click', 'hex-fill', (e) => {
-        e.preventDefault(); // prevent park-area click from also firing
+        e.preventDefault();
         const props = e.features?.[0]?.properties;
         if (!props) return;
         const parkId = String(props.parkId ?? '');
         const cellId = String(props.cellId ?? parkId);
-        const score = Number(props.score);
-        if (!parkId || Number.isNaN(score)) return;
-        onClickRef.current(parkId, cellId, score);
+        const parkName = props.parkName != null ? String(props.parkName) : undefined;
+        if (!parkId || !cellId) return;
+        onClickRef.current(parkId, cellId, [e.lngLat.lng, e.lngLat.lat], parkName);
       });
 
       map.on('click', 'park-area', (e) => {
-        if (e.defaultPrevented) return; // hex already handled it
+        if (e.defaultPrevented) return;
         const props = e.features?.[0]?.properties;
         if (!props) return;
         const parkId = String(props.parkId ?? '');
         if (!parkId) return;
-        // Use the full park hexgrid, not only MapLibre's currently rendered viewport.
         const medianHex = medianHexForPark(parkId);
-        const medianScore = medianHex
-          ? medianHex.score
-          : 0;
-        onClickRef.current(parkId, medianHex?.cellId ?? parkId, medianScore);
+        const cellId = medianHex?.cellId ?? parkId;
+        onClickRef.current(parkId, cellId, [e.lngLat.lng, e.lngLat.lat]);
       });
     });
 
@@ -317,26 +323,38 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
   }, [selectedCellId]);
 
   // ── Sync layer visibility ──────────────────────────────────────────────────
-  // Runs whenever layers prop changes (user toggle). Guards on layersAddedRef so
-  // we never call setLayoutProperty before our custom layers exist.
   useEffect(() => {
     if (!mapRef.current || !layersAddedRef.current) return;
+    const map = mapRef.current;
+
     for (const layer of layers) {
       const mlIds = LAYER_MAP[layer.id];
       if (!mlIds) continue;
       const vis = layer.enabled ? 'visible' : 'none';
       for (const id of mlIds) {
-        try { mapRef.current.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
+        try { map.setLayoutProperty(id, 'visibility', vis); } catch { /* ignore */ }
       }
     }
+
+    const rasterEnabled = {
+      habitat: layers.some((l) => l.id === 'habitat' && l.enabled),
+      ndvi: layers.some((l) => l.id === 'ndvi' && l.enabled),
+      lst: layers.some((l) => l.id === 'lst' && l.enabled),
+    } satisfies Record<RasterLayerId, boolean>;
+
+    void syncRasterLayers(map, rasterEnabled);
   }, [layers]);
 
-  // ── Refresh hex source when pipeline data loads from Storage ──────────────
+  // ── Refresh hex + park sources when pipeline data loads from Storage ────────
   useEffect(() => {
     if (!mapRef.current || !layersAddedRef.current || dataRevision === 0) return;
-    const src = mapRef.current.getSource('hexgrid') as maplibregl.GeoJSONSource | undefined;
+    const map = mapRef.current;
+    const hexSrc = map.getSource('hexgrid') as maplibregl.GeoJSONSource | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    src?.setData(getHexGrid() as any);
+    hexSrc?.setData(getHexGrid() as any);
+    const parkSrc = map.getSource('parks') as maplibregl.GeoJSONSource | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parkSrc?.setData(parkPolygonsGeoJSON() as any);
   }, [dataRevision]);
 
   // ── Fly to a programmatic target (search selection) ───────────────────────

@@ -1,7 +1,7 @@
-import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
+import type { CellStatsFields, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 import type { GreenSpace } from './green-spaces';
 
-type ParkStats = Omit<CellData, 'id' | 'name' | 'nameJa' | 'coordinates'>;
+export type ParkStats = CellStatsFields;
 
 const IMPACT_STATUSES = ['much-worse', 'worse', 'as-expected', 'better', 'much-better'] satisfies ImpactStatus[];
 const HABITAT_POTENTIALS = ['low', 'moderate', 'high'] satisfies HabitatPotential[];
@@ -22,7 +22,14 @@ function isNumber(value: unknown): value is number {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(isString);
+  if (typeof value === 'string') return true;
+  return Array.isArray(value) && value.every((v) => typeof v === 'string');
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
+  return [];
 }
 
 function isLngLat(value: unknown): value is [number, number] {
@@ -52,14 +59,20 @@ function isIntervention(value: unknown): value is Intervention {
   );
 }
 
-function assertParkStats(value: unknown, id: string): asserts value is ParkStats {
-  if (!isRecord(value)) throw new Error(`Invalid park-stats entry for ${id}: expected object`);
+function assertCellStats(value: unknown, id: string): asserts value is CellStatsFields {
+  if (!isRecord(value)) throw new Error(`Invalid stats entry for ${id}: expected object`);
 
   const valid =
     isNumber(value.impactScore) &&
     isNumber(value.habitatQuality) &&
+    isNumber(value.habitatQualityIndex) &&
+    isNumber(value.speciesRichnessRaw) &&
     isNumber(value.observedRichness) &&
     isNumber(value.expectedRichness) &&
+    isNumber(value.maxExpectedRichness) &&
+    isNumber(value.ecologicalResidual) &&
+    isNumber(value.nObs) &&
+    isNumber(value.nSurveyDates) &&
     typeof value.status === 'string' &&
     IMPACT_STATUSES.includes(value.status as ImpactStatus) &&
     typeof value.habitatPotential === 'string' &&
@@ -71,13 +84,18 @@ function assertParkStats(value: unknown, id: string): asserts value is ParkStats
     Array.isArray(value.species) &&
     value.species.every(isSpecies) &&
     isStringArray(value.pressures) &&
-    Array.isArray(value.trendData) &&
-    value.trendData.length === 12 &&
-    value.trendData.every(isNumber) &&
     Array.isArray(value.interventions) &&
     value.interventions.every(isIntervention);
 
-  if (!valid) throw new Error(`Invalid park-stats entry for ${id}`);
+  if (!valid) throw new Error(`Invalid stats entry for ${id}`);
+}
+
+function normalizeCellStats(value: Record<string, unknown>): CellStatsFields {
+  assertCellStats(value, 'entry');
+  return {
+    ...(value as CellStatsFields),
+    pressures: normalizeStringArray(value.pressures),
+  };
 }
 
 export function parseGreenSpaces(value: unknown): GreenSpace[] {
@@ -112,9 +130,21 @@ export function parseGreenSpaces(value: unknown): GreenSpace[] {
 export function parseParkStats(value: unknown): Record<string, ParkStats> {
   if (!isRecord(value)) throw new Error('Invalid park-stats data: expected object keyed by park id');
 
+  const out: Record<string, ParkStats> = {};
   for (const [id, stats] of Object.entries(value)) {
-    assertParkStats(stats, id);
+    if (!isRecord(stats)) throw new Error(`Invalid park-stats entry for ${id}: expected object`);
+    out[id] = normalizeCellStats(stats);
   }
+  return out;
+}
 
-  return value as Record<string, ParkStats>;
+export function parseCellsJson(value: unknown): Record<string, ParkStats> {
+  if (!isRecord(value)) throw new Error('Invalid cells.json: expected object keyed by cell id');
+
+  const out: Record<string, ParkStats> = {};
+  for (const [id, stats] of Object.entries(value)) {
+    if (!isRecord(stats)) throw new Error(`Invalid cells.json entry for ${id}: expected object`);
+    out[id] = normalizeCellStats(stats);
+  }
+  return out;
 }

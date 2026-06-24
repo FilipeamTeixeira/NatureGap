@@ -33,6 +33,11 @@ export default async function TakeActionPage() {
           </p>
 
           <div className="flex flex-col gap-3">
+            {actions.length === 0 ? (
+              <p className="text-[14px] text-[#667066] leading-relaxed">
+                No recommended actions are loaded yet. Configure Supabase or run the pipeline export.
+              </p>
+            ) : null}
             {actions.map(({ id, icon, title, description, impact, time }) => {
               const Icon = ICON_MAP[icon] ?? Leaf;
               return (

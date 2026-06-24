@@ -1,21 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { X, ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { X, ArrowLeft } from 'lucide-react';
 import { cn, getScoreLabel } from '@/lib/utils';
-import { SCORE_THRESHOLDS, CITY } from '@/lib/config';
+import { SCORE_THRESHOLDS, CITY, MAX_EXPECTED_RICHNESS } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import ScoreGauge from './ScoreGauge';
-import TrendChart from './TrendChart';
 import InterventionCard from './InterventionCard';
 
-type Tab = 'overview' | 'biodiversity' | 'habitat' | 'trends' | 'actions';
+type Tab = 'overview' | 'biodiversity' | 'habitat' | 'actions';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'biodiversity', label: 'Biodiversity' },
   { id: 'habitat', label: 'Habitat' },
-  { id: 'trends', label: 'Trends' },
   { id: 'actions', label: 'Actions' },
 ];
 
@@ -59,18 +57,78 @@ function CardSubtitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
+  const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
+  return (
+    <div className="mt-4 pt-4 border-t border-[#E4E7E1] flex flex-col gap-3">
+      <p className="text-[12px] font-medium text-[#1F2A1F]">Why is expected richness {cell.expectedRichness}?</p>
+      <p className="text-[12px] text-[#667066] leading-relaxed">
+        Expected richness is a habitat-based index, not a field survey. The pipeline estimates
+        how many species a cell could support given its land-cover quality:
+      </p>
+      <div className="bg-[#F7F8F5] rounded-xl p-4 font-mono text-[12px] text-[#1F2A1F] leading-relaxed">
+        expected = habitat quality ({cell.habitatQualityIndex.toFixed(3)}) × {cell.maxExpectedRichness}
+        <br />
+        = {cell.expectedRichness.toFixed(1)} species
+      </div>
+      <ul className="text-[12px] text-[#667066] leading-relaxed flex flex-col gap-2 list-disc pl-4">
+        <li>
+          Habitat quality ({hqPct}%) comes from satellite land cover (WorldCover tree/shrub/grass
+          fractions and impervious surface).
+        </li>
+        <li>
+          {cell.maxExpectedRichness} is the study-area upper bound for a fully vegetated cell
+          (configured in the pipeline as MAX_EXPECTED_RICHNESS).
+        </li>
+        <li>
+          This is a simple index for comparison across cells — not a calibrated species
+          distribution model.
+        </li>
+      </ul>
+      <p className="text-[12px] text-[#667066] leading-relaxed">
+        Ecological residual = observed ({cell.observedRichness.toFixed(1)}) − expected
+        ({cell.expectedRichness.toFixed(1)}) = {cell.ecologicalResidual.toFixed(1)}.
+        {' '}Negative values mean observed biodiversity is below the habitat expectation.
+      </p>
+    </div>
+  );
+}
+
+function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
+  return (
+    <div className="mt-4 pt-4 border-t border-[#E4E7E1] flex flex-col gap-3">
+      <p className="text-[12px] font-medium text-[#1F2A1F]">How observed richness is calculated</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[#F7F8F5] rounded-xl p-4">
+          <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{cell.speciesRichnessRaw}</div>
+          <div className="text-[11px] text-[#667066] mt-1.5">Raw distinct taxa</div>
+        </div>
+        <div className="bg-[#F7F8F5] rounded-xl p-4">
+          <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{cell.nSurveyDates}</div>
+          <div className="text-[11px] text-[#667066] mt-1.5">Survey dates</div>
+        </div>
+      </div>
+      <p className="text-[12px] text-[#667066] leading-relaxed">
+        {cell.nObs} iNaturalist and GBIF records in this cell ({cell.speciesRichnessRaw} distinct
+        scientific names). The headline observed value ({cell.observedRichness.toFixed(1)}) is
+        effort-corrected: raw richness ÷ log(1 + survey dates) so cells with many repeat visits
+        are not inflated relative to under-surveyed areas.
+      </p>
+      <p className="text-[12px] text-[#667066] leading-relaxed">
+        Taxonomic breakdown counts distinct taxa per group (plants, birds, insects, mammals,
+        fungi) from iNaturalist iconic taxon and GBIF class fields.
+      </p>
+    </div>
+  );
+}
+
 export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview');
   const isUnder = cell.impactScore < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
-
-  const trendDir =
-    cell.trendData.length >= 2
-      ? cell.trendData[cell.trendData.length - 1] - cell.trendData[0]
-      : 0;
+  const speciesTotal = cell.species.reduce((s, sp) => s + sp.count, 0);
 
   return (
     <div className="w-[440px] flex-shrink-0 bg-[#F7F8F5] border-l border-[#E4E7E1] flex flex-col overflow-hidden">
-      {/* Panel header */}
       <div className="px-6 pt-5 pb-0 flex-shrink-0 bg-white border-b border-[#E4E7E1]">
         <button
           onClick={onClose}
@@ -96,7 +154,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           </button>
         </div>
 
-        {/* Status badge row */}
         <div className="flex items-center gap-2 mb-4">
           <span
             className={cn(
@@ -122,7 +179,6 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           </span>
         </div>
 
-        {/* Tabs */}
         <div className="flex -mx-6 px-6 overflow-x-auto">
           {TABS.map((t) => (
             <button
@@ -141,30 +197,22 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
-
-        {/* ─── OVERVIEW ─────────────────────────────────────────────────── */}
         {tab === 'overview' && (
           <div className="p-5 flex flex-col gap-4">
-
-            {/* Ecological Diagnosis card */}
             <Card>
-              <CardTitle>Ecological Diagnosis</CardTitle>
-              <CardSubtitle>Nature impact score</CardSubtitle>
+              <CardTitle>Ecological diagnosis</CardTitle>
+              <CardSubtitle>Nature impact score from pipeline</CardSubtitle>
               <div className="flex items-center gap-5">
                 <ScoreGauge score={cell.impactScore} />
                 <div className="flex-1">
                   <p className="text-[12px] text-[#667066] leading-relaxed">
-                    {cell.habitatPotential === 'high'
-                      ? 'This landscape could support high biodiversity.'
-                      : cell.habitatPotential === 'moderate'
-                        ? 'Moderate habitat capacity based on land cover.'
-                        : 'Limited habitat capacity based on land cover.'}
+                    Impact score normalises the ecological residual (observed − expected richness)
+                    across the study grid to roughly −50…+50.
                   </p>
                   {cell.pressures.length > 0 && (
                     <div className="mt-3 flex flex-col gap-1.5">
-                      {cell.pressures.slice(0, 2).map((p) => (
+                      {cell.pressures.slice(0, 3).map((p) => (
                         <div key={p} className="flex items-start gap-2 text-[11px] text-[#667066]">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#E8A44C] mt-1.5 flex-shrink-0" />
                           {p}
@@ -176,39 +224,41 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               </div>
             </Card>
 
-            {/* Biodiversity KPI card */}
             <Card>
               <CardTitle>Biodiversity</CardTitle>
-              <CardSubtitle>Observed vs expected species richness</CardSubtitle>
+              <CardSubtitle>Observed vs expected (effort-corrected index)</CardSubtitle>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.observedRichness}
+                    {cell.observedRichness.toFixed(1)}
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Species observed</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Observed (corrected)</div>
+                  <div className="text-[10px] text-[#A8B4A8] mt-1">{cell.speciesRichnessRaw} raw taxa</div>
                 </div>
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.expectedRichness}
+                    {cell.expectedRichness.toFixed(0)}
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Species expected</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Expected (habitat index)</div>
+                  <div className="text-[10px] text-[#A8B4A8] mt-1">HQ {cell.habitatQuality}%</div>
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4 border-t border-[#E4E7E1]">
-                {cell.species.map((s) => (
-                  <div key={s.type} className="flex flex-col items-center gap-0.5">
-                    <span className="text-[14px] font-semibold text-[#1F2A1F]">{s.count}</span>
-                    <span className="text-[9px] text-[#667066] uppercase tracking-wide">{SPECIES_LABELS[s.type]}</span>
-                  </div>
-                ))}
-              </div>
+              {speciesTotal > 0 && (
+                <div className="flex gap-4 pt-4 border-t border-[#E4E7E1]">
+                  {cell.species.filter((s) => s.count > 0).map((s) => (
+                    <div key={s.type} className="flex flex-col items-center gap-0.5">
+                      <span className="text-[14px] font-semibold text-[#1F2A1F]">{s.count}</span>
+                      <span className="text-[9px] text-[#667066] uppercase tracking-wide">{SPECIES_LABELS[s.type]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
-            {/* Habitat metrics card */}
             <Card>
-              <CardTitle>Habitat Metrics</CardTitle>
-              <CardSubtitle>Land cover indicators</CardSubtitle>
+              <CardTitle>Habitat metrics</CardTitle>
+              <CardSubtitle>From pipeline land cover and connectivity</CardSubtitle>
               <div className="flex flex-col gap-4">
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
@@ -234,33 +284,12 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               </div>
             </Card>
 
-            {/* Trend card */}
-            <Card>
-              <div className="flex items-start justify-between mb-1">
-                <div>
-                  <CardTitle>Impact Trend</CardTitle>
-                  <CardSubtitle>12-month history</CardSubtitle>
-                </div>
-                <div className="flex items-center gap-1 text-[12px] font-medium mt-0.5">
-                  {trendDir > 0 ? (
-                    <><TrendingUp size={13} className="text-[#2E6F40]" /><span className="text-[#2E6F40]">Improving</span></>
-                  ) : trendDir < 0 ? (
-                    <><TrendingDown size={13} className="text-[#C95B4B]" /><span className="text-[#C95B4B]">Declining</span></>
-                  ) : (
-                    <><Minus size={13} className="text-[#667066]" /><span className="text-[#667066]">Stable</span></>
-                  )}
-                </div>
-              </div>
-              <TrendChart data={cell.trendData} />
-            </Card>
-
-            {/* Actions preview */}
             {cell.interventions.length > 0 && (
               <Card>
                 <div className="flex items-start justify-between mb-1">
                   <div>
-                    <CardTitle>Recommended Actions</CardTitle>
-                    <CardSubtitle>Ranked by ecological impact</CardSubtitle>
+                    <CardTitle>Recommended actions</CardTitle>
+                    <CardSubtitle>From pipeline intervention ranking</CardSubtitle>
                   </div>
                   <button
                     onClick={() => setTab('actions')}
@@ -277,65 +306,90 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           </div>
         )}
 
-        {/* ─── BIODIVERSITY ─────────────────────────────────────────────── */}
         {tab === 'biodiversity' && (
           <div className="p-5 flex flex-col gap-4">
             <Card>
-              <CardTitle>Species breakdown</CardTitle>
-              <CardSubtitle>All recorded taxa</CardSubtitle>
-              <div className="grid grid-cols-2 gap-3 mb-5">
+              <CardTitle>Observed richness</CardTitle>
+              <CardSubtitle>From iNaturalist + GBIF records in this cell</CardSubtitle>
+              <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.observedRichness}</div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Observed species</div>
-                </div>
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.expectedRichness}</div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Expected species</div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {cell.species.map((s) => (
-                  <div key={s.type} className="flex items-center gap-3">
-                    <div className="w-20 text-[12px] text-[#667066]">{SPECIES_LABELS[s.type]}</div>
-                    <div className="flex-1 h-1.5 bg-[#E4E7E1] rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${(s.count / Math.max(cell.observedRichness, 1)) * 100}%`,
-                          backgroundColor: '#73A56D',
-                        }}
-                      />
-                    </div>
-                    <div className="w-7 text-[12px] font-semibold text-[#1F2A1F] text-right">{s.count}</div>
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                    {cell.observedRichness.toFixed(1)}
                   </div>
-                ))}
+                  <div className="text-[11px] text-[#667066] mt-1.5">Effort-corrected index</div>
+                </div>
+                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.nObs}</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Total records</div>
+                </div>
               </div>
+              <ObservedRichnessExplainer cell={cell} />
             </Card>
 
             <Card>
+              <CardTitle>Expected richness</CardTitle>
+              <CardSubtitle>Habitat-based benchmark (index)</CardSubtitle>
+              <div className="bg-[#F7F8F5] rounded-xl p-4 mb-2">
+                <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                  {cell.expectedRichness.toFixed(1)}
+                </div>
+                <div className="text-[11px] text-[#667066] mt-1.5">
+                  At habitat quality {cell.habitatQualityIndex.toFixed(3)} × max {MAX_EXPECTED_RICHNESS}
+                </div>
+              </div>
+              <ExpectedRichnessExplainer cell={cell} />
+            </Card>
+
+            {speciesTotal > 0 && (
+              <Card>
+                <CardTitle>Taxonomic breakdown</CardTitle>
+                <CardSubtitle>{speciesTotal} distinct taxa by group</CardSubtitle>
+                <div className="flex flex-col gap-3">
+                  {cell.species.map((s) => (
+                    <div key={s.type} className="flex items-center gap-3">
+                      <div className="w-20 text-[12px] text-[#667066]">{SPECIES_LABELS[s.type]}</div>
+                      <div className="flex-1 h-1.5 bg-[#E4E7E1] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${(s.count / Math.max(speciesTotal, 1)) * 100}%`,
+                            backgroundColor: '#73A56D',
+                          }}
+                        />
+                      </div>
+                      <div className="w-7 text-[12px] font-semibold text-[#1F2A1F] text-right">{s.count}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <Card>
               <CardTitle>Diversity indices</CardTitle>
-              <CardSubtitle>Statistical measures</CardSubtitle>
+              <CardSubtitle>From pipeline observation layer</CardSubtitle>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.taxonomicDiversity.toFixed(1)}</div>
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                    {cell.taxonomicDiversity.toFixed(1)}
+                  </div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Shannon diversity</div>
                 </div>
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.observerEffortScore.toFixed(1)}</div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Obs / km effort</div>
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                    {cell.observerEffortScore.toFixed(1)}
+                  </div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Records / km path</div>
                 </div>
               </div>
             </Card>
           </div>
         )}
 
-        {/* ─── HABITAT ──────────────────────────────────────────────────── */}
         {tab === 'habitat' && (
           <div className="p-5 flex flex-col gap-4">
             <Card>
               <CardTitle>Habitat metrics</CardTitle>
-              <CardSubtitle>Land cover indicators</CardSubtitle>
+              <CardSubtitle>Land cover and connectivity from pipeline</CardSubtitle>
               <div className="flex flex-col gap-5">
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
@@ -368,47 +422,18 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           </div>
         )}
 
-        {/* ─── TRENDS ───────────────────────────────────────────────────── */}
-        {tab === 'trends' && (
-          <div className="p-5 flex flex-col gap-4">
-            <Card>
-              <CardTitle>Impact trend</CardTitle>
-              <CardSubtitle>12-month history</CardSubtitle>
-              <TrendChart data={cell.trendData} />
-              <p className="text-[12px] text-[#667066] leading-relaxed mt-4">
-                The nature impact score tracks the gap between expected and observed biodiversity,
-                corrected for observer effort. Values near zero indicate nature is performing as
-                expected for the habitat type.
-              </p>
-            </Card>
-
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: '12-month high', value: Math.max(...cell.trendData) },
-                { label: '12-month low', value: Math.min(...cell.trendData) },
-                { label: 'Average', value: parseFloat((cell.trendData.reduce((a, b) => a + b, 0) / cell.trendData.length).toFixed(1)) },
-              ].map(({ label, value }) => (
-                <Card key={label} className="!p-4">
-                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{value}</div>
-                  <div className="text-[10px] text-[#667066] mt-1.5">{label}</div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ─── ACTIONS ──────────────────────────────────────────────────── */}
         {tab === 'actions' && (
           <div className="p-5">
             <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Recommended actions</p>
-            <p className="text-[12px] text-[#667066] mb-4">Ranked by ecological impact</p>
+            <p className="text-[12px] text-[#667066] mb-4">Ranked by pipeline composite intervention score</p>
             <Card className="!p-0 !overflow-hidden">
               {cell.interventions.map((iv) => (
                 <InterventionCard key={iv.id} intervention={iv} />
               ))}
               {cell.interventions.length === 0 && (
                 <p className="text-[13px] text-[#667066] leading-relaxed p-6">
-                  No ranked interventions are available for this area yet.
+                  No ranked interventions are available for this area. Actions are assigned only
+                  to cells in the pipeline&apos;s top intervention list.
                 </p>
               )}
             </Card>

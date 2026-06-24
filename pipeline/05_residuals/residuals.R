@@ -18,7 +18,7 @@ library(sf)
 library(tidyverse)
 library(igraph)
 
-DATA_PROC <- here::here("data/processed")
+if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 W_RESIDUAL    <- 0.55  # weight on underperformance in composite score
 W_CORRIDOR    <- 0.45  # weight on corridor importance
@@ -26,12 +26,13 @@ TOP_N         <- 20    # number of cells for counterfactual connectivity
 
 # ── 1. Load and join layers ──────────────────────────────────────────────────
 
-hab  <- st_read(file.path(DATA_PROC, "grid_habitat.gpkg"),     quiet = TRUE)
-obs  <- st_read(file.path(DATA_PROC, "grid_observations.gpkg"),quiet = TRUE) |>
+hab  <- st_read(PROC_GRID_HABITAT,     quiet = TRUE)
+obs  <- st_read(PROC_GRID_OBS,quiet = TRUE) |>
   st_drop_geometry() |>
-  select(cell_id, richness_corrected, n_obs, species_shannon)
+  select(cell_id, species_richness, richness_corrected, n_obs, species_shannon,
+         n_survey_dates, plant, bird, insect, mammal, fungi)
 
-conn <- st_read(file.path(DATA_PROC, "grid_connectivity.gpkg"),quiet = TRUE) |>
+conn <- st_read(PROC_GRID_CONN,quiet = TRUE) |>
   st_drop_geometry() |>
   select(cell_id, corridor_importance, fragmentation_index, patch_area_ha)
 
@@ -47,11 +48,11 @@ grid <- hab |>
 # In future work, this should be replaced with a species distribution model
 # trained on independent validation data.
 
-MAX_EXPECTED <- 350  # rough upper bound for Yokohama urban biodiversity
+if (!exists("MAX_EXPECTED_RICHNESS")) MAX_EXPECTED_RICHNESS <- 350L
 
 grid <- grid |>
   mutate(
-    expected_richness = habitat_quality * MAX_EXPECTED,
+    expected_richness = habitat_quality * MAX_EXPECTED_RICHNESS,
     richness_corrected = replace_na(richness_corrected, 0),
     ecological_residual = richness_corrected - expected_richness,
     underperformance = pmax(0, -ecological_residual)
@@ -139,8 +140,8 @@ top_cells <- top_cells |>
 
 # ── 7. Write outputs ─────────────────────────────────────────────────────────
 
-st_write(grid, file.path(DATA_PROC, "grid_residuals.gpkg"), delete_dsn = TRUE)
-write_csv(top_cells, file.path(DATA_PROC, "top_interventions.csv"))
+st_write(grid, PROC_GRID_RESID, delete_dsn = TRUE)
+write_csv(top_cells, PROC_TOP_INTER)
 
 cat("Written: grid_residuals.gpkg\n")
 cat("Written: top_interventions.csv\n")

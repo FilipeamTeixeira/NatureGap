@@ -18,12 +18,11 @@ library(tidyverse)
 library(lubridate)
 library(vegan)
 
-DATA_RAW  <- here::here("data/raw")
-DATA_PROC <- here::here("data/processed")
+if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 # ── 1. Load grid ──────────────────────────────────────────────────────────────
 
-grid <- st_read(file.path(DATA_PROC, "grid_habitat.gpkg"), quiet = TRUE)
+grid <- st_read(PROC_GRID_HABITAT, quiet = TRUE)
 
 # ── 2. Load and standardise observations ──────────────────────────────────────
 # Both sources are transformed to the grid CRS here and held in that CRS
@@ -34,7 +33,7 @@ grid <- st_read(file.path(DATA_PROC, "grid_habitat.gpkg"), quiet = TRUE)
 #   - GBIF eventDate can be "YYYY-MM-DDTHH:MM:SS" (ISO 8601 datetime string)
 # as.Date() alone chokes on the datetime format, hence parse_date_time() for GBIF.
 
-inat_std <- st_read(file.path(DATA_RAW, "inat_observations.gpkg"), quiet = TRUE) |>
+inat_std <- st_read(RAW_INAT, quiet = TRUE) |>
   st_transform(st_crs(grid)) |>
   mutate(
     taxon_name  = scientific_name,
@@ -44,7 +43,7 @@ inat_std <- st_read(file.path(DATA_RAW, "inat_observations.gpkg"), quiet = TRUE)
 
 st_geometry(inat_std) <- "geometry"
 
-gbif_std <- st_read(file.path(DATA_RAW, "gbif_observations.gpkg"), quiet = TRUE) |>
+gbif_std <- st_read(RAW_GBIF, quiet = TRUE) |>
   st_transform(st_crs(grid)) |>
   mutate(
     taxon_name        = species,
@@ -98,12 +97,41 @@ species_matrix <- obs_joined |>
   pivot_wider(names_from = taxon_name, values_from = n, values_fill = 0) |>
   column_to_rownames("cell_id")
 
-shannon <- diversity(species_matrix, index = "shannon")
+shannon <- vegan::diversity(species_matrix, index = "shannon")
 
 diversity_df <- tibble(
   cell_id         = as.integer(rownames(species_matrix)),
   species_shannon = shannon
 )
+
+# ── 5b. Taxonomic group counts (distinct taxa per UI category) ───────────────
+# Maps iNaturalist iconic_taxon_name and GBIF class to the five frontend groups.
+
+classify_taxon_group <- function(label) {
+  x <- tolower(as.character(label))
+  dplyr::case_when(
+    is.na(x) | x == "" ~ NA_character_,
+    x %in% c("plantae", "chromista") ~ "plant",
+    grepl("^(plant|magnoli|pinopsida|liliopsida|polypodi)", x) ~ "plant",
+    x == "aves" | grepl("bird", x) ~ "bird",
+    x %in% c("insecta", "arachnida") | grepl("insect|spider|arthropod", x) ~ "insect",
+    x %in% c("mammalia", "amphibia", "reptilia", "actinopterygii", "animalia") ~ "mammal",
+    x == "fungi" | grepl("fung", x) ~ "fungi",
+    TRUE ~ NA_character_
+  )
+}
+
+taxon_counts <- obs_joined |>
+  st_drop_geometry() |>
+  mutate(taxon_group = classify_taxon_group(iconic_taxon_name)) |>
+  filter(!is.na(taxon_group)) |>
+  group_by(cell_id, taxon_group) |>
+  summarise(count = n_distinct(taxon_name), .groups = "drop") |>
+  pivot_wider(names_from = taxon_group, values_from = count, values_fill = 0)
+
+for (col in c("plant", "bird", "insect", "mammal", "fungi")) {
+  if (!col %in% names(taxon_counts)) taxon_counts[[col]] <- 0L
+}
 
 # ── 6. Effort correction ──────────────────────────────────────────────────────
 # Corrected richness = species_richness / log1p(n_survey_dates)
@@ -119,6 +147,7 @@ diversity_df <- tibble(
 richness_corrected <- richness |>
   left_join(grid |> st_drop_geometry() |> select(cell_id, path_km), by = "cell_id") |>
   left_join(diversity_df, by = "cell_id") |>
+  left_join(taxon_counts, by = "cell_id") |>
   mutate(
     path_km            = replace_na(path_km, 0),
     richness_corrected = species_richness / log1p(pmax(n_survey_dates, 1))
@@ -131,9 +160,15 @@ grid_obs <- grid |>
   mutate(
     n_obs              = replace_na(n_obs, 0L),
     species_richness   = replace_na(species_richness, 0L),
-    richness_corrected = replace_na(richness_corrected, 0)
+    richness_corrected = replace_na(richness_corrected, 0),
+    n_survey_dates     = replace_na(n_survey_dates, 0L),
+    plant              = replace_na(plant, 0L),
+    bird               = replace_na(bird, 0L),
+    insect             = replace_na(insect, 0L),
+    mammal             = replace_na(mammal, 0L),
+    fungi              = replace_na(fungi, 0L)
   )
 
-st_write(grid_obs, file.path(DATA_PROC, "grid_observations.gpkg"), delete_dsn = TRUE)
+st_write(grid_obs, PROC_GRID_OBS, delete_dsn = TRUE)
 cat(sprintf("Written: grid_observations.gpkg (%d cells)\n", nrow(grid_obs)))
 

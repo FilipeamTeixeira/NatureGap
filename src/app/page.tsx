@@ -8,13 +8,12 @@ import LayerControls from '@/components/map/LayerControls';
 import CellDetailPanel from '@/components/detail/CellDetailPanel';
 import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
 import { MAP_LAYERS } from '@/lib/mock-data';
-import { GREEN_SPACES } from '@/lib/green-spaces';
-import { parkToCellData, initParkStats } from '@/lib/park-data';
+import { getParks, initParks, type GreenSpace } from '@/lib/green-spaces';
+import { parkToCellData, cellToCellData, initParkStats } from '@/lib/park-data';
 import { initData } from '@/lib/data';
-import { medianScoreForPark, initHexGrid } from '@/lib/hex-grid';
+import { initHexGrid, filterHexGridToParks } from '@/lib/hex-grid';
 import { IMPACT_LEGEND } from '@/lib/utils';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
-import type { GreenSpace } from '@/lib/green-spaces';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
@@ -66,8 +65,14 @@ export default function Page() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([initParkStats(), initData(), initHexGrid()]).finally(() => {
-      if (!cancelled) setDataRevision((r) => r + 1);
+    Promise.allSettled([initParkStats(), initData(), initHexGrid(), initParks()]).finally(() => {
+      if (!cancelled) {
+        // Clip runtime hexgrid to park polygons and re-assign parkId for cells
+        // that the pipeline left as "city-green". Must run after both initHexGrid
+        // and initParks have settled so park polygons are available.
+        filterHexGridToParks();
+        setDataRevision((r) => r + 1);
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -76,23 +81,32 @@ export default function Page() {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
   };
 
-  const handleHexClick = (parkId: string, cellId: string, score: number) => {
-    const park = GREEN_SPACES.find((p) => p.id === parkId) ?? {
-      id: parkId,
-      name: 'Yokohama',
-      nameJa: '横浜市',
-      wardId: '',
-      ring: [] as [number, number][],
-    };
-    setSelectedCell(parkToCellData(park, score, cellId));
-    setSelectedWard(null);
+  const handleHexClick = (
+    parkId: string,
+    cellId: string,
+    coordinates: [number, number],
+    parkName?: string,
+  ) => {
+    const cell =
+      cellToCellData(cellId, parkId, parkName ?? parkId, coordinates) ??
+      (() => {
+        const park = getParks().find((p) => p.id === parkId);
+        return park ? parkToCellData(park, cellId, coordinates) : null;
+      })();
+
+    if (cell) {
+      setSelectedCell(cell);
+      setSelectedWard(null);
+    }
   };
 
   const handleParkSelect = (park: GreenSpace) => {
-    const score = medianScoreForPark(park.id);
-    setSelectedCell(parkToCellData(park, score, park.id));
-    setSelectedWard(null);
-    setFlyToTarget({ center: centroid(park.ring), zoom: 17 });
+    const cell = parkToCellData(park, park.id, centroid(park.ring));
+    if (cell) {
+      setSelectedCell(cell);
+      setSelectedWard(null);
+      setFlyToTarget({ center: centroid(park.ring), zoom: 17 });
+    }
   };
 
   const handleWardSelect = (ward: WardFeature) => {
