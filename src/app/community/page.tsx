@@ -46,7 +46,7 @@ export default function CommunityPage() {
 
       <div className="flex-1 overflow-y-auto bg-[#F7F8F5]">
         <div className="max-w-2xl mx-auto px-6 py-12">
-          <h1 className="text-[24px] font-semibold text-[#1F2A1F] tracking-tight mb-2">
+          <h1 className="text-[32px] font-semibold text-[#1F2A1F] tracking-tight leading-tight mb-2">
             Community
           </h1>
           <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">

@@ -34,7 +34,7 @@ interface CellDetailPanelProps {
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={cn('bg-white rounded-2xl border border-[#E4E7E1] p-5', className)}
+      className={cn('bg-white rounded-2xl border border-[#E4E7E1] p-6', className)}
       style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
     >
       {children}
@@ -42,9 +42,17 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function CardTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest mb-3">
+    <h3 className="text-[15px] font-semibold text-[#1F2A1F] mb-1">
+      {children}
+    </h3>
+  );
+}
+
+function CardSubtitle({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] text-[#667066] uppercase tracking-widest mb-4">
       {children}
     </p>
   );
@@ -73,8 +81,8 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0 pr-3">
-            <h2 className="font-semibold text-[#1F2A1F] text-[16px] leading-tight">{cell.name}</h2>
-            <p className="text-[12px] text-[#667066] mt-0.5">
+            <h2 className="font-semibold text-[#1F2A1F] text-[18px] leading-tight">{cell.name}</h2>
+            <p className="text-[13px] text-[#667066] mt-0.5">
               {cell.nameJa} · Yokohama
             </p>
           </div>
@@ -120,7 +128,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                'text-[12px] py-2.5 px-3 -mb-px border-b-2 transition-colors font-medium whitespace-nowrap flex-shrink-0',
+                'text-[13px] py-2.5 px-3 -mb-px border-b-2 transition-colors font-medium whitespace-nowrap flex-shrink-0',
                 tab === t.id
                   ? 'border-[#2E6F40] text-[#2E6F40]'
                   : 'border-transparent text-[#667066] hover:text-[#1F2A1F]',
@@ -134,16 +142,19 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
+
         {/* ─── OVERVIEW ─────────────────────────────────────────────────── */}
         {tab === 'overview' && (
           <div className="p-5 flex flex-col gap-4">
-            {/* Ecological diagnosis card */}
+
+            {/* Ecological Diagnosis card */}
             <Card>
-              <SectionLabel>Ecological Diagnosis</SectionLabel>
+              <CardTitle>Ecological Diagnosis</CardTitle>
+              <CardSubtitle>Nature impact score</CardSubtitle>
               <div className="flex items-center gap-5">
                 <ScoreGauge score={cell.impactScore} />
                 <div className="flex-1">
-                  <p className="text-[11px] text-[#667066] leading-relaxed">
+                  <p className="text-[12px] text-[#667066] leading-relaxed">
                     {cell.habitatPotential === 'high'
                       ? 'This landscape could support high biodiversity.'
                       : cell.habitatPotential === 'moderate'
@@ -166,26 +177,27 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
             {/* Biodiversity KPI card */}
             <Card>
-              <SectionLabel>Biodiversity</SectionLabel>
+              <CardTitle>Biodiversity</CardTitle>
+              <CardSubtitle>Observed vs expected species richness</CardSubtitle>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-[#F7F8F5] rounded-xl p-3">
-                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">
+                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
                     {cell.observedRichness}
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1">Species observed</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Species observed</div>
                 </div>
-                <div className="bg-[#F7F8F5] rounded-xl p-3">
-                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">
+                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
                     {cell.expectedRichness}
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1">Species expected</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Species expected</div>
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-3 border-t border-[#E4E7E1]">
+              <div className="flex gap-4 pt-4 border-t border-[#E4E7E1]">
                 {cell.species.map((s) => (
                   <div key={s.type} className="flex flex-col items-center gap-0.5">
-                    <span className="text-[13px] font-semibold text-[#1F2A1F]">{s.count}</span>
+                    <span className="text-[14px] font-semibold text-[#1F2A1F]">{s.count}</span>
                     <span className="text-[9px] text-[#667066] uppercase tracking-wide">{SPECIES_LABELS[s.type]}</span>
                   </div>
                 ))}
@@ -194,17 +206,18 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
             {/* Habitat metrics card */}
             <Card>
-              <SectionLabel>Habitat Metrics</SectionLabel>
-              <div className="flex flex-col gap-3.5">
+              <CardTitle>Habitat Metrics</CardTitle>
+              <CardSubtitle>Land cover indicators</CardSubtitle>
+              <div className="flex flex-col gap-4">
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
                   { label: 'Corridor importance', value: cell.corridorImportance, inverted: false },
                   { label: 'Fragmentation index', value: cell.fragmentationIndex, inverted: true },
                 ].map(({ label, value, inverted }) => (
                   <div key={label}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[12px] text-[#667066]">{label}</span>
-                      <span className="text-[12px] font-semibold text-[#1F2A1F]">{value}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[13px] text-[#667066]">{label}</span>
+                      <span className="text-[13px] font-semibold text-[#1F2A1F]">{value}</span>
                     </div>
                     <div className="h-1.5 bg-[#E4E7E1] rounded-full overflow-hidden">
                       <div
@@ -222,15 +235,18 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
 
             {/* Trend card */}
             <Card>
-              <div className="flex items-center justify-between mb-3">
-                <SectionLabel>Impact Trend · 12 months</SectionLabel>
-                <div className="flex items-center gap-1 text-[11px] font-medium mb-3">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <CardTitle>Impact Trend</CardTitle>
+                  <CardSubtitle>12-month history</CardSubtitle>
+                </div>
+                <div className="flex items-center gap-1 text-[12px] font-medium mt-0.5">
                   {trendDir > 0 ? (
-                    <><TrendingUp size={12} className="text-[#2E6F40]" /><span className="text-[#2E6F40]">Improving</span></>
+                    <><TrendingUp size={13} className="text-[#2E6F40]" /><span className="text-[#2E6F40]">Improving</span></>
                   ) : trendDir < 0 ? (
-                    <><TrendingDown size={12} className="text-[#C95B4B]" /><span className="text-[#C95B4B]">Declining</span></>
+                    <><TrendingDown size={13} className="text-[#C95B4B]" /><span className="text-[#C95B4B]">Declining</span></>
                   ) : (
-                    <><Minus size={12} className="text-[#667066]" /><span className="text-[#667066]">Stable</span></>
+                    <><Minus size={13} className="text-[#667066]" /><span className="text-[#667066]">Stable</span></>
                   )}
                 </div>
               </div>
@@ -240,11 +256,14 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
             {/* Actions preview */}
             {cell.interventions.length > 0 && (
               <Card>
-                <div className="flex items-center justify-between mb-1">
-                  <SectionLabel>Top Recommended Actions</SectionLabel>
+                <div className="flex items-start justify-between mb-1">
+                  <div>
+                    <CardTitle>Recommended Actions</CardTitle>
+                    <CardSubtitle>Ranked by ecological impact</CardSubtitle>
+                  </div>
                   <button
                     onClick={() => setTab('actions')}
-                    className="text-[11px] text-[#2E6F40] font-medium hover:underline mb-3"
+                    className="text-[12px] text-[#2E6F40] font-medium hover:underline mt-0.5 flex-shrink-0"
                   >
                     See all →
                   </button>
@@ -261,14 +280,15 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         {tab === 'biodiversity' && (
           <div className="p-5 flex flex-col gap-4">
             <Card>
-              <SectionLabel>Species breakdown</SectionLabel>
+              <CardTitle>Species breakdown</CardTitle>
+              <CardSubtitle>All recorded taxa</CardSubtitle>
               <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="bg-[#F7F8F5] rounded-xl p-3">
-                  <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">{cell.observedRichness}</div>
+                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.observedRichness}</div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Observed species</div>
                 </div>
-                <div className="bg-[#F7F8F5] rounded-xl p-3">
-                  <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">{cell.expectedRichness}</div>
+                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.expectedRichness}</div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Expected species</div>
                 </div>
               </div>
@@ -293,15 +313,16 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
             </Card>
 
             <Card>
-              <SectionLabel>Diversity indices</SectionLabel>
+              <CardTitle>Diversity indices</CardTitle>
+              <CardSubtitle>Statistical measures</CardSubtitle>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{cell.taxonomicDiversity.toFixed(1)}</div>
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.taxonomicDiversity.toFixed(1)}</div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Shannon diversity</div>
                 </div>
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{cell.observerEffortScore.toFixed(1)}</div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">obs / km effort</div>
+                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.observerEffortScore.toFixed(1)}</div>
+                  <div className="text-[11px] text-[#667066] mt-1.5">Obs / km effort</div>
                 </div>
               </div>
             </Card>
@@ -312,7 +333,8 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         {tab === 'habitat' && (
           <div className="p-5 flex flex-col gap-4">
             <Card>
-              <SectionLabel>Habitat metrics</SectionLabel>
+              <CardTitle>Habitat metrics</CardTitle>
+              <CardSubtitle>Land cover indicators</CardSubtitle>
               <div className="flex flex-col gap-5">
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
@@ -334,7 +356,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
                       />
                     </div>
                     {inverted && (
-                      <p className="text-[10px] text-[#9ca3af] mt-1.5">
+                      <p className="text-[10px] text-[#A8B4A8] mt-1.5">
                         Higher fragmentation → more isolated patches
                       </p>
                     )}
@@ -349,9 +371,10 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         {tab === 'trends' && (
           <div className="p-5 flex flex-col gap-4">
             <Card>
-              <SectionLabel>Impact trend · 12 months</SectionLabel>
+              <CardTitle>Impact trend</CardTitle>
+              <CardSubtitle>12-month history</CardSubtitle>
               <TrendChart data={cell.trendData} />
-              <p className="text-[11px] text-[#667066] leading-relaxed mt-4">
+              <p className="text-[12px] text-[#667066] leading-relaxed mt-4">
                 The nature impact score tracks the gap between expected and observed biodiversity,
                 corrected for observer effort. Values near zero indicate nature is performing as
                 expected for the habitat type.
@@ -365,7 +388,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
                 { label: 'Average', value: parseFloat((cell.trendData.reduce((a, b) => a + b, 0) / cell.trendData.length).toFixed(1)) },
               ].map(({ label, value }) => (
                 <Card key={label} className="!p-4">
-                  <div className="text-[22px] font-semibold text-[#1F2A1F] leading-none">{value}</div>
+                  <div className="text-[28px] font-semibold text-[#1F2A1F] leading-none">{value}</div>
                   <div className="text-[10px] text-[#667066] mt-1.5">{label}</div>
                 </Card>
               ))}
@@ -376,15 +399,14 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
         {/* ─── ACTIONS ──────────────────────────────────────────────────── */}
         {tab === 'actions' && (
           <div className="p-5">
-            <p className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest mb-4">
-              Recommended actions · ranked by impact
-            </p>
+            <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Recommended actions</p>
+            <p className="text-[12px] text-[#667066] mb-4">Ranked by ecological impact</p>
             <Card className="!p-0 !overflow-hidden">
               {cell.interventions.map((iv) => (
                 <InterventionCard key={iv.id} intervention={iv} />
               ))}
               {cell.interventions.length === 0 && (
-                <p className="text-[12px] text-[#667066] leading-relaxed p-5">
+                <p className="text-[13px] text-[#667066] leading-relaxed p-6">
                   No ranked interventions are available for this area yet.
                 </p>
               )}

@@ -31,7 +31,7 @@ export default function AboutPage() {
             <div className="w-8 h-8 bg-[#2E6F40] rounded-lg flex items-center justify-center flex-shrink-0">
               <Leaf size={14} strokeWidth={2} className="text-white" />
             </div>
-            <h1 className="text-[24px] font-semibold text-[#1F2A1F] tracking-tight">
+            <h1 className="text-[32px] font-semibold text-[#1F2A1F] tracking-tight leading-tight">
               About NatureGap
             </h1>
           </div>
@@ -47,9 +47,9 @@ export default function AboutPage() {
             designed to be publishable as a standalone methods paper.
           </p>
 
-          <p className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest mb-4">
+          <h2 className="text-[18px] font-semibold text-[#1F2A1F] mb-4">
             Design principles
-          </p>
+          </h2>
           <div className="flex flex-col gap-3 mb-10">
             {PRINCIPLES.map(({ title, body }) => (
               <div
@@ -63,9 +63,9 @@ export default function AboutPage() {
             ))}
           </div>
 
-          <p className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest mb-4">
+          <h2 className="text-[18px] font-semibold text-[#1F2A1F] mb-4">
             Resources
-          </p>
+          </h2>
           <div className="flex flex-col gap-2.5">
             {[
               { icon: FolderGit, label: 'Source code',   sub: 'Available in this project repository' },

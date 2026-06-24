@@ -1,7 +1,7 @@
 'use client';
 
 import { cn, formatNumber } from '@/lib/utils';
-import { Layers, Info, MapPin } from 'lucide-react';
+import { Layers, Info, MapPin, Search } from 'lucide-react';
 import { GLOBAL_STATS } from '@/lib/mock-data';
 import type { MapLayer } from '@/lib/types';
 
@@ -17,17 +17,31 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
 export default function LayerControls({ layers, onToggle }: LayerControlsProps) {
   return (
     <aside className="w-80 flex-shrink-0 bg-white border-r border-[#E4E7E1] flex flex-col overflow-y-auto">
+      {/* Search */}
+      <div className="px-5 pt-5 pb-4 border-b border-[#E4E7E1]">
+        <div className="relative">
+          <Search
+            size={13}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8B4A8] pointer-events-none"
+            strokeWidth={1.5}
+          />
+          <input
+            type="text"
+            placeholder="Search parks and wards…"
+            readOnly
+            className="w-full bg-[#F7F8F5] border border-[#E4E7E1] rounded-xl pl-8 pr-3 py-2.5 text-[13px] text-[#1F2A1F] placeholder:text-[#A8B4A8] outline-none cursor-default"
+          />
+        </div>
+      </div>
+
       {/* Section header */}
-      <div className="px-6 pt-5 pb-4 border-b border-[#E4E7E1]">
-        <div className="flex items-center gap-2 mb-2">
+      <div className="px-6 pt-4 pb-3">
+        <div className="flex items-center gap-2">
           <Layers size={13} className="text-[#667066]" strokeWidth={1.5} />
           <span className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest">
             Data Layers
           </span>
         </div>
-        <p className="text-[12px] text-[#667066] leading-relaxed">
-          Toggle ecological layers to explore different dimensions of urban nature.
-        </p>
       </div>
 
       {/* Layer list */}
