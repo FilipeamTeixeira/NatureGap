@@ -35,12 +35,30 @@ export async function ensureRasterLayer(
       url: pmtilesUrl(assetUrl),
       tileSize: 256,
     });
+
+    // Build paint — apply a colour ramp if the spec provides colour stops.
+    // MapLibre ≥ 4 supports raster-color + raster-value for single-band rasters.
+    const paint: maplibregl.RasterLayerSpecification['paint'] = {
+      'raster-opacity': spec.opacity,
+    };
+    if (spec.colorStops && spec.colorStops.length >= 2) {
+      const stops = spec.colorStops;
+      // Build ['interpolate', ['linear'], ['raster-value'], stop0, color0, ...]
+      // raster-value / raster-color are supported in MapLibre ≥ 4 but not yet
+      // reflected in the bundled TypeScript types, so we cast through unknown.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paint as any)['raster-color'] = [
+        'interpolate', ['linear'], ['raster-value'],
+        ...stops.flatMap(([v, c]) => [v, c]),
+      ];
+    }
+
     map.addLayer(
       {
         id: spec.layerId,
         type: 'raster',
         source: spec.sourceId,
-        paint: { 'raster-opacity': spec.opacity },
+        paint,
         layout: { visibility: 'none' },
       },
       'hex-fill',

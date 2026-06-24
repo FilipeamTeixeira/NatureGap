@@ -48,14 +48,19 @@ BBOX_FETCH <- BBOX_CITY   # set to a different box if observations are sparse
 
 # ── Overpass API ──────────────────────────────────────────────────────────────
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
-# retries with 60 s backoff. Use overpass-api.de or another public instance:
+# retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
 # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
 
-OVERPASS_URL <- "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+OVERPASS_URL <- "https://overpass-api.de/api/interpreter"
 OVERPASS_FALLBACK_URLS <- c(
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter"
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
 )
+OVERPASS_RETRIES     <- 3L    # attempts per endpoint before moving on
+OVERPASS_RETRY_WAIT  <- 45L   # seconds between retries (Overpass rate-limits)
+
+# Re-use existing OSM extracts on re-runs instead of hitting Overpass again.
+OSM_SKIP_IF_EXISTS   <- TRUE
 
 # ── Local projection ──────────────────────────────────────────────────────────
 # Use a metre-based CRS for your analysis area:
@@ -71,7 +76,7 @@ CRS_LOCAL <- "EPSG:6674"
 # Smaller = finer detail but slower to process and heavier to upload.
 # Typical values: 25 m (very fine), 50 m (fine), 100 m (standard).
 
-CELL_SIZE <- 50   # metres
+CELL_SIZE <- 10   # metres
 
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.

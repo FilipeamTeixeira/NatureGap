@@ -39,26 +39,62 @@ fetch_osm_sf <- function(query_fn, label) {
   primary_url <- if (exists("OVERPASS_URL")) {
     OVERPASS_URL
   } else {
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    "https://overpass-api.de/api/interpreter"
   }
+  max_retries <- if (exists("OVERPASS_RETRIES")) OVERPASS_RETRIES else 3L
+  retry_wait  <- if (exists("OVERPASS_RETRY_WAIT")) OVERPASS_RETRY_WAIT else 45L
+
   urls <- unique(c(primary_url, fallback_urls))
   last_err <- NULL
+
   for (url in urls) {
-    cat(sprintf("  → Fetching %s via %s\n", label, url))
     set_overpass_url(url)
-    result <- tryCatch(query_fn(), error = function(e) {
-      last_err <<- e
-      NULL
-    })
-    if (!is.null(result)) return(result)
+    for (attempt in seq_len(max_retries)) {
+      cat(sprintf(
+        "  → Fetching %s via %s (attempt %d/%d)\n",
+        label, url, attempt, max_retries
+      ))
+      result <- tryCatch(
+        query_fn(),
+        error = function(e) {
+          last_err <<- e
+          NULL
+        }
+      )
+      if (!is.null(result)) return(result)
+
+      err_msg <- conditionMessage(last_err)
+      is_transient <- grepl(
+        "504|502|503|429|timeout|timed out|Gateway|Too Many|rate limit|overloaded",
+        err_msg, ignore.case = TRUE
+      )
+      if (attempt < max_retries && is_transient) {
+        cat(sprintf(
+          "    … transient error, waiting %ds before retry: %s\n",
+          retry_wait, err_msg
+        ))
+        Sys.sleep(retry_wait)
+      } else {
+        break
+      }
+    }
     warning(sprintf(
-      "%s failed on %s: %s", label, url, conditionMessage(last_err)
+      "%s failed on %s after %d attempt(s): %s",
+      label, url, max_retries, conditionMessage(last_err)
     ), call. = FALSE)
   }
   stop(sprintf(
-    "All Overpass endpoints failed for %s. Last error: %s",
+    "All Overpass endpoints failed for %s. Last error: %s\n",
     label, conditionMessage(last_err)
-  ))
+  ), call. = FALSE)
+}
+
+osm_cache_ok <- function(path, min_features = 1L) {
+  if (!file.exists(path)) return(FALSE)
+  tryCatch({
+    sf_obj <- st_read(path, quiet = TRUE)
+    nrow(sf_obj) >= min_features
+  }, error = function(e) FALSE)
 }
 
 city_raster_ext <- function() {
@@ -67,6 +103,21 @@ city_raster_ext <- function() {
 
 crop_to_city <- function(r) {
   crop(r, city_raster_ext())
+}
+
+#' Reduce a possibly multi-band NDVI stack to a single layer for the pipeline.
+prepare_ndvi_raster <- function(r) {
+  if (nlyr(r) == 1L) {
+    out <- r[[1]]
+  } else {
+    cat(sprintf(
+      "  → NDVI source has %d bands — using mean across bands\n",
+      nlyr(r)
+    ))
+    out <- app(r, fun = mean, na.rm = TRUE)
+  }
+  names(out) <- "ndvi"
+  out
 }
 
 # ── 1. iNaturalist observations ───────────────────────────────────────────────
@@ -109,40 +160,51 @@ cat(sprintf("  → %d GBIF records written\n", nrow(gbif_sf)))
 
 cat("Fetching OpenStreetMap features...\n")
 
-osm_bbox <- c(BBOX_FETCH["xmin"], BBOX_FETCH["ymin"],
-              BBOX_FETCH["xmax"], BBOX_FETCH["ymax"])
+skip_osm <- exists("OSM_SKIP_IF_EXISTS") &&
+  isTRUE(OSM_SKIP_IF_EXISTS) &&
+  osm_cache_ok(RAW_OSM_GREEN) &&
+  osm_cache_ok(RAW_OSM_PATHS, min_features = 0L)
 
-osm_green <- fetch_osm_sf(function() {
-  opq(bbox = osm_bbox) |>
-    add_osm_feature(key = "leisure",
-                    value = c("park", "nature_reserve", "garden")) |>
-    osmdata_sf()
-}, "OSM green spaces")
-
-green_polygons <- if (!is.null(osm_green$osm_polygons)) {
-  osm_green$osm_polygons |> st_transform(CRS_LOCAL)
+if (skip_osm) {
+  cat("  → Using cached OSM files (OSM_SKIP_IF_EXISTS=TRUE)\n")
+  cat(sprintf("    %s\n    %s\n", RAW_OSM_GREEN, RAW_OSM_PATHS))
 } else {
-  warning("No OSM green space polygons returned — writing empty layer")
-  st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-}
-st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
-cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
+  # Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
+  osm_bbox <- c(BBOX_CITY["xmin"], BBOX_CITY["ymin"],
+                BBOX_CITY["xmax"], BBOX_CITY["ymax"])
 
-osm_paths <- fetch_osm_sf(function() {
-  opq(bbox = osm_bbox) |>
-    add_osm_feature(key = "highway",
-                    value = c("path", "footway", "pedestrian", "steps", "track")) |>
-    osmdata_sf()
-}, "OSM paths")
+  osm_green <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "leisure",
+                      value = c("park", "nature_reserve", "garden")) |>
+      osmdata_sf()
+  }, "OSM green spaces")
 
-path_lines <- if (!is.null(osm_paths$osm_lines)) {
-  osm_paths$osm_lines |> st_transform(CRS_LOCAL)
-} else {
-  warning("No OSM path lines returned — writing empty layer")
-  st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  green_polygons <- if (!is.null(osm_green$osm_polygons)) {
+    osm_green$osm_polygons |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM green space polygons returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
+  cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
+
+  osm_paths <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "highway",
+                      value = c("path", "footway", "pedestrian", "steps", "track")) |>
+      osmdata_sf()
+  }, "OSM paths")
+
+  path_lines <- if (!is.null(osm_paths$osm_lines)) {
+    osm_paths$osm_lines |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM path lines returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
+  cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
 }
-st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
-cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
 
 # ── 4. ESA WorldCover 10m landcover classification ───────────────────────────
 #
@@ -230,8 +292,7 @@ ndvi_written <- FALSE
 
 if (config_path_exists(S2_NDVI_FILE)) {
   cat(sprintf("Processing pre-computed NDVI: %s\n", S2_NDVI_FILE))
-  ndvi_crop <- crop_to_city(rast(S2_NDVI_FILE))
-  names(ndvi_crop) <- "ndvi"
+  ndvi_crop <- crop_to_city(rast(S2_NDVI_FILE)) |> prepare_ndvi_raster()
   writeRaster(ndvi_crop, RAW_NDVI, overwrite = TRUE, datatype = "FLT4S")
   ndvi_written <- TRUE
   cat(sprintf("  → NDVI written (%d m resolution configured)\n", NDVI_RES_M))

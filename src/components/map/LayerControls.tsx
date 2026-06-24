@@ -22,10 +22,13 @@ type SearchResult =
   | { kind: 'ward'; ward: WardFeature };
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
-  impact: 'Observed vs expected biodiversity, corrected for observer effort.',
-  habitat: 'Composite habitat quality from land cover, NDVI, and heat.',
-  ndvi: 'Sentinel-2 vegetation index — greener = higher NDVI.',
-  lst: 'Landsat land-surface temperature — warmer = more heat exposure.',
+  impact:       'Observed vs expected biodiversity, corrected for observer effort.',
+  habitat:      'Composite habitat quality from land cover, vegetation, and heat.',
+  treecover:    'Canopy cover fraction derived from satellite imagery.',
+  biodiversity: 'Effort-corrected observed species richness per cell.',
+  connectivity: 'Habitat corridor importance — how connected each patch is.',
+  heat:         'Landsat land-surface temperature — warmer = more heat stress.',
+  landuse:      'Land cover classification across the study area.',
 };
 
 export default function LayerControls({ layers, onToggle, onParkSelect, onWardSelect }: LayerControlsProps) {
@@ -240,8 +243,9 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
         <div className="flex items-start gap-2">
           <Info size={11} className="text-[#A8B4A8] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-[11px] text-[#A8B4A8] leading-relaxed">
-            NDVI and LST rasters appear when those files are exported and uploaded
-            to Supabase Storage alongside habitat_quality.pmtiles.
+            Raster layers (Tree Cover, Biodiversity, Connectivity, Heat Exposure,
+            Land Use) appear once the corresponding PMTiles are exported and
+            uploaded to Supabase Storage.
           </p>
         </div>
       </div>

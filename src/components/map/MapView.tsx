@@ -25,10 +25,13 @@ interface MapViewProps {
 
 
 const LAYER_MAP: Partial<Record<string, string[]>> = {
-  impact: ['hex-fill', 'hex-outline', 'hex-selected', 'park-area'],
-  habitat: ['raster-habitat'],
-  ndvi: ['raster-ndvi'],
-  lst: ['raster-lst'],
+  impact:       ['hex-fill', 'hex-outline', 'hex-selected', 'park-area'],
+  habitat:      ['raster-habitat'],
+  treecover:    ['raster-treecover'],
+  biodiversity: ['raster-biodiversity'],
+  connectivity: ['raster-connectivity'],
+  heat:         ['raster-heat'],
+  landuse:      ['raster-landuse'],
 };
 
 /** Build a GeoJSON FeatureCollection from parks for park-level click zones. */
@@ -337,9 +340,12 @@ export default function MapView({ layers, selectedCellId, onHexClick, flyToTarge
     }
 
     const rasterEnabled = {
-      habitat: layers.some((l) => l.id === 'habitat' && l.enabled),
-      ndvi: layers.some((l) => l.id === 'ndvi' && l.enabled),
-      lst: layers.some((l) => l.id === 'lst' && l.enabled),
+      habitat:      layers.some((l) => l.id === 'habitat'      && l.enabled),
+      treecover:    layers.some((l) => l.id === 'treecover'    && l.enabled),
+      biodiversity: layers.some((l) => l.id === 'biodiversity' && l.enabled),
+      connectivity: layers.some((l) => l.id === 'connectivity' && l.enabled),
+      heat:         layers.some((l) => l.id === 'heat'         && l.enabled),
+      landuse:      layers.some((l) => l.id === 'landuse'      && l.enabled),
     } satisfies Record<RasterLayerId, boolean>;
 
     void syncRasterLayers(map, rasterEnabled);

@@ -66,46 +66,70 @@ function pointInRing(lng: number, lat: number, ring: [number, number][]): boolea
 }
 
 /**
- * Re-assign parkId for city-green cells inside named park polygons.
- * All habitat cells are kept — nothing is clipped away.
+ * Clip the hex grid to named park polygons.
+ * Cells already assigned to a named park by the pipeline are kept as-is.
+ * Cells with parkId='city-green' are tested against park polygons and either
+ * reassigned (if inside a named park) or discarded.
+ * Cells with no parkId are discarded.
  */
 export function filterHexGridToParks(): void {
   const raw = rawRuntimeHexGrid;
   if (!raw) return;
 
   const parks = getParks();
+
   if (parks.length === 0) {
-    filteredHexGrid = raw;
+    // No park polygons loaded — keep only cells that the pipeline already
+    // assigned to a named park (anything other than empty or 'city-green').
+    filteredHexGrid = {
+      ...raw,
+      features: raw.features.filter((f) => {
+        const pid = (f.properties?.parkId as string | undefined) ?? '';
+        return pid && pid !== 'city-green';
+      }),
+    };
+    console.info(`[hex-grid] ${filteredHexGrid.features.length} park cells (no park polygons, pipeline IDs only)`);
     return;
   }
 
   const parkIndex = parks.map((p) => ({ park: p, bbox: ringBbox(p.ring) }));
 
-  const features = raw.features.map((f) => {
-    const existingParkId = (f.properties?.parkId as string | undefined) ?? '';
-    if (existingParkId && existingParkId !== 'city-green') return f;
+  const features: typeof raw.features = [];
 
+  for (const f of raw.features) {
+    const existingParkId = (f.properties?.parkId as string | undefined) ?? '';
+
+    // Already assigned to a named park by the pipeline → keep as-is.
+    if (existingParkId && existingParkId !== 'city-green') {
+      features.push(f);
+      continue;
+    }
+
+    // city-green or unassigned → test against park polygons.
     const coords = (f.geometry as GeoJSON.Polygon).coordinates[0];
     const lng = coords.reduce((s, p) => s + p[0], 0) / coords.length;
     const lat = coords.reduce((s, p) => s + p[1], 0) / coords.length;
 
+    let matched = false;
     for (const { park, bbox } of parkIndex) {
       if (lng < bbox.minLng || lng > bbox.maxLng || lat < bbox.minLat || lat > bbox.maxLat) {
         continue;
       }
       if (pointInRing(lng, lat, park.ring)) {
-        return {
+        features.push({
           ...f,
           properties: { ...f.properties, parkId: park.id, parkName: park.name },
-        };
+        });
+        matched = true;
+        break;
       }
     }
-
-    return f;
-  });
+    // Cells not inside any named park are dropped (city-green = not a named park).
+    if (!matched) continue;
+  }
 
   filteredHexGrid = { ...raw, features };
-  console.info(`[hex-grid] ${features.length} cells (park labels updated where matched)`);
+  console.info(`[hex-grid] ${features.length} cells retained inside named parks`);
 }
 
 export function getHexGrid(): GeoJSON.FeatureCollection {

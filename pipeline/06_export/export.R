@@ -379,10 +379,92 @@ aggregate_park_stats <- function(rows, max_expected) {
 }
 
 # ── 1. Rasters → Cloud-Optimised GeoTIFF → PMTiles ───────────────────────────
+#
+# Map layer → pipeline source (must match src/lib/config.ts RASTER_LAYERS filenames):
+#   habitat_quality.pmtiles  ← habitat_quality.tif        (step 02)
+#   treecover.pmtiles        ← tree_fraction              (step 02 grid)
+#   biodiversity.pmtiles     ← richness_corrected       (step 05 grid, normalised)
+#   connectivity.pmtiles     ← corridor_importance      (step 04 grid)
+#   landuse.pmtiles          ← green_fraction_wc        (step 02 grid)
+#   lst.pmtiles              ← lst.tif                  (step 01 ingest, optional)
+
+rasterize_grid_field <- function(grid_sf, field, out_path) {
+  if (!field %in% names(grid_sf)) {
+    message(sprintf("Skipping raster — field '%s' not in grid", field))
+    return(invisible(FALSE))
+  }
+  v <- vect(grid_sf)
+  template <- rast(ext(v), res = CELL_SIZE, crs = CRS_LOCAL)
+  r <- rasterize(v, template, field = field)
+  writeRaster(r, out_path, overwrite = TRUE)
+  cat(sprintf("Written: %s (field: %s)\n", out_path, field))
+  invisible(TRUE)
+}
+
+#' Rasterise a grid column scaled to 0–1 for web colour ramps.
+rasterize_grid_normalized <- function(grid_sf, field, out_path, cap_quantile = 0.99) {
+  if (!field %in% names(grid_sf)) {
+    message(sprintf("Skipping raster — field '%s' not in grid", field))
+    return(invisible(FALSE))
+  }
+  vals <- grid_sf[[field]]
+  vals <- vals[!is.na(vals) & vals > 0]
+  if (length(vals) == 0) {
+    message(sprintf("Skipping raster — no positive values for '%s'", field))
+    return(invisible(FALSE))
+  }
+  cap <- as.numeric(stats::quantile(vals, cap_quantile, na.rm = TRUE))
+  if (!is.finite(cap) || cap <= 0) cap <- max(vals, na.rm = TRUE)
+  grid_norm <- grid_sf |>
+    mutate(.export_val = pmin(replace_na(.data[[field]], 0), cap) / cap)
+  rasterize_grid_field(grid_norm, ".export_val", out_path)
+}
+
+prepare_layer_rasters <- function() {
+  treecover_tif    <- file.path(DATA_EXPORT, "treecover.tif")
+  biodiversity_tif <- file.path(DATA_EXPORT, "biodiversity.tif")
+  connectivity_tif <- file.path(DATA_EXPORT, "connectivity.tif")
+  landuse_tif      <- file.path(DATA_EXPORT, "landuse.tif")
+
+  if (file.exists(PROC_GRID_HABITAT)) {
+    grid_hab <- st_read(PROC_GRID_HABITAT, quiet = TRUE)
+    rasterize_grid_field(grid_hab, "tree_fraction", treecover_tif)
+    rasterize_grid_field(grid_hab, "green_fraction_wc", landuse_tif)
+  } else {
+    message(sprintf("Skipping treecover/landuse — %s not found", PROC_GRID_HABITAT))
+  }
+
+  if (file.exists(PROC_GRID_RESID)) {
+    grid_resid <- st_read(PROC_GRID_RESID, quiet = TRUE) |>
+      filter(habitat_quality > 0)
+    rasterize_grid_normalized(grid_resid, "richness_corrected", biodiversity_tif)
+  } else {
+    message(sprintf("Skipping biodiversity — %s not found", PROC_GRID_RESID))
+  }
+
+  if (file.exists(PROC_GRID_CONN)) {
+    grid_conn <- st_read(PROC_GRID_CONN, quiet = TRUE)
+    rasterize_grid_field(grid_conn, "corridor_importance", connectivity_tif)
+  } else {
+    message(sprintf("Skipping connectivity — %s not found", PROC_GRID_CONN))
+  }
+
+  invisible(list(
+    treecover = treecover_tif,
+    biodiversity = biodiversity_tif,
+    connectivity = connectivity_tif,
+    landuse = landuse_tif
+  ))
+}
+
+layer_tifs <- prepare_layer_rasters()
 
 raster_layers <- c(
   "habitat_quality" = PROC_HABITAT_TIF,
-  "ndvi"            = RAW_NDVI,
+  "treecover"       = layer_tifs$treecover,
+  "biodiversity"    = layer_tifs$biodiversity,
+  "connectivity"    = layer_tifs$connectivity,
+  "landuse"         = layer_tifs$landuse,
   "lst"             = RAW_LST
 )
 

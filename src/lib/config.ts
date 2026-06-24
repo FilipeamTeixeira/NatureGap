@@ -87,28 +87,102 @@ export const MAX_EXPECTED_RICHNESS = 350;
 
 // ── Pipeline raster layers (PMTiles from export step 06) ─────────────────────
 
-export type RasterLayerId = 'habitat' | 'ndvi' | 'lst';
+export type RasterLayerId = 'habitat' | 'treecover' | 'biodiversity' | 'connectivity' | 'heat' | 'landuse';
 
-export const RASTER_LAYERS: Record<
-  RasterLayerId,
-  { file: string; sourceId: string; layerId: string; opacity: number }
-> = {
+/**
+ * colorStops: pairs of [value, color] for an interpolated raster-color ramp.
+ * Values are normalised [0, 1] (MapLibre raster-value range).
+ * omit to render the tile as-is (raw grayscale).
+ */
+export interface RasterLayerSpec {
+  file: string;
+  sourceId: string;
+  layerId: string;
+  opacity: number;
+  colorStops?: [number, string][];
+}
+
+export const RASTER_LAYERS: Record<RasterLayerId, RasterLayerSpec> = {
   habitat: {
     file: 'habitat_quality.pmtiles',
     sourceId: 'raster-habitat',
     layerId: 'raster-habitat',
-    opacity: 0.55,
+    opacity: 0.65,
+    // Low quality → transparent; high quality → deep forest green.
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.15, '#d4edda'],
+      [0.35, '#74c67a'],
+      [0.6,  '#2E6F40'],
+      [1.0,  '#1a4a28'],
+    ],
   },
-  ndvi: {
-    file: 'ndvi.pmtiles',
-    sourceId: 'raster-ndvi',
-    layerId: 'raster-ndvi',
-    opacity: 0.6,
+  treecover: {
+    file: 'treecover.pmtiles',
+    sourceId: 'raster-treecover',
+    layerId: 'raster-treecover',
+    opacity: 0.65,
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.15, '#e8f5e9'],
+      [0.4,  '#81c784'],
+      [0.7,  '#388e3c'],
+      [1.0,  '#1b5e20'],
+    ],
   },
-  lst: {
+  biodiversity: {
+    file: 'biodiversity.pmtiles',
+    sourceId: 'raster-biodiversity',
+    layerId: 'raster-biodiversity',
+    opacity: 0.65,
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.15, '#e3f2fd'],
+      [0.4,  '#64b5f6'],
+      [0.7,  '#1976d2'],
+      [1.0,  '#0d47a1'],
+    ],
+  },
+  connectivity: {
+    file: 'connectivity.pmtiles',
+    sourceId: 'raster-connectivity',
+    layerId: 'raster-connectivity',
+    opacity: 0.65,
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.15, '#f3e5f5'],
+      [0.4,  '#ba68c8'],
+      [0.7,  '#7b1fa2'],
+      [1.0,  '#4a148c'],
+    ],
+  },
+  heat: {
+    // Landsat LST — file stays lst.pmtiles from pipeline export.
     file: 'lst.pmtiles',
-    sourceId: 'raster-lst',
-    layerId: 'raster-lst',
-    opacity: 0.55,
+    sourceId: 'raster-heat',
+    layerId: 'raster-heat',
+    opacity: 0.6,
+    // Low temp (cool) → blue; high temp (hot) → red.
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.15, '#4575b4'],
+      [0.35, '#74add1'],
+      [0.5,  '#fee090'],
+      [0.7,  '#f46d43'],
+      [1.0,  '#a50026'],
+    ],
+  },
+  landuse: {
+    file: 'landuse.pmtiles',
+    sourceId: 'raster-landuse',
+    layerId: 'raster-landuse',
+    opacity: 0.65,
+    colorStops: [
+      [0,    'rgba(255,255,255,0)'],
+      [0.2,  '#fff9c4'],
+      [0.45, '#aed581'],
+      [0.7,  '#558b2f'],
+      [1.0,  '#33691e'],
+    ],
   },
 };
