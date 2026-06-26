@@ -2,70 +2,104 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn, formatNumber } from '@/lib/utils';
-import { Layers, Info, MapPin, Search, TreePine, Map } from 'lucide-react';
-import { getGlobalStats, getWards } from '@/lib/data';
-import { getParks } from '@/lib/green-spaces';
+import { ChevronLeft, ChevronRight, Layers, Info, MapPin, Search, Map as MapIcon } from 'lucide-react';
+import { getGlobalStats } from '@/lib/data';
 import { CITY } from '@/lib/config';
 import type { MapLayer } from '@/lib/types';
-import type { WardFeature } from '@/lib/types';
-import type { GreenSpace } from '@/lib/green-spaces';
+import type { GeocodingSearchResult } from '@/lib/map-search';
 
 interface LayerControlsProps {
   layers: MapLayer[];
   onToggle: (id: string) => void;
-  onParkSelect?: (park: GreenSpace) => void;
-  onWardSelect?: (ward: WardFeature) => void;
+  onPlaceSelect?: (center: [number, number]) => void;
 }
 
 type SearchResult =
-  | { kind: 'park'; park: GreenSpace }
-  | { kind: 'ward'; ward: WardFeature };
+  | { kind: 'geocode'; result: GeocodingSearchResult };
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
-  impact:       'Observed vs expected biodiversity, corrected for observer effort.',
-  expected:     'Habitat-derived expected species richness per cell.',
-  residual:     'Expected minus effort-corrected richness, showing ecological pressure.',
-  intervention: 'Restoration priority ranking from the pipeline.',
-  habitat:      'Composite habitat quality from land cover, vegetation, and heat.',
-  treecover:    'Canopy cover fraction derived from satellite imagery.',
-  biodiversity: 'Effort-corrected observed species richness per cell.',
-  connectivity: 'Habitat corridor importance — how connected each patch is.',
-  heat:         'Landsat land-surface temperature — warmer = more heat stress.',
-  landuse:      'Land cover classification across the study area.',
-  'cell-grid': '20m hex cell outlines.',
-  'survey-points': 'Approved structured survey points.',
-  'quick-sightings': 'Presence-only citizen observations.',
-  'structured-surveys': 'Protocol-based survey submissions.',
+  impact:       'Main score: observed nature compared with expected nature.',
+  residual:     'Where biodiversity is below or above habitat potential.',
+  intervention: 'Cells ranked for restoration action.',
+  expected:     'Modelled richness from habitat and connectivity.',
+  biodiversity: 'Effort-corrected observed species richness.',
+  habitat:      'Combined habitat quality.',
+  treecover:    'Estimated canopy cover.',
+  connectivity: 'Corridor importance between habitat cells.',
+  heat:         'Relative land-surface heat exposure.',
+  landuse:      'Vegetated and built-up land cover.',
+  'cell-grid': 'Show the 20m hex grid.',
+  'survey-points': 'Approved places for structured surveys.',
+  'quick-sightings': 'Recent quick observations.',
+  'structured-surveys': 'Protocol survey submissions.',
 };
 
-export default function LayerControls({ layers, onToggle, onParkSelect, onWardSelect }: LayerControlsProps) {
+const LAYER_GROUPS = [
+  {
+    title: 'Start Here',
+    description: 'The layers most useful for first reading the map.',
+    ids: ['impact', 'residual', 'intervention'],
+  },
+  {
+    title: 'Biodiversity',
+    description: 'Observed and expected species patterns.',
+    ids: ['biodiversity', 'expected'],
+  },
+  {
+    title: 'Habitat And Stress',
+    description: 'Landscape condition and environmental pressures.',
+    ids: ['habitat', 'treecover', 'connectivity', 'heat', 'landuse'],
+  },
+  {
+    title: 'Surveys',
+    description: 'Citizen-science records and fieldwork points.',
+    ids: ['survey-points', 'quick-sightings', 'structured-surveys', 'cell-grid'],
+  },
+] as const;
+
+export default function LayerControls({
+  layers,
+  onToggle,
+  onPlaceSelect,
+}: LayerControlsProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([]);
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem('naturegap.sidebar.collapsed') === 'true',
+  );
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo<SearchResult[]>(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
+  useEffect(() => {
+    window.localStorage.setItem('naturegap.sidebar.collapsed', String(collapsed));
+  }, [collapsed]);
 
-    const parks: SearchResult[] = getParks()
-      .filter((p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.nameJa.includes(q) ||
-        p.wardId.toLowerCase().includes(q),
-      )
-      .slice(0, 5)
-      .map((park) => ({ kind: 'park', park }));
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
 
-    const wards: SearchResult[] = getWards()
-      .filter((w) =>
-        w.name.toLowerCase().includes(q) ||
-        w.nameJa.includes(q),
-      )
-      .slice(0, 5)
-      .map((ward) => ({ kind: 'ward', ward }));
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      fetch(`/api/search-places?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { results: [] }))
+        .then((data: { results?: GeocodingSearchResult[] }) => {
+          setGeocodingResults(data.results ?? []);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setGeocodingResults([]);
+        });
+    }, 200);
 
-    return [...parks, ...wards];
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [query]);
+
+  const results = useMemo<SearchResult[]>(() => {
+    if (query.trim().length < 2) return [];
+    return geocodingResults.map((result) => ({ kind: 'geocode' as const, result }));
+  }, [geocodingResults, query]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -81,14 +115,95 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
   function handleSelect(result: SearchResult) {
     setQuery('');
     setOpen(false);
-    if (result.kind === 'park') onParkSelect?.(result.park);
-    else onWardSelect?.(result.ward);
+    onPlaceSelect?.(result.result.center);
+  }
+
+  const layersById = useMemo(() => new Map(layers.map((layer) => [layer.id, layer])), [layers]);
+
+  function renderLayerButton(layer: MapLayer) {
+    return (
+      <button
+        key={layer.id}
+        type="button"
+        role="switch"
+        aria-checked={layer.enabled}
+        aria-label={`${layer.enabled ? 'Hide' : 'Show'} ${layer.label}`}
+        onClick={() => onToggle(layer.id)}
+        className={cn(
+          'flex items-start gap-3 rounded-lg text-left transition-all',
+          collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5',
+          layer.enabled
+            ? 'bg-[#F7F8F5] border border-[#E4E7E1]'
+            : 'border border-transparent hover:bg-[#F7F8F5] hover:border-[#E4E7E1]',
+        )}
+      >
+        <span
+          className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 transition-opacity"
+          style={{
+            backgroundColor: layer.color,
+            opacity: layer.enabled ? 1 : 0.3,
+          }}
+        />
+        <div className={cn('flex-1 min-w-0', collapsed && 'hidden')}>
+          <span
+            className={cn(
+              'block text-[13px] leading-tight font-medium',
+              layer.enabled ? 'text-[#1F2A1F]' : 'text-[#667066]',
+            )}
+          >
+            {layer.label}
+          </span>
+          {LAYER_DESCRIPTIONS[layer.id] && (
+            <span
+              className={cn(
+                'block text-[11px] leading-snug mt-1',
+                layer.enabled ? 'text-[#667066]' : 'text-[#9ca3af]',
+              )}
+            >
+              {LAYER_DESCRIPTIONS[layer.id]}
+            </span>
+          )}
+        </div>
+
+        <span
+          className={cn(
+            'w-8 h-4 rounded-full transition-colors items-center px-[2px] flex-shrink-0 mt-0.5',
+            collapsed ? 'hidden' : 'flex',
+            layer.enabled ? 'bg-[#2E6F40]' : 'bg-[#D1D8CE]',
+          )}
+        >
+          <span
+            className={cn(
+              'w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+              layer.enabled ? 'translate-x-4' : 'translate-x-0',
+            )}
+          />
+        </span>
+      </button>
+    );
   }
 
   return (
-    <aside className="w-80 flex-shrink-0 bg-white border-r border-[#E4E7E1] flex flex-col overflow-y-auto">
+    <aside className={cn(
+      'flex-shrink-0 bg-white border-r border-[#E4E7E1] flex flex-col overflow-y-auto transition-[width] duration-200',
+      collapsed ? 'w-16' : 'w-80',
+    )}>
+      <div className={cn('border-b border-[#E4E7E1] flex items-center', collapsed ? 'justify-center p-3' : 'justify-between px-5 py-3')}>
+        <div className={cn('flex items-center gap-2', collapsed && 'hidden')}>
+          <Layers size={13} className="text-[#667066]" strokeWidth={1.5} />
+          <span className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest">Controls</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="w-8 h-8 rounded-lg border border-[#E4E7E1] flex items-center justify-center text-[#667066] hover:bg-[#F7F8F5]"
+        >
+          {collapsed ? <ChevronRight size={14} strokeWidth={1.8} /> : <ChevronLeft size={14} strokeWidth={1.8} />}
+        </button>
+      </div>
       {/* Search */}
-      <div className="px-5 pt-5 pb-4 border-b border-[#E4E7E1]" ref={wrapperRef}>
+      <div className={cn('px-5 pt-5 pb-4 border-b border-[#E4E7E1]', collapsed && 'hidden')} ref={wrapperRef}>
         <div className="relative">
           <Search
             size={13}
@@ -110,10 +225,9 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
             <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl border border-[#E4E7E1] shadow-lg overflow-hidden z-50"
                  style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
               {results.map((result, i) => {
-                const key = result.kind === 'park' ? `park-${result.park.id}` : `ward-${result.ward.id}`;
-                const label = result.kind === 'park' ? result.park.name : `${result.ward.name} Ward`;
-                const sub   = result.kind === 'park' ? result.park.nameJa : result.ward.nameJa;
-                const Icon  = result.kind === 'park' ? TreePine : Map;
+                const key = `geocode-${result.result.id}`;
+                const label = result.result.label;
+                const sub = result.result.sub;
                 return (
                   <button
                     key={key}
@@ -125,13 +239,13 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
                     )}
                   >
                     <div className="w-6 h-6 rounded-lg bg-[#DDEAD8] flex items-center justify-center flex-shrink-0">
-                      <Icon size={11} className="text-[#2E6F40]" strokeWidth={1.5} />
+                      <MapIcon size={11} className="text-[#2E6F40]" strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] font-medium text-[#1F2A1F] truncate">{label}</div>
                       <div className="text-[10px] text-[#A8B4A8]">{sub}</div>
                     </div>
-                    <span className="text-[10px] text-[#A8B4A8] flex-shrink-0 capitalize">{result.kind}</span>
+                    <span className="text-[10px] text-[#A8B4A8] flex-shrink-0 capitalize">place</span>
                   </button>
                 );
               })}
@@ -148,80 +262,43 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
       </div>
 
       {/* Section header */}
-      <div className="px-6 pt-4 pb-3">
+      <div className={cn('pt-4 pb-3', collapsed ? 'px-0 flex justify-center' : 'px-6')}>
         <div className="flex items-center gap-2">
           <Layers size={13} className="text-[#667066]" strokeWidth={1.5} />
-          <span className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest">
+          <span className={cn('text-[10px] font-semibold text-[#667066] uppercase tracking-widest', collapsed && 'hidden')}>
             Data Layers
           </span>
         </div>
       </div>
 
       {/* Layer list */}
-      <div className="flex flex-col gap-1.5 p-4 flex-1">
-        {layers.map((layer) => (
-          <button
-            key={layer.id}
-            type="button"
-            role="switch"
-            aria-checked={layer.enabled}
-            aria-label={`${layer.enabled ? 'Hide' : 'Show'} ${layer.label}`}
-            onClick={() => onToggle(layer.id)}
-            className={cn(
-              'flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-all',
-              layer.enabled
-                ? 'bg-[#F7F8F5] border border-[#E4E7E1]'
-                : 'border border-transparent hover:bg-[#F7F8F5] hover:border-[#E4E7E1]',
-            )}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 transition-opacity"
-                  style={{
-                    backgroundColor: layer.color,
-                    opacity: layer.enabled ? 1 : 0.3,
-                  }}
-                />
-                <span
-                  className={cn(
-                    'text-[13px] leading-tight font-medium',
-                    layer.enabled ? 'text-[#1F2A1F]' : 'text-[#667066]',
-                  )}
-                >
-                  {layer.label}
-                </span>
-              </div>
-              {LAYER_DESCRIPTIONS[layer.id] && (
-                <p className={cn(
-                  'text-[11px] leading-relaxed pl-4',
-                  layer.enabled ? 'text-[#667066]' : 'text-[#9ca3af]',
-                )}>
-                  {LAYER_DESCRIPTIONS[layer.id]}
-                </p>
-              )}
-            </div>
+      <div className={cn('flex flex-col flex-1', collapsed ? 'gap-1 p-2' : 'gap-4 p-4')}>
+        {LAYER_GROUPS.map((group) => {
+          const groupLayers = group.ids
+            .map((id) => layersById.get(id))
+            .filter((layer): layer is MapLayer => Boolean(layer));
+          if (groupLayers.length === 0) return null;
 
-            {/* Toggle switch */}
-            <div
-              className={cn(
-                'w-9 h-5 rounded-full transition-colors flex items-center px-[3px] flex-shrink-0 mt-0.5',
-                layer.enabled ? 'bg-[#2E6F40]' : 'bg-[#D1D8CE]',
-              )}
-            >
-              <div
-                className={cn(
-                  'w-3.5 h-3.5 rounded-full bg-white transition-transform shadow-sm',
-                  layer.enabled ? 'translate-x-4' : 'translate-x-0',
-                )}
-              />
-            </div>
-          </button>
-        ))}
+          return (
+            <section key={group.title} className="flex flex-col gap-2">
+              <div className={cn('px-1', collapsed && 'hidden')}>
+                <h3 className="text-[11px] font-semibold text-[#1F2A1F] uppercase tracking-widest">
+                  {group.title}
+                </h3>
+                <p className="text-[11px] text-[#8A958A] leading-snug mt-1">
+                  {group.description}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                {groupLayers.map(renderLayerButton)}
+              </div>
+            </section>
+          );
+        })}
       </div>
 
       {/* Location info */}
-      <div className="px-6 py-4 border-t border-[#E4E7E1]">
+      <div className={cn('px-6 py-4 border-t border-[#E4E7E1]', collapsed && 'hidden')}>
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={11} className="text-[#667066] flex-shrink-0" strokeWidth={1.5} />
           <span className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest">
@@ -246,12 +323,11 @@ export default function LayerControls({ layers, onToggle, onParkSelect, onWardSe
       </div>
 
       {/* Pipeline note */}
-      <div className="px-6 py-4 border-t border-[#E4E7E1]">
+      <div className={cn('px-6 py-4 border-t border-[#E4E7E1]', collapsed && 'hidden')}>
         <div className="flex items-start gap-2">
           <Info size={11} className="text-[#A8B4A8] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-[11px] text-[#A8B4A8] leading-relaxed">
-            Map layers are painted from hex cells using stats in cells.json.
-            Upload hexgrid, parks, park-stats, and cells chunks to Supabase Storage.
+            Showing the current Yokohama ecology model and submitted citizen-science records.
           </p>
         </div>
       </div>

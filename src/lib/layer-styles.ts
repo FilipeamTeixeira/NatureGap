@@ -8,7 +8,7 @@ export interface LayerLegendItem {
 
 export interface LayerStyleSpec {
   title: string;
-  /** GeoJSON feature property for data-driven colouring (impact uses precomputed `color`). */
+  /** Vector tile feature property for data-driven colouring. */
   property?: string;
   legend: LayerLegendItem[];
 }
@@ -58,7 +58,14 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
 /** Build MapLibre fill-color expression for a data layer. */
 export function hexFillColorExpression(layerId: HexLayerId): ExpressionSpecification {
   if (layerId === 'impact') {
-    return ['coalesce', ['get', 'color'], '#B8C9AE'] as ExpressionSpecification;
+    return [
+      'case',
+      ['<', ['coalesce', ['get', 'impactScore'], 0], -20], '#C95B4B',
+      ['<', ['coalesce', ['get', 'impactScore'], 0], -10], '#E8A44C',
+      ['<', ['coalesce', ['get', 'impactScore'], 0], 5], '#B8C9AE',
+      ['<', ['coalesce', ['get', 'impactScore'], 0], 15], '#73A56D',
+      '#2E6F40',
+    ] as ExpressionSpecification;
   }
 
   const spec = LAYER_STYLE_SPECS[layerId];

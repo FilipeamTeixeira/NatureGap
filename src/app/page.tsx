@@ -8,10 +8,9 @@ import CellDetailPanel from '@/components/detail/CellDetailPanel';
 import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
 import CitizenSciencePanel from '@/components/citizen-science/CitizenSciencePanel';
 import { MAP_LAYERS } from '@/lib/mock-data';
-import { getParks, initParks, type GreenSpace } from '@/lib/green-spaces';
-import { parkToCellData, cellToCellData, initParkStats } from '@/lib/park-data';
+import { initParks } from '@/lib/green-spaces';
 import { initData } from '@/lib/data';
-import { initHexGrid, filterHexGridToParks, enrichHexGridWithCellStats } from '@/lib/hex-grid';
+import { fetchCellDetail, type RenderCellProperties } from '@/lib/cell-detail';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -30,13 +29,6 @@ import {
 } from '@/lib/citizen-science';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
-
-function centroid(ring: [number, number][]): [number, number] {
-  const pts = ring.slice(0, -1);
-  const lng = pts.reduce((s, p) => s + p[0], 0) / pts.length;
-  const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-  return [lng, lat];
-}
 
 export default function Page() {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
@@ -57,13 +49,8 @@ export default function Page() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([initParkStats(), initData(), initHexGrid(), initParks()]).finally(() => {
+    Promise.allSettled([initData(), initParks()]).finally(() => {
       if (!cancelled) {
-        // Clip runtime hexgrid to park polygons and re-assign parkId for cells
-        // that the pipeline left as "city-green". Must run after both initHexGrid
-        // and initParks have settled so park polygons are available.
-        filterHexGridToParks();
-        enrichHexGridWithCellStats();
         setDataRevision((r) => r + 1);
       }
     });
@@ -108,19 +95,11 @@ export default function Page() {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
   };
 
-  const handleHexClick = (
-    parkId: string,
-    cellId: string,
+  const handleHexClick = async (
+    renderCell: RenderCellProperties,
     coordinates: [number, number],
-    parkName?: string,
   ) => {
-    const cell =
-      cellToCellData(cellId, parkId, parkName ?? parkId, coordinates) ??
-      (() => {
-        const park = getParks().find((p) => p.id === parkId);
-        return park ? parkToCellData(park, cellId, coordinates) : null;
-      })();
-
+    const cell = await fetchCellDetail(renderCell, coordinates);
     if (cell) {
       setSelectedCell(cell);
       setSelectedWard(null);
@@ -128,21 +107,11 @@ export default function Page() {
     }
   };
 
-  const handleParkSelect = (park: GreenSpace) => {
-    const cell = parkToCellData(park, park.id, centroid(park.ring));
-    if (cell) {
-      setSelectedCell(cell);
-      setSelectedWard(null);
-      setSelectedSurveyPoint(null);
-      setFlyToTarget({ center: centroid(park.ring), zoom: 17 });
-    }
-  };
-
-  const handleWardSelect = (ward: WardFeature) => {
-    setSelectedWard(ward);
+  const handlePlaceSelect = (center: [number, number]) => {
+    setSelectedWard(null);
     setSelectedCell(null);
     setSelectedSurveyPoint(null);
-    setFlyToTarget({ center: ward.coordinates, zoom: 13 });
+    setFlyToTarget({ center, zoom: 15 });
   };
 
   const handleClosePanel = () => {
@@ -168,8 +137,7 @@ export default function Page() {
         <LayerControls
           layers={layers}
           onToggle={toggleLayer}
-          onParkSelect={handleParkSelect}
-          onWardSelect={handleWardSelect}
+          onPlaceSelect={handlePlaceSelect}
         />
 
         <div className="flex-1 relative min-w-0">

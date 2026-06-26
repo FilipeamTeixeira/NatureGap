@@ -18,6 +18,7 @@ data/export/
 *.Rhistory
 *.RData
 .Rproj.user/
+/pipeline/data/
 
 # Raster files (large)
 *.tif

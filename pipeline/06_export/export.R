@@ -1,9 +1,9 @@
 # NatureGap — Step 06: Export for Visualisation
-# Converts processed outputs to Supabase-ready JSON + GeoJSON:
-#   hexgrid.geojson (+ manifest/chunks), parks.geojson,
-#   park-stats.json, cells.json (+ manifest/chunks)
+# Converts processed outputs to Supabase-ready JSON + vector artifacts:
+#   hexgrid.pmtiles, parks.geojson, park-stats.json
 #
-# Map layers are painted client-side from cells.json stats on the hex grid.
+# Hex map layers are painted from PMTiles vector tiles. Full-city hex GeoJSON
+# must not be uploaded or rendered by the frontend.
 
 library(sf)
 library(tidyverse)
@@ -131,13 +131,43 @@ write_geojson_chunked <- function(value, output_path) {
   ))
 }
 
+write_hexgrid_pmtiles <- function(value, output_path) {
+  tippecanoe <- Sys.which("tippecanoe")
+  if (tippecanoe == "") {
+    stop("tippecanoe is required to generate hexgrid.pmtiles. Install tippecanoe and rerun the export step.")
+  }
+
+  tmp <- tempfile(fileext = ".geojson")
+  on.exit(unlink(tmp), add = TRUE)
+  write_geojson(value, tmp)
+  if (file.exists(output_path)) unlink(output_path)
+
+  # Internal vector tile source-layer is exactly "hexgrid".
+  # Frontend URL format:
+  # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/hexgrid.pmtiles
+  args <- c(
+    "--output", output_path,
+    "--layer", "hexgrid",
+    "--force",
+    "--drop-densest-as-needed",
+    "--extend-zooms-if-still-dropping",
+    "--minimum-zoom", "0",
+    "--maximum-zoom", "14",
+    tmp
+  )
+  status <- system2(tippecanoe, args = args)
+  if (!file.exists(output_path) || !identical(status, 0L)) {
+    stop("tippecanoe failed to generate hexgrid.pmtiles")
+  }
+}
+
 export_upload_files <- function() {
   files <- c(
-    "hexgrid.geojson", "hexgrid.manifest.json",
+    "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
-    "cell_attributes.manifest.json", "cells.json", "cells.manifest.json"
+    "cell_attributes.manifest.json"
   )
-  for (base in c("hexgrid", "cell_attributes", "cells")) {
+  for (base in c("cell_attributes")) {
     parts <- list.files(DATA_EXPORT, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
     files <- c(files, parts)
   }
@@ -440,7 +470,7 @@ if (file.exists(green_path)) {
   message(sprintf("Skipping parks.geojson — %s not found", green_path))
 }
 
-# ── 3. Vector grid → GeoJSON (for PostGIS import + frontend cells) ───────────
+# ── 3. Vector grid → PMTiles (frontend) + GeoJSON (PostGIS import) ───────────
 
 grid_raw <- st_read(PROC_GRID_RESID, quiet = TRUE) |>
   st_transform(4326)
@@ -530,57 +560,8 @@ if (file.exists(osm_parks_path)) {
   message("osm_green_spaces.gpkg not found — all cells assigned to 'city-green'")
 }
 
-hexgrid <- grid |>
-  transmute(
-    cellId   = cell_id,
-    parkId   = park_id,
-    parkName = park_name,
-    wardId   = NA_character_,
-    score    = as.integer(impact_score),
-    color    = score_color(impact_score)
-  )
-
-hexgrid_path <- file.path(DATA_EXPORT, "hexgrid.geojson")
-write_geojson_chunked(hexgrid, hexgrid_path)
-cat(sprintf("Written: %s\n", hexgrid_path))
-
-if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
-  cell_attr <- st_read(PROC_CELL_ATTR, quiet = TRUE) |>
-    st_transform(4326)
-} else {
-  cell_attr <- grid |>
-    transmute(
-      cell_id,
-      expected_richness,
-      effort_corrected_richness,
-      ecological_residual,
-      corridor_importance,
-      intervention_rank,
-      heat_exposure = lst_rank,
-      noise = NA_real_,
-      light_pollution = NA_real_,
-      disturbance_index = NA_real_,
-      fragmentation = fragmentation_index,
-      fragmentation_index,
-      water_proximity = NA_real_,
-      connectivity_score = coalesce(connectivity_score, corridor_importance),
-      node_importance = NA_real_,
-      path_km,
-      is_unsampled,
-      temporal_bias_flag,
-      last_updated = Sys.time()
-    )
-}
-
-cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
-write_geojson_chunked(cell_attr, cell_attr_path)
-cat(sprintf("Written: %s\n", cell_attr_path))
-
-# ── 4. Per-cell stats + park aggregates + interventions ───────────────────────
-
 grid_df <- st_drop_geometry(grid)
 n_cells <- nrow(grid_df)
-cat(sprintf("Building cell stats for %d cells...\n", n_cells))
 
 cell_taxa_lookup <- list()
 if (file.exists(PROC_CELL_TAXA)) {
@@ -590,7 +571,8 @@ if (file.exists(PROC_CELL_TAXA)) {
   message(sprintf("No %s — species counts only (no name lists)", PROC_CELL_TAXA))
 }
 
-# Top interventions with park attribution
+# Top interventions with park attribution. Full intervention descriptions are
+# stored in PostgreSQL for click-time detail, not in PMTiles.
 top <- read_csv(PROC_TOP_INTER, show_col_types = FALSE) |>
   mutate(cell_id = paste0(CITY_ID, "-", cell_id)) |>
   left_join(grid_df |> select(cell_id, park_id), by = "cell_id")
@@ -625,25 +607,105 @@ park_interventions <- top |>
   )
 park_intervention_lookup <- setNames(park_interventions$interventions, park_interventions$park_id)
 
-cells_out <- list()
-for (i in seq_len(n_cells)) {
-  row <- grid_df[i, ]
-  stats <- cell_stats_row(row, MAX_EXPECTED_RICHNESS, cell_taxa_lookup)
-  cid <- row$cell_id
-  if (!is.null(intervention_lookup[[cid]])) {
-    stats$interventions <- list(intervention_lookup[[cid]])
-  }
-  cells_out[[cid]] <- stats
-  if (i %% 10000L == 0L) cat(sprintf("  … %d / %d cells\n", i, n_cells))
+hexgrid_tiles <- grid |>
+  transmute(
+    cellId             = cell_id,
+    impactScore        = as.integer(round(replace_na(impact_score, 0))),
+    expectedRichness   = round(replace_na(expected_richness, 0), 1),
+    ecologicalResidual = if_else(is_unsampled, NA_real_, round(replace_na(ecological_residual, 0), 1)),
+    habitatQuality     = pct_index(habitat_quality),
+    observedRichness   = if_else(is_unsampled, NA_real_, round(replace_na(richness_corrected, 0), 1)),
+    corridorImportance = pct_index(corridor_importance),
+    treeCover          = pct_index(tree_fraction),
+    heatExposure       = pct_index(lst_rank),
+    landUseGreen       = pct_index(green_fraction_wc),
+    interventionRank   = as.integer(replace_na(intervention_rank, 50L))
+  )
+
+hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
+write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
+cat(sprintf("Written: %s (source-layer: hexgrid)\n", hexgrid_pmtiles_path))
+
+if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
+  cell_attr_base <- st_read(PROC_CELL_ATTR, quiet = TRUE) |>
+    st_transform(4326)
+} else {
+  cell_attr_base <- grid |>
+    transmute(
+      cell_id,
+      expected_richness,
+      effort_corrected_richness,
+      ecological_residual,
+      corridor_importance,
+      intervention_rank,
+      heat_exposure = lst_rank,
+      noise = NA_real_,
+      light_pollution = NA_real_,
+      disturbance_index = NA_real_,
+      fragmentation = fragmentation_index,
+      fragmentation_index,
+      water_proximity = NA_real_,
+      connectivity_score = coalesce(connectivity_score, corridor_importance),
+      node_importance = NA_real_,
+      path_km,
+      is_unsampled,
+      temporal_bias_flag,
+      last_updated = Sys.time()
+    )
 }
 
-cat("Writing cells.json...\n")
-write_json_chunked(
-  cells_out,
-  file.path(DATA_EXPORT, "cells.json"),
-  auto_unbox = TRUE, null = "null", na = "null"
-)
-cat("Written: cells.json\n")
+cell_detail_attrs <- grid |>
+  rowwise() |>
+  mutate(
+    species = list(species_list(plant, bird, insect, mammal, fungi, taxa = normalize_cell_taxa(
+      cell_taxa_lookup[[sub(paste0("^", CITY_ID, "-"), "", cell_id)]]
+    ))),
+    pressures = list(derive_pressures(
+      n_obs, n_survey_dates, richness_corrected,
+      expected_richness, ecological_residual,
+      fragmentation_index, corridor_importance,
+      is_unsampled, temporal_bias_flag
+    )),
+    interventions = list({
+      iv <- intervention_lookup[[cell_id]]
+      if (is.null(iv)) list() else list(iv)
+    })
+  ) |>
+  ungroup() |>
+  st_drop_geometry() |>
+  transmute(
+    cell_id,
+    impact_score = as.integer(round(replace_na(impact_score, 0))),
+    habitat_quality = pct_index(habitat_quality),
+    habitat_quality_index = round(replace_na(habitat_quality, 0), 4),
+    species_richness_raw = as.integer(replace_na(species_richness, 0L)),
+    observed_richness = if_else(is_unsampled, NA_real_, round(replace_na(richness_corrected, 0), 1)),
+    max_expected_richness = as.integer(MAX_EXPECTED_RICHNESS),
+    is_unsampled,
+    temporal_bias_flag,
+    path_km = round(replace_na(path_km, 0), 4),
+    n_obs = as.integer(replace_na(n_obs, 0L)),
+    n_survey_dates = as.integer(replace_na(n_survey_dates, 0L)),
+    habitat_potential = habitat_potential(habitat_quality),
+    observer_effort_score = round(replace_na(n_obs, 0) / pmax(replace_na(path_km, 0), 0.01), 1),
+    taxonomic_diversity = round(replace_na(taxonomic_shannon, 0), 1),
+    species,
+    pressures,
+    interventions,
+    tree_cover = pct_index(tree_fraction),
+    land_use_green = pct_index(green_fraction_wc)
+  )
+
+cell_attr <- cell_attr_base |>
+  left_join(cell_detail_attrs, by = "cell_id")
+
+cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
+write_geojson_chunked(cell_attr, cell_attr_path)
+cat(sprintf("Written: %s\n", cell_attr_path))
+
+# ── 4. Per-cell stats + park aggregates + interventions ───────────────────────
+
+cat(sprintf("Building park aggregate stats from %d cells...\n", n_cells))
 
 park_stats_out <- list()
 for (pid in unique(grid_df$park_id)) {

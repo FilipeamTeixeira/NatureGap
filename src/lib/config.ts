@@ -19,7 +19,7 @@ export const MAP_CONFIG = {
   /** Initial map center — Honmoku Sancho Park centroid. */
   center:    [139.6606, 35.4255] as [number, number],
   zoom:      17,
-  minZoom:   9,
+  minZoom:   2,
   maxZoom:   20,
   /** OpenFreeMap Positron — free, no API key, Carto-Positron-compatible style. */
   basemapUrl: 'https://tiles.openfreemap.org/styles/positron',
@@ -40,7 +40,7 @@ export const HEX_CONFIG = {
 // ── Score methodology ─────────────────────────────────────────────────────────
 //
 // These thresholds define the 5-band ecological residual scale.
-// They are used in utils.ts, ScoreGauge.tsx, park-data.ts, and the
+// They are used in utils.ts, ScoreGauge.tsx, and the
 // data-contract.md colour table — change them here only.
 
 export const SCORE_THRESHOLDS = {
@@ -74,12 +74,13 @@ export const SCORE_COLORS = {
 
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
-  /** Must match CITY_ID in pipeline/config.R — files live at <BUCKET>/<CITY_ID>/filename */
+  /** Dataset namespace to scan in Storage. Files may be nested under timestamped folders. */
   CITY_ID:         'yokohama-honmoku',
+  DATASET_IDS:     ['yokohama-honmoku', 'amsterdam-schimmelstraat'],
+  /** Logical export names used as matching patterns, not fixed Storage paths. */
   PARK_STATS_KEY:  'park-stats.json',
-  CELLS_KEY:       'cells.json',
-  CELLS_MANIFEST_KEY: 'cells.manifest.json',
-  HEXGRID_MANIFEST_KEY: 'hexgrid.manifest.json',
+  HEXGRID_PMTILES_KEY: 'hexgrid.pmtiles',
+  HEXGRID_SOURCE_LAYER: 'hexgrid',
 } as const;
 
 /** Must match MAX_EXPECTED_RICHNESS in pipeline/config.R */

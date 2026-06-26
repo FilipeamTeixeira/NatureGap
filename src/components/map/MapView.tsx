@@ -2,10 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
+import { Protocol } from 'pmtiles';
 import { wardCentroidsGeoJSON } from '@/lib/data';
-import { getHexGrid } from '@/lib/hex-grid';
 import { getParks } from '@/lib/green-spaces';
 import { MAP_CONFIG } from '@/lib/config';
+import { listHexPmtilesDatasets, type HexPmtilesDataset } from '@/lib/pmtiles-storage';
+import type { RenderCellProperties } from '@/lib/cell-detail';
 import type { MapLayer } from '@/lib/types';
 import {
   getEnabledLayerIds,
@@ -21,10 +23,8 @@ interface MapViewProps {
   layers: MapLayer[];
   selectedCellId: string | null;
   onHexClick: (
-    parkId: string,
-    cellId: string,
+    cell: RenderCellProperties,
     coordinates: [number, number],
-    parkName?: string,
   ) => void;
   flyToTarget?: { center: [number, number]; zoom: number } | null;
   dataRevision?: number;
@@ -33,6 +33,19 @@ interface MapViewProps {
   surveyPointsGeoJSON?: GeoJSON.FeatureCollection;
   selectedSurveyPointId?: string | null;
   onSurveyPointSelect?: (id: string, coordinates: [number, number]) => void;
+}
+
+const PMTILES_PROTOCOL_KEY = '__naturegap_pmtiles_protocol__';
+
+function registerPmtilesProtocol() {
+  const globalState = globalThis as typeof globalThis & {
+    [PMTILES_PROTOCOL_KEY]?: Protocol;
+  };
+  if (globalState[PMTILES_PROTOCOL_KEY]) return;
+
+  const protocol = new Protocol();
+  maplibregl.addProtocol('pmtiles', protocol.tile);
+  globalState[PMTILES_PROTOCOL_KEY] = protocol;
 }
 
 /** Build a GeoJSON FeatureCollection from parks for park-level click zones. */
@@ -51,6 +64,15 @@ function safeColor(color: unknown) {
   return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : '#3d6b2f';
 }
 
+function scoreColor(score: number | undefined) {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return '#B8C9AE';
+  if (score < -20) return '#C95B4B';
+  if (score < -10) return '#E8A44C';
+  if (score < 5) return '#B8C9AE';
+  if (score < 15) return '#73A56D';
+  return '#2E6F40';
+}
+
 function layerEnabled(layers: MapLayer[], id: string): boolean {
   return layers.some((layer) => layer.id === id && layer.enabled);
 }
@@ -58,24 +80,75 @@ function layerEnabled(layers: MapLayer[], id: string): boolean {
 function applyHexLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
   const enabledIds = getEnabledLayerIds(layers);
   const opacity = hexFillOpacity(enabledIds.length);
+  const datasets = getHexDatasets(map);
 
-  for (const layerId of LAYER_DRAW_ORDER) {
-    const mlId = hexFillLayerId(layerId);
-    const enabled = enabledIds.includes(layerId);
+  for (const dataset of datasets) {
+    for (const layerId of LAYER_DRAW_ORDER) {
+      const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
+      const enabled = enabledIds.includes(layerId);
+      try {
+        map.setLayoutProperty(mlId, 'visibility', enabled ? 'visible' : 'none');
+        if (enabled) map.setPaintProperty(mlId, 'fill-opacity', opacity);
+      } catch { /* layer not ready */ }
+    }
+
     try {
-      map.setLayoutProperty(mlId, 'visibility', enabled ? 'visible' : 'none');
-      if (enabled) map.setPaintProperty(mlId, 'fill-opacity', opacity);
-    } catch { /* layer not ready */ }
+      map.setLayoutProperty(
+        hexOutlineLayerId(dataset.sourceId),
+        'visibility',
+        layerEnabled(layers, 'cell-grid') || enabledIds.length > 0 ? 'visible' : 'none',
+      );
+      map.setLayoutProperty(hexSelectedLayerId(dataset.sourceId), 'visibility', enabledIds.length > 0 ? 'visible' : 'none');
+    } catch { /* ignore */ }
   }
-
-  try {
-    map.setLayoutProperty('hex-outline', 'visibility', layerEnabled(layers, 'cell-grid') || enabledIds.length > 0 ? 'visible' : 'none');
-    map.setLayoutProperty('hex-selected', 'visibility', enabledIds.length > 0 ? 'visible' : 'none');
-  } catch { /* ignore */ }
 }
 
-function hexInteractiveLayerIds(): string[] {
-  return LAYER_DRAW_ORDER.map(hexFillLayerId);
+function hexFillLayerIdForDataset(sourceId: string, layerId: HexLayerId): string {
+  return `${hexFillLayerId(layerId)}-${sourceId}`;
+}
+
+function hexOutlineLayerId(sourceId: string): string {
+  return `hex-outline-${sourceId}`;
+}
+
+function hexSelectedLayerId(sourceId: string): string {
+  return `hex-selected-${sourceId}`;
+}
+
+function getHexDatasets(map: maplibregl.Map): HexPmtilesDataset[] {
+  return ((map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets ?? []);
+}
+
+function setHexDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
+  (map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets = datasets;
+}
+
+function hexInteractiveLayerIds(map: maplibregl.Map): string[] {
+  return getHexDatasets(map).flatMap((dataset) => LAYER_DRAW_ORDER.map((layerId) => (
+    hexFillLayerIdForDataset(dataset.sourceId, layerId)
+  )));
+}
+
+function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
+  if (!properties) return null;
+  const cellId = String(properties.cellId ?? '');
+  if (!cellId) return null;
+
+  return {
+    cellId,
+    parkId: properties.parkId != null ? String(properties.parkId) : undefined,
+    parkName: properties.parkName != null ? String(properties.parkName) : undefined,
+    impactScore: Number(properties.impactScore ?? 0),
+    expectedRichness: properties.expectedRichness == null ? null : Number(properties.expectedRichness),
+    ecologicalResidual: properties.ecologicalResidual == null ? null : Number(properties.ecologicalResidual),
+    habitatQuality: properties.habitatQuality == null ? null : Number(properties.habitatQuality),
+    observedRichness: properties.observedRichness == null ? null : Number(properties.observedRichness),
+    corridorImportance: properties.corridorImportance == null ? null : Number(properties.corridorImportance),
+    treeCover: properties.treeCover == null ? null : Number(properties.treeCover),
+    heatExposure: properties.heatExposure == null ? null : Number(properties.heatExposure),
+    landUseGreen: properties.landUseGreen == null ? null : Number(properties.landUseGreen),
+    interventionRank: properties.interventionRank == null ? null : Number(properties.interventionRank),
+  };
 }
 
 function applyCitizenLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
@@ -92,28 +165,13 @@ function applyCitizenLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
   }
 }
 
-function medianHexForPark(parkId: string) {
-  const hexes = getHexGrid().features
-    .filter((feature) => feature.properties?.parkId === parkId)
-    .map((feature) => ({
-      cellId: String(feature.properties?.cellId ?? ''),
-      score: Number(feature.properties?.score),
-    }))
-    .filter((feature) => feature.cellId && !Number.isNaN(feature.score))
-    .sort((a, b) => a.score - b.score);
-
-  return hexes.length ? hexes[Math.floor(hexes.length / 2)] : null;
-}
-
 function createPopupContent({
   parkName,
   score,
-  color,
   showScore,
 }: {
   parkName?: string;
   score?: number;
-  color?: string;
   showScore: boolean;
 }) {
   const root = document.createElement('div');
@@ -146,7 +204,7 @@ function createPopupContent({
     value.textContent = score > 0 ? `+${score}` : String(score);
     value.style.fontSize = '18px';
     value.style.fontWeight = '700';
-    value.style.color = safeColor(color);
+    value.style.color = safeColor(scoreColor(score));
     value.style.lineHeight = '1.2';
     root.append(value);
   }
@@ -212,6 +270,7 @@ export default function MapView({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    registerPmtilesProtocol();
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -227,7 +286,7 @@ export default function MapView({
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
-    map.on('load', () => {
+    map.on('load', async () => {
       map.addSource('parks', { type: 'geojson', data: parkPolygonsGeoJSON() });
 
       map.addLayer({
@@ -237,41 +296,51 @@ export default function MapView({
         paint: { 'fill-color': '#3d6b2f', 'fill-opacity': 0 },
       });
 
-      const hexGrid = getHexGrid();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      map.addSource('hexgrid', { type: 'geojson', data: hexGrid as any });
+      const pmtilesDatasets = await listHexPmtilesDatasets();
+      if (mapRef.current !== map) return;
+      setHexDatasets(map, pmtilesDatasets);
 
-      for (const layerId of LAYER_DRAW_ORDER) {
+      for (const dataset of pmtilesDatasets) {
+        map.addSource(dataset.sourceId, {
+          type: 'vector',
+          url: `pmtiles://${dataset.publicUrl}`,
+        });
+
+        for (const layerId of LAYER_DRAW_ORDER) {
+          map.addLayer({
+            id: hexFillLayerIdForDataset(dataset.sourceId, layerId),
+            type: 'fill',
+            source: dataset.sourceId,
+            'source-layer': dataset.sourceLayer,
+            layout: { visibility: 'none' },
+            paint: {
+              'fill-color': hexFillColorExpression(layerId),
+              'fill-opacity': 0.78,
+            },
+          });
+        }
+
         map.addLayer({
-          id: hexFillLayerId(layerId),
+          id: hexOutlineLayerId(dataset.sourceId),
+          type: 'line',
+          source: dataset.sourceId,
+          'source-layer': dataset.sourceLayer,
+          paint: { 'line-color': '#5a6b5a', 'line-width': 0.4, 'line-opacity': 0.55 },
+        });
+
+        map.addLayer({
+          id: hexSelectedLayerId(dataset.sourceId),
           type: 'fill',
-          source: 'hexgrid',
-          layout: { visibility: 'none' },
+          source: dataset.sourceId,
+          'source-layer': dataset.sourceLayer,
+          filter: ['==', ['get', 'cellId'], ''],
           paint: {
-            'fill-color': hexFillColorExpression(layerId),
-            'fill-opacity': 0.78,
+            'fill-color': '#1F2A1F',
+            'fill-opacity': 0.25,
+            'fill-outline-color': '#1F2A1F',
           },
         });
       }
-
-      map.addLayer({
-        id: 'hex-outline',
-        type: 'line',
-        source: 'hexgrid',
-        paint: { 'line-color': '#5a6b5a', 'line-width': 0.4, 'line-opacity': 0.55 },
-      });
-
-      map.addLayer({
-        id: 'hex-selected',
-        type: 'fill',
-        source: 'hexgrid',
-        filter: ['==', ['get', 'cellId'], ''],
-        paint: {
-          'fill-color': '#1F2A1F',
-          'fill-opacity': 0.25,
-          'fill-outline-color': '#1F2A1F',
-        },
-      });
 
       applyHexLayerVisibility(map, layersRef.current);
 
@@ -369,16 +438,18 @@ export default function MapView({
       });
 
       map.on('mousemove', (e) => {
-        const hexFeatures = map.queryRenderedFeatures(e.point, { layers: hexInteractiveLayerIds() });
+        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const hexFeatures = interactiveLayerIds.length
+          ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
+          : [];
         map.getCanvas().style.cursor = hexFeatures.length > 0 ? 'pointer' : '';
 
         const f = hexFeatures[0];
         if (!f) return;
 
-        const { score, color, parkName } = f.properties as {
-          score: number; color: string; parkName?: string;
-        };
-        const numericScore = Number(score);
+        const props = renderCellProperties(f.properties);
+        if (!props) return;
+        const numericScore = Number(props.impactScore);
         const impactOn = getEnabledLayerIds(layersRef.current).includes('impact');
 
         popupRef.current?.remove();
@@ -387,16 +458,18 @@ export default function MapView({
         })
           .setLngLat(e.lngLat)
           .setDOMContent(createPopupContent({
-            parkName,
+            parkName: props.parkName,
             score: numericScore,
-            color,
             showScore: impactOn && !Number.isNaN(numericScore),
           }))
           .addTo(map);
       });
 
       map.on('mousemove', 'park-area', (e) => {
-        const hexFeatures = map.queryRenderedFeatures(e.point, { layers: hexInteractiveLayerIds() });
+        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const hexFeatures = interactiveLayerIds.length
+          ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
+          : [];
         if (hexFeatures.length > 0) return;
 
         const f = e.features?.[0];
@@ -413,28 +486,27 @@ export default function MapView({
       });
 
       map.on('click', (e) => {
-        const hexFeatures = map.queryRenderedFeatures(e.point, { layers: hexInteractiveLayerIds() });
+        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const hexFeatures = interactiveLayerIds.length
+          ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
+          : [];
         const f = hexFeatures[0];
         if (!f) return;
         e.preventDefault();
-        const props = f.properties;
+        const props = renderCellProperties(f.properties);
         if (!props) return;
-        const parkId = String(props.parkId ?? '');
-        const cellId = String(props.cellId ?? parkId);
-        const parkName = props.parkName != null ? String(props.parkName) : undefined;
-        if (!parkId || !cellId) return;
-        onClickRef.current(parkId, cellId, [e.lngLat.lng, e.lngLat.lat], parkName);
+        onClickRef.current(props, [e.lngLat.lng, e.lngLat.lat]);
       });
 
       map.on('click', 'park-area', (e) => {
         if (e.defaultPrevented) return;
-        const props = e.features?.[0]?.properties;
+        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const hexFeatures = interactiveLayerIds.length
+          ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
+          : [];
+        const props = renderCellProperties(hexFeatures[0]?.properties);
         if (!props) return;
-        const parkId = String(props.parkId ?? '');
-        if (!parkId) return;
-        const medianHex = medianHexForPark(parkId);
-        const cellId = medianHex?.cellId ?? parkId;
-        onClickRef.current(parkId, cellId, [e.lngLat.lng, e.lngLat.lat]);
+        onClickRef.current(props, [e.lngLat.lng, e.lngLat.lat]);
       });
 
       map.on('mouseenter', 'survey-points-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -460,7 +532,9 @@ export default function MapView({
     if (!map) return;
     const apply = () => {
       try {
-        map.setFilter('hex-selected', ['==', ['get', 'cellId'], selectedCellId ?? '']);
+        for (const dataset of getHexDatasets(map)) {
+          map.setFilter(hexSelectedLayerId(dataset.sourceId), ['==', ['get', 'cellId'], selectedCellId ?? '']);
+        }
       } catch { /* style not ready */ }
     };
     if (map.isStyleLoaded()) apply();
@@ -493,9 +567,6 @@ export default function MapView({
   useEffect(() => {
     if (!mapRef.current || !layersAddedRef.current || dataRevision === 0) return;
     const map = mapRef.current;
-    const hexSrc = map.getSource('hexgrid') as maplibregl.GeoJSONSource | undefined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    hexSrc?.setData(getHexGrid() as any);
     const parkSrc = map.getSource('parks') as maplibregl.GeoJSONSource | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     parkSrc?.setData(parkPolygonsGeoJSON() as any);

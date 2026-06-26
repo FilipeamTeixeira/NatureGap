@@ -11,7 +11,7 @@ download_sentinel2_ndvi <- function(bbox = BBOX_CITY,
 
   dir.create(dirname(out_file), recursive = TRUE, showWarnings = FALSE)
 
-  con <- connect("https://openeo.dataspace.copernicus.eu")
+  con <- openeo::connect("https://openeo.dataspace.copernicus.eu")
   login()
 
   p <- processes()
@@ -70,3 +70,4 @@ download_sentinel2_ndvi <- function(bbox = BBOX_CITY,
 }
 
 download_sentinel2_ndvi()
+

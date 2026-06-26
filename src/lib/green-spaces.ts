@@ -1,5 +1,4 @@
-import { supabase } from './supabase';
-import { STORAGE } from './config';
+import { fetchPipelineJson } from './storage-fetch';
 
 export interface GreenSpace {
   /** Stable identifier — matches hexgrid `parkId` and park-stats `id`. */
@@ -53,48 +52,21 @@ function featureToGreenSpace(f: Record<string, unknown>): GreenSpace | null {
   };
 }
 
-async function fetchParksFromPublic(): Promise<GreenSpace[]> {
-  try {
-    const res = await fetch(`/pipeline/${STORAGE.CITY_ID}/parks.geojson`);
-    if (!res.ok) return [];
-    const fc = (await res.json()) as { features: Record<string, unknown>[] };
-    return fc.features
-      .map(featureToGreenSpace)
-      .filter((p): p is GreenSpace => p !== null);
-  } catch {
-    return [];
-  }
-}
-
 /**
- * Fetch parks.geojson from Supabase Storage or bundled public assets.
+ * Fetch latest matching parks GeoJSON from Supabase Storage.
  */
 export async function initParks(): Promise<void> {
   if (initParksCalled) return;
   initParksCalled = true;
 
   try {
-    if (supabase) {
-      const { data, error } = await supabase.storage
-        .from(STORAGE.PIPELINE_BUCKET)
-        .download(`${STORAGE.CITY_ID}/parks.geojson`);
-      if (!error && data) {
-        const fc = JSON.parse(await data.text()) as { features: Record<string, unknown>[] };
-        const parks = fc.features
-          .map(featureToGreenSpace)
-          .filter((p): p is GreenSpace => p !== null);
-        if (parks.length > 0) {
-          runtimeParks = parks;
-          console.info(`[green-spaces] Loaded ${parks.length} parks from Storage`);
-          return;
-        }
-      }
-    }
-
-    const parks = await fetchParksFromPublic();
+    const fc = await fetchPipelineJson('parks.geojson', null) as { features?: Record<string, unknown>[] } | null;
+    const parks = (fc?.features ?? [])
+      .map(featureToGreenSpace)
+      .filter((p): p is GreenSpace => p !== null);
     if (parks.length > 0) {
       runtimeParks = parks;
-      console.info(`[green-spaces] Loaded ${parks.length} parks from public assets`);
+      console.info(`[green-spaces] Loaded ${parks.length} parks from Storage`);
     }
   } catch (e) {
     console.warn('[green-spaces] Failed to load parks:', e);

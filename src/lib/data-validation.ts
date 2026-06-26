@@ -163,14 +163,3 @@ export function parseParkStats(value: unknown): Record<string, ParkStats> {
   }
   return out;
 }
-
-export function parseCellsJson(value: unknown): Record<string, ParkStats> {
-  if (!isRecord(value)) throw new Error('Invalid cells.json: expected object keyed by cell id');
-
-  const out: Record<string, ParkStats> = {};
-  for (const [id, stats] of Object.entries(value)) {
-    if (!isRecord(stats)) throw new Error(`Invalid cells.json entry for ${id}: expected object`);
-    out[id] = normalizeCellStats(stats);
-  }
-  return out;
-}

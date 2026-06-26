@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -284,7 +285,7 @@ export default function CitizenSciencePanel({
           <div>
             <h2 className="text-[16px] font-semibold text-[#1F2A1F]">Citizen science</h2>
             <p className="text-[12px] text-[#667066] mt-0.5">
-              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1)} access` : 'Sign in required'}
+              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1)} access` : 'Sign in to contribute'}
             </p>
           </div>
           <div className="flex rounded-lg border border-[#E4E7E1] bg-[#F7F8F5] p-1">
@@ -308,7 +309,12 @@ export default function CitizenSciencePanel({
 
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
         {!hasAuth && (
-          <StatusMessage kind="warning">Connect with Supabase Auth before submitting observations.</StatusMessage>
+          <StatusMessage kind="warning">
+            <Link href="/login" className="font-semibold underline underline-offset-2">
+              Sign in
+            </Link>
+            {' '}to submit sightings and surveys.
+          </StatusMessage>
         )}
 
         <div className="bg-white border border-[#E4E7E1] rounded-lg p-4">
