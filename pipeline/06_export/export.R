@@ -140,24 +140,37 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   tmp <- tempfile(fileext = ".geojson")
   on.exit(unlink(tmp), add = TRUE)
   write_geojson(value, tmp)
+
+  tmp_pmtiles <- tempfile(fileext = ".pmtiles")
+  on.exit(unlink(tmp_pmtiles), add = TRUE)
   if (file.exists(output_path)) unlink(output_path)
 
   # Internal vector tile source-layer is exactly "hexgrid".
   # Frontend URL format:
   # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/hexgrid.pmtiles
   args <- c(
-    "--output", output_path,
+    "--output", tmp_pmtiles,
     "--layer", "hexgrid",
     "--force",
-    "--drop-densest-as-needed",
-    "--extend-zooms-if-still-dropping",
+    "--no-feature-limit",
+    "--no-tile-size-limit",
+    "--no-tiny-polygon-reduction",
     "--minimum-zoom", "0",
-    "--maximum-zoom", "14",
+    "--maximum-zoom", "18",
     tmp
   )
   status <- system2(tippecanoe, args = args)
-  if (!file.exists(output_path) || !identical(status, 0L)) {
-    stop("tippecanoe failed to generate hexgrid.pmtiles")
+  if (is.na(status) || status != 0) {
+    stop(sprintf("tippecanoe failed to generate hexgrid.pmtiles (exit status: %s)", status))
+  }
+  if (!file.exists(tmp_pmtiles) || file.info(tmp_pmtiles)$size <= 0) {
+    stop(sprintf(
+      "tippecanoe exited successfully but did not create a PMTiles file at %s",
+      tmp_pmtiles
+    ))
+  }
+  if (!file.copy(tmp_pmtiles, output_path, overwrite = TRUE)) {
+    stop(sprintf("Failed to copy generated PMTiles to %s", output_path))
   }
 }
 
@@ -607,14 +620,24 @@ park_interventions <- top |>
   )
 park_intervention_lookup <- setNames(park_interventions$interventions, park_interventions$park_id)
 
-hexgrid_tiles <- grid |>
+hexgrid_render <- grid |>
+  filter(!is.na(park_id), park_id != "city-green")
+
+cat(sprintf(
+  "  → PMTiles render grid: %d / %d cells inside named green spaces\n",
+  nrow(hexgrid_render), nrow(grid)
+))
+
+hexgrid_tiles <- hexgrid_render |>
   transmute(
     cellId             = cell_id,
+    parkId             = park_id,
+    parkName           = park_name,
     impactScore        = as.integer(round(replace_na(impact_score, 0))),
     expectedRichness   = round(replace_na(expected_richness, 0), 1),
-    ecologicalResidual = if_else(is_unsampled, NA_real_, round(replace_na(ecological_residual, 0), 1)),
+    ecologicalResidual = if_else(is_unsampled, 0, round(replace_na(ecological_residual, 0), 1)),
     habitatQuality     = pct_index(habitat_quality),
-    observedRichness   = if_else(is_unsampled, NA_real_, round(replace_na(richness_corrected, 0), 1)),
+    observedRichness   = if_else(is_unsampled, 0, round(replace_na(richness_corrected, 0), 1)),
     corridorImportance = pct_index(corridor_importance),
     treeCover          = pct_index(tree_fraction),
     heatExposure       = pct_index(lst_rank),
@@ -689,9 +712,24 @@ cell_detail_attrs <- grid |>
     habitat_potential = habitat_potential(habitat_quality),
     observer_effort_score = round(replace_na(n_obs, 0) / pmax(replace_na(path_km, 0), 0.01), 1),
     taxonomic_diversity = round(replace_na(taxonomic_shannon, 0), 1),
-    species,
-    pressures,
-    interventions,
+    species = vapply(
+      species,
+      jsonlite::toJSON,
+      character(1),
+      auto_unbox = TRUE, null = "null", na = "null"
+    ),
+    pressures = vapply(
+      pressures,
+      jsonlite::toJSON,
+      character(1),
+      auto_unbox = TRUE, null = "null", na = "null"
+    ),
+    interventions = vapply(
+      interventions,
+      jsonlite::toJSON,
+      character(1),
+      auto_unbox = TRUE, null = "null", na = "null"
+    ),
     tree_cover = pct_index(tree_fraction),
     land_use_green = pct_index(green_fraction_wc)
   )

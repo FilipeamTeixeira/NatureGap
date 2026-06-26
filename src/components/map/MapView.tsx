@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
-import { Protocol } from 'pmtiles';
+import { PMTiles, Protocol } from 'pmtiles';
 import { wardCentroidsGeoJSON } from '@/lib/data';
 import { getParks } from '@/lib/green-spaces';
 import { MAP_CONFIG } from '@/lib/config';
@@ -127,6 +127,34 @@ function hexInteractiveLayerIds(map: maplibregl.Map): string[] {
   return getHexDatasets(map).flatMap((dataset) => LAYER_DRAW_ORDER.map((layerId) => (
     hexFillLayerIdForDataset(dataset.sourceId, layerId)
   )));
+}
+
+function selectedHexFilter(cellId: string | null): maplibregl.FilterSpecification {
+  return ['==', ['get', 'cellId'], cellId ?? ''];
+}
+
+async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
+  if (datasets.length === 0) return;
+
+  const bounds = new maplibregl.LngLatBounds();
+  const headers = await Promise.allSettled(
+    datasets.map((dataset) => new PMTiles(dataset.publicUrl).getHeader()),
+  );
+
+  for (const headerResult of headers) {
+    if (headerResult.status !== 'fulfilled') continue;
+    const { minLon, minLat, maxLon, maxLat } = headerResult.value;
+    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) continue;
+    bounds.extend([minLon, minLat]);
+    bounds.extend([maxLon, maxLat]);
+  }
+
+  if (bounds.isEmpty()) return;
+  map.fitBounds(bounds, {
+    padding: 80,
+    maxZoom: MAP_CONFIG.zoom,
+    duration: 0,
+  });
 }
 
 function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
@@ -333,7 +361,7 @@ export default function MapView({
           type: 'fill',
           source: dataset.sourceId,
           'source-layer': dataset.sourceLayer,
-          filter: ['==', ['get', 'cellId'], ''],
+          filter: selectedHexFilter(null),
           paint: {
             'fill-color': '#1F2A1F',
             'fill-opacity': 0.25,
@@ -343,6 +371,8 @@ export default function MapView({
       }
 
       applyHexLayerVisibility(map, layersRef.current);
+      await fitMapToPmtilesDatasets(map, pmtilesDatasets);
+      if (mapRef.current !== map) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addSource('ward-labels', { type: 'geojson', data: wardCentroidsGeoJSON() as any });
@@ -533,7 +563,7 @@ export default function MapView({
     const apply = () => {
       try {
         for (const dataset of getHexDatasets(map)) {
-          map.setFilter(hexSelectedLayerId(dataset.sourceId), ['==', ['get', 'cellId'], selectedCellId ?? '']);
+          map.setFilter(hexSelectedLayerId(dataset.sourceId), selectedHexFilter(selectedCellId));
         }
       } catch { /* style not ready */ }
     };

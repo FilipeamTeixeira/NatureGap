@@ -19,7 +19,7 @@ export const MAP_CONFIG = {
   /** Initial map center — Honmoku Sancho Park centroid. */
   center:    [139.6606, 35.4255] as [number, number],
   zoom:      17,
-  minZoom:   2,
+  minZoom:   0,
   maxZoom:   20,
   /** OpenFreeMap Positron — free, no API key, Carto-Positron-compatible style. */
   basemapUrl: 'https://tiles.openfreemap.org/styles/positron',

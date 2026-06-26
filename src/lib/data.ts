@@ -62,7 +62,7 @@ export async function initData(): Promise<void> {
       const { data, error } = await supabase
         .from('global_stats')
         .select('observations_today, species_observed, areas_improving')
-        .single();
+        .maybeSingle();
       if (error || !data) return;
       _globalStats = {
         observationsToday: data.observations_today,

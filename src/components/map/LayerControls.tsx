@@ -65,14 +65,22 @@ export default function LayerControls({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([]);
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window !== 'undefined' && window.localStorage.getItem('naturegap.sidebar.collapsed') === 'true',
-  );
+  const [collapsed, setCollapsed] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setCollapsed(window.localStorage.getItem('naturegap.sidebar.collapsed') === 'true');
+      setHydrated(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem('naturegap.sidebar.collapsed', String(collapsed));
-  }, [collapsed]);
+  }, [collapsed, hydrated]);
 
   useEffect(() => {
     const q = query.trim();
