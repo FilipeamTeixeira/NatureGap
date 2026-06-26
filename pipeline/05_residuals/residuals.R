@@ -6,9 +6,8 @@
 # Negative residual → potential refuge
 #
 # Intervention ranking:
-#   composite_score = w1 * normalised_underperformance + w2 * corridor_importance
-#   Top-ranked cells get counterfactual connectivity estimates (re-run graph
-#   with candidate cell reclassified as habitat, measure betweenness change).
+#   intervention_score = (ecological_residual * 0.5) * (corridor_importance * 0.5)
+#   Top-ranked cells get counterfactual connectivity estimates.
 #
 # Outputs:
 #   data/processed/grid_residuals.gpkg  — full grid with all computed fields
@@ -20,8 +19,6 @@ library(igraph)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
-W_RESIDUAL    <- 0.55  # weight on underperformance in composite score
-W_CORRIDOR    <- 0.45  # weight on corridor importance
 TOP_N         <- 20    # number of cells for counterfactual connectivity
 
 # ── 1. Load and join layers ──────────────────────────────────────────────────
@@ -37,7 +34,9 @@ obs  <- st_read(PROC_GRID_OBS,quiet = TRUE) |>
 
 conn <- st_read(PROC_GRID_CONN,quiet = TRUE) |>
   st_drop_geometry() |>
-  select(cell_id, corridor_importance, fragmentation_index, patch_area_ha)
+  select(cell_id, corridor_importance, connectivity_score, node_importance,
+         fragmentation_index, neighbor_fragmentation, edge_density,
+         patch_isolation, patch_size_distribution, patch_area_ha)
 
 grid <- hab |>
   left_join(obs,  by = "cell_id") |>
@@ -104,55 +103,80 @@ if (is.na(m) || m == 0) {
     ))
 }
 
-# ── 3. Normalise components for composite score ───────────────────────────────
+# ── 3. Intervention score and ranking ────────────────────────────────────────
 
 grid <- grid |>
   mutate(
-    resid_range   = max(underperformance, na.rm = TRUE) - min(underperformance, na.rm = TRUE),
-    resid_norm    = if_else(
-      is_unsampled | !is.finite(resid_range) | resid_range == 0,
-      0,
-      (underperformance - min(underperformance, na.rm = TRUE)) / resid_range
+    intervention_score = (
+      replace_na(ecological_residual, 0) * 0.5
+    ) * (
+      replace_na(corridor_importance, 0) * 0.5
     ),
-    corr_norm     = replace_na(corridor_importance, 0),
-    composite     = W_RESIDUAL * resid_norm + W_CORRIDOR * corr_norm
-  ) |>
-  select(-resid_range)
-
-# ── 4. Rank cells by composite score ─────────────────────────────────────────
-
-grid <- grid |>
-  mutate(
-    intervention_rank = if_else(
-      is_unsampled,
-      NA_real_,
-      rank(-composite, ties.method = "first", na.last = "keep")
-    )
+    composite = intervention_score,
+    intervention_rank = rank(-intervention_score, ties.method = "first", na.last = "keep")
   )
 
 top_cells <- grid |>
   st_drop_geometry() |>
-  filter(!is.na(intervention_rank), !is_unsampled) |>
+  filter(!is.na(intervention_rank), intervention_score > 0) |>
   arrange(intervention_rank) |>
   slice_head(n = TOP_N)
 
 cat(sprintf("Top %d intervention cells identified\n", nrow(top_cells)))
 
-# ── 5. Counterfactual connectivity for top cells ──────────────────────────────
-# Re-run graph with each top cell reclassified as habitat (quality = 1.0)
-# and measure change in mean betweenness of adjacent cells.
-# NOTE: full re-run is slow for large grids; only TOP_N cells are evaluated.
+# ── 4. Counterfactual connectivity for top cells ─────────────────────────────
 
-# (Placeholder — requires connectivity graph from step 04 to be in memory.
-#  In production, source("04_connectivity/connectivity.R") first or use targets.)
+counterfactual_gain <- function(grid_sf, target_cell_id, radius_m = CELL_SIZE * 4) {
+  target <- grid_sf |> filter(cell_id == target_cell_id)
+  if (nrow(target) != 1L) return(NA_real_)
+
+  local_idx <- lengths(st_is_within_distance(st_centroid(grid_sf), st_centroid(target), dist = radius_m)) > 0
+  local_grid <- grid_sf[local_idx, ]
+  if (nrow(local_grid) < 3L) return(NA_real_)
+
+  build_local_score <- function(local_grid, upgraded = FALSE) {
+    qualities <- pmin(1, pmax(0, replace_na(local_grid$habitat_quality, 0)))
+    if (upgraded) {
+      qualities[local_grid$cell_id == target_cell_id] <- 1
+    }
+    pts <- st_centroid(local_grid)
+    within <- st_is_within_distance(pts, pts, dist = CELL_SIZE * 1.15, sparse = TRUE)
+    edges <- bind_rows(lapply(seq_along(within), function(i) {
+      neighbors <- within[[i]]
+      neighbors <- neighbors[neighbors > i]
+      if (length(neighbors) == 0L) return(NULL)
+      tibble(from = local_grid$cell_id[i], to = local_grid$cell_id[neighbors],
+             from_idx = i, to_idx = neighbors)
+    }))
+    if (nrow(edges) == 0L) return(0)
+    weights <- ((1 - qualities[edges$from_idx]) + (1 - qualities[edges$to_idx])) / 2
+    eps <- min(weights[weights > 0], na.rm = TRUE) * 0.001
+    if (!is.finite(eps) || eps <= 0) eps <- 1e-6
+    g <- graph_from_data_frame(
+      edges |> mutate(weight = pmax(weights, eps)) |> select(from, to, weight),
+      directed = FALSE,
+      vertices = tibble(name = local_grid$cell_id)
+    )
+    mean(betweenness(g, weights = E(g)$weight, normalized = TRUE), na.rm = TRUE)
+  }
+
+  baseline <- build_local_score(local_grid, upgraded = FALSE)
+  upgraded <- build_local_score(local_grid, upgraded = TRUE)
+  if (!is.finite(baseline) || baseline <= 0) return(NA_real_)
+  (upgraded - baseline) / baseline * 100
+}
 
 top_cells <- top_cells |>
   mutate(
-    connectivity_gain_pct = NA_real_,  # populated by counterfactual loop
-    counterfactual_note   = "Counterfactual not yet computed — run full pipeline"
+    connectivity_gain_pct = vapply(
+      cell_id,
+      \(cid) counterfactual_gain(grid, cid),
+      numeric(1)
+    ),
+    counterfactual_note = "Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0"
   )
 
-# ── 6. Assign intervention categories ────────────────────────────────────────
+# ── 5. Assign intervention categories ────────────────────────────────────────
 
 top_cells <- top_cells |>
   mutate(
@@ -170,7 +194,7 @@ top_cells <- top_cells |>
     )
   )
 
-# ── 7. Write outputs ─────────────────────────────────────────────────────────
+# ── 6. Write outputs ─────────────────────────────────────────────────────────
 
 st_write(grid, PROC_GRID_RESID, delete_dsn = TRUE)
 write_csv(top_cells, PROC_TOP_INTER)
@@ -183,12 +207,16 @@ cell_attributes <- grid |>
     ecological_residual,
     corridor_importance,
     intervention_rank,
-    heat_exposure = lst_rank,
-    noise = NA_real_,
-    light_pollution = NA_real_,
+    intervention_score,
+    heat_exposure,
+    noise,
+    light_pollution,
+    disturbance_index,
     fragmentation = fragmentation_index,
-    water_proximity = NA_real_,
-    connectivity_score = corridor_importance,
+    fragmentation_index,
+    water_proximity,
+    connectivity_score,
+    node_importance,
     path_km,
     is_unsampled,
     temporal_bias_flag,

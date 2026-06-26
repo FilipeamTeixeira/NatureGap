@@ -24,7 +24,7 @@ type SearchResult =
 const LAYER_DESCRIPTIONS: Record<string, string> = {
   impact:       'Observed vs expected biodiversity, corrected for observer effort.',
   expected:     'Habitat-derived expected species richness per cell.',
-  residual:     'Observed minus expected richness, showing ecological gap.',
+  residual:     'Expected minus effort-corrected richness, showing ecological pressure.',
   intervention: 'Restoration priority ranking from the pipeline.',
   habitat:      'Composite habitat quality from land cover, vegetation, and heat.',
   treecover:    'Canopy cover fraction derived from satellite imagery.',
@@ -32,7 +32,7 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
   connectivity: 'Habitat corridor importance — how connected each patch is.',
   heat:         'Landsat land-surface temperature — warmer = more heat stress.',
   landuse:      'Land cover classification across the study area.',
-  'cell-grid': '100m analysis cell outlines where available.',
+  'cell-grid': '20m hex cell outlines.',
   'survey-points': 'Approved structured survey points.',
   'quick-sightings': 'Presence-only citizen observations.',
   'structured-surveys': 'Protocol-based survey submissions.',

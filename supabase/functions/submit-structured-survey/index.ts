@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
         status,
       })
       .eq('id', surveyId)
-      .select('id, survey_point_id, started_at, submitted_at, duration_seconds, status, habitat_indicators')
+      .select('id, survey_point_id, cell_id, started_at, submitted_at, duration_seconds, status, habitat_indicators')
       .single();
 
     if (error) throw error;

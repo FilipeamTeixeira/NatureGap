@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     const { data: survey, error: surveyError } = await auth.serviceClient
       .from('structured_surveys')
-      .select('id, user_id, survey_point_id, started_at')
+      .select('id, user_id, survey_point_id, cell_id, started_at')
       .eq('id', surveyId)
       .maybeSingle();
 
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     const flags: string[] = [];
-    const cellId = await findSurveyPointCellId(auth.serviceClient, survey.survey_point_id);
+    const cellId = survey.cell_id ?? await findSurveyPointCellId(auth.serviceClient, survey.survey_point_id);
     const reasons = plausibilityReasons(species, cellId, new Date(survey.started_at));
     if (await maybeFlagPlausibility(auth.serviceClient, 'survey_record', data.id, reasons, auth.user.id)) {
       flags.push(...reasons);
@@ -79,9 +79,9 @@ Deno.serve(async (req) => {
 
       const { data: duplicates, error: duplicateError } = await auth.serviceClient
         .from('survey_records')
-        .select('id, structured_surveys!inner(survey_point_id, started_at)')
+        .select('id, structured_surveys!inner(cell_id, started_at)')
         .eq('species_id', speciesId)
-        .eq('structured_surveys.survey_point_id', survey.survey_point_id)
+        .eq('structured_surveys.cell_id', cellId)
         .gte('structured_surveys.started_at', windowStart)
         .lte('structured_surveys.started_at', windowEnd)
         .neq('id', data.id)
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
       if (duplicateError) throw duplicateError;
       if (duplicates && duplicates.length > 0) {
-        const reason = 'Duplicate detection: same species and survey point within 30 minutes';
+        const reason = 'Duplicate detection: same species and 20m hex cell within 30 minutes';
         await createFlag(auth.serviceClient, 'survey_record', data.id, reason, auth.user.id);
         flags.push(reason);
       }

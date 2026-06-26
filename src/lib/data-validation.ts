@@ -21,6 +21,10 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || isNumber(value);
+}
+
 function isStringArray(value: unknown): value is string[] {
   if (typeof value === 'string') return true;
   return Array.isArray(value) && value.every((v) => typeof v === 'string');
@@ -72,10 +76,14 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     isNumber(value.habitatQuality) &&
     isNumber(value.habitatQualityIndex) &&
     isNumber(value.speciesRichnessRaw) &&
-    isNumber(value.observedRichness) &&
+    isNullableNumber(value.observedRichness) &&
+    (value.effortCorrectedRichness === undefined || isNullableNumber(value.effortCorrectedRichness)) &&
     isNumber(value.expectedRichness) &&
     isNumber(value.maxExpectedRichness) &&
-    isNumber(value.ecologicalResidual) &&
+    isNullableNumber(value.ecologicalResidual) &&
+    (value.isUnsampled === undefined || typeof value.isUnsampled === 'boolean') &&
+    (value.temporalBiasFlag === undefined || typeof value.temporalBiasFlag === 'boolean') &&
+    (value.pathKm === undefined || isNumber(value.pathKm)) &&
     isNumber(value.nObs) &&
     isNumber(value.nSurveyDates) &&
     typeof value.status === 'string' &&

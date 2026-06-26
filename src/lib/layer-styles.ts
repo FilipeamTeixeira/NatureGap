@@ -32,7 +32,7 @@ export type HexLayerId = (typeof LAYER_DRAW_ORDER)[number];
 /** Saturated ramps — even low values stay visible on the light basemap. */
 const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact'>, [number, string][]> = {
   expected:     [[0, '#deebf7'], [25, '#9ecae1'], [50, '#4292c6'], [75, '#08519c'], [100, '#08306b']],
-  residual:     [[-50, '#C95B4B'], [-20, '#E8A44C'], [0, '#B8C9AE'], [20, '#73A56D'], [50, '#2E6F40']],
+  residual:     [[-50, '#2E6F40'], [-20, '#73A56D'], [0, '#B8C9AE'], [20, '#E8A44C'], [50, '#C95B4B']],
   intervention: [[1, '#4a148c'], [5, '#6a1b9a'], [10, '#8e24aa'], [20, '#ab47bc'], [50, '#d8a7df']],
   habitat:      [[0, '#8ecf9a'], [25, '#52a868'], [50, '#3d8b57'], [75, '#2E6F40'], [100, '#1a4a28']],
   treecover:    [[0, '#66bb6a'], [25, '#43a047'], [50, '#2e7d32'], [75, '#1b5e20'], [100, '#0d3d12']],
@@ -108,11 +108,11 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     title: 'Ecological Residual',
     property: 'ecologicalResidual',
     legend: [
-      { color: '#2E6F40', label: 'Strong surplus' },
-      { color: '#73A56D', label: 'Surplus' },
+      { color: '#C95B4B', label: 'Strong pressure' },
+      { color: '#E8A44C', label: 'Pressure' },
       { color: '#B8C9AE', label: 'Near expected' },
-      { color: '#E8A44C', label: 'Underperforming' },
-      { color: '#C95B4B', label: 'Strong gap' },
+      { color: '#73A56D', label: 'Refuge' },
+      { color: '#2E6F40', label: 'Strong refuge' },
     ],
   },
   intervention: {

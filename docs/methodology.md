@@ -6,9 +6,9 @@ This document describes the analytical decisions behind NatureGap's indices, the
 
 ## 1. Spatial grid
 
-**Resolution:** 250m × 250m square grid (configurable; 100m tested but computationally heavier for connectivity step).  
+**Resolution:** 20 m hexagons generated with `sf::st_make_grid(area, cellsize = 20, square = FALSE)`. This is the only analytical, storage, and display grid.  
 **CRS:** JGD2011 / Japan Plane Rectangular CS VI (EPSG:6674) for local processing; reprojected to WGS84 (EPSG:4326) for web serving.  
-**Coverage:** Yokohama city boundary with a 500m buffer to avoid edge effects in the connectivity graph.
+**Coverage:** configured city analysis extent. Display and analysis use the same 20 m hex cells.
 
 ---
 
@@ -42,13 +42,13 @@ habitat_quality = 0.35 × ndvi_idx + 0.30 × green_idx + 0.20 × lst_idx + 0.15 
 **Approach:** We normalise observed richness by a proxy for observer effort:
 
 ```
-effort_i = n_obs_i / max(path_km_i, 0.1)
-corrected_richness_i = raw_richness_i / sqrt(effort_i + 1)
+corrected_richness_i = raw_species_count_i / log(1 + path_km_i)
 ```
 
 Where `path_km_i` is the total length of OSM footways, paths, and tracks within cell *i*.
+If `path_km_i = 0`, the cell is marked unsampled and excluded from richness residual inference rather than treated as zero richness.
 
-**Rationale for sqrt:** The square root dampens the correction for very high-effort cells, preventing over-correction where richness is genuinely high and well-sampled.
+**Rationale for log:** `log(1 + path_km)` dampens very high accessibility while preserving the critical distinction between sampled and unsampled cells.
 
 **Limitations:**  
 - Effort proxy assumes observers walk on mapped paths. Unmarked paths and private land crossings are missed.  
@@ -62,7 +62,7 @@ Where `path_km_i` is the total length of OSM footways, paths, and tracks within 
 **Formula:**
 
 ```
-expected_richness_i = habitat_quality_i × MAX_EXPECTED
+expected_richness_i = MAX_EXPECTED × (0.65 × habitat_i + 0.20 × connectivity_i + 0.15 × accessibility_i)
 ```
 
 Where `MAX_EXPECTED = 350` (provisional upper bound based on literature values for temperate urban biodiversity in Japan).
@@ -79,11 +79,11 @@ Where `MAX_EXPECTED = 350` (provisional upper bound based on literature values f
 ## 5. Ecological residual
 
 ```
-ecological_residual_i = corrected_richness_i − expected_richness_i
+ecological_residual_i = expected_richness_i − corrected_richness_i
 ```
 
-- **Negative residual** → nature is underperforming relative to habitat quality. Priority for restoration.
-- **Positive residual** → biodiversity surplus. Potentially an unrecognised refuge worth protecting.
+- **Positive residual** → high habitat pressure. Priority for restoration.
+- **Negative residual** → potential refuge worth protecting.
 - **Near zero** → nature is performing as expected.
 
 ---
@@ -91,15 +91,15 @@ ecological_residual_i = corrected_richness_i − expected_richness_i
 ## 6. Connectivity analysis
 
 **Graph construction:**  
-- Nodes = habitat cells (habitat_quality ≥ 0.40).  
-- Edges = queen's-case adjacency (8-neighbours within √2 × 250m).  
+- Nodes = all 20 m hex cells, including urban, green, water, and built-up cells.  
+- Edges = neighbouring 20 m hex centroids.  
 - Edge weight = mean resistance = mean(1 − habitat_quality) of both connected cells.
 
 **Corridor importance:**  
 Normalised betweenness centrality computed with `igraph::betweenness()`. A cell with high betweenness lies on many shortest paths between habitat patches — removing it would disconnect the network.
 
 **Fragmentation index:**  
-Proportion of the 8 possible queen's-case neighbours that are NOT classified as habitat.
+Proportion of neighbouring 20 m hexes that are NOT classified as habitat.
 
 **Limitations:**  
 - The resistance surface uses habitat quality as a proxy for permeability. Species-specific permeability (e.g., for a focal species like a butterfly or small mammal) would require species distribution models.  
@@ -126,5 +126,5 @@ Each top cell is reclassified as habitat (quality = 1.0) and the connectivity gr
 1. **Urban bias in citizen science:** Records cluster near dense residential areas and popular parks. The effort correction partially addresses this but cannot fully compensate.
 2. **Taxonomic bias:** iNaturalist records skew toward charismatic fauna (birds, butterflies, large plants). Soil fauna, fungi, and aquatic invertebrates are severely underrepresented.
 3. **Temporal mismatch:** Satellite imagery and field records rarely coincide in time. Seasonal variation in NDVI and phenology creates noise.
-4. **Data sparsity:** Many cells have zero observations. The residual for these cells reflects habitat quality only, not confirmed absence of biodiversity.
+4. **Data sparsity:** Unsampled cells are excluded from residual inference rather than treated as zero biodiversity.
 5. **Single-city calibration:** All parameters are tuned for Yokohama. Transferability to a second city requires re-validation.

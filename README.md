@@ -13,7 +13,7 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 | Feature | What it does |
 |---|---|
 | **Residual analysis** | Compares expected biodiversity (habitat model) with observed (citizen science), cell by cell |
-| **Effort correction** | iNaturalist/GBIF records weighted by observer effort (obs / km of accessible path) |
+| **Effort correction** | Species richness corrected by accessible pedestrian path length on the 20m hex grid |
 | **Graph-theoretic corridors** | Betweenness centrality drives intervention ranking — "restoring *this* cell reduces fragmentation most efficiently" |
 | **LiDAR canopy** | Uses actual canopy height (Yokohama open LiDAR) rather than spectral greenness alone |
 | **Fully open source** | Methodology, pipeline, and application code are all public |
@@ -25,7 +25,7 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 ```
 /pipeline        # R scripts: data ingestion → modelling → export
   /01_ingest     # iNaturalist, GBIF, OSM, Sentinel-2, Landsat, LiDAR
-  /02_habitat    # Habitat quality index per grid cell
+  /02_habitat    # Habitat quality index per 20m hex cell
   /03_observations  # Effort-corrected species richness per cell
   /04_connectivity  # Landscape connectivity graph (igraph)
   /05_residuals  # Ecological residual + intervention ranking

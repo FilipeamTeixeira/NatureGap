@@ -112,14 +112,28 @@ obs_all <- rbind(inat_std, gbif_std) |>
 
 cat(sprintf("Total observations loaded: %d\n", nrow(obs_all)))
 
-# ── 3. Spatial join to grid ───────────────────────────────────────────────────
-# st_join is a left join: obs outside the study boundary receive cell_id = NA.
-# These are dropped immediately rather than propagating as a spurious group.
+# ── 3. Snap observations to nearest 20 m hex centroid ────────────────────────
+# Raw observation geometry is preserved; only cell attribution is snapped.
 
-obs_joined <- st_join(obs_all, grid |> select(cell_id, path_km)) |>
-  filter(!is.na(cell_id))
+if (nrow(obs_all) > 0L && nrow(grid) > 0L) {
+  grid_centroids <- st_centroid(grid)
+  nearest_idx <- st_nearest_feature(obs_all, grid_centroids)
+  nearest_cells <- grid |>
+    st_drop_geometry() |>
+    select(cell_id, path_km) |>
+    slice(nearest_idx)
 
-cat(sprintf("Observations within study boundary: %d\n", nrow(obs_joined)))
+  obs_joined <- obs_all |>
+    mutate(
+      cell_id = nearest_cells$cell_id,
+      path_km = nearest_cells$path_km
+    )
+} else {
+  obs_joined <- obs_all |>
+    mutate(cell_id = integer(), path_km = numeric())
+}
+
+cat(sprintf("Observations snapped to 20 m hex cells: %d\n", nrow(obs_joined)))
 
 # ── 4. Species richness per cell ─────────────────────────────────────────────
 # n_distinct() has no na.rm — NAs are excluded by subsetting before passing in.
@@ -252,15 +266,10 @@ jsonlite::write_json(
 cat(sprintf("Written: %s (%d cells with taxa)\n", PROC_CELL_TAXA, length(cell_taxa_out)))
 
 # ── 6. Effort correction ──────────────────────────────────────────────────────
-# Corrected richness = species_richness / log1p(n_survey_dates)
+# Corrected richness = species_richness / log1p(path_km)
 #
-# log1p is preferred over sqrt(effort + 1): it is standard in rarefaction-
-# adjacent corrections and scales more conservatively at high effort.
-# pmax(..., 1) guards against cells where all observed_on are NA (degenerate
-# case: log1p(0) = 0 would produce division by zero).
-#
-# Note: this is a lightweight pre-correction only. Effort enters as a formal
-# covariate in the residual model at Step 05.
+# Cells with no accessible OSM pedestrian path length are marked unsampled and
+# retain NA for corrected richness so they are excluded from inference.
 
 richness_corrected <- richness |>
   left_join(grid |> st_drop_geometry() |> select(cell_id, path_km), by = "cell_id") |>

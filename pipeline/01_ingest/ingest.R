@@ -325,11 +325,21 @@ cat("Fetching OpenStreetMap features...\n")
 skip_osm <- exists("OSM_SKIP_IF_EXISTS") &&
   isTRUE(OSM_SKIP_IF_EXISTS) &&
   osm_cache_ok(RAW_OSM_GREEN) &&
-  osm_cache_ok(RAW_OSM_PATHS, min_features = 0L)
+  osm_cache_ok(RAW_OSM_PATHS, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_ROADS, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_RAIL, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_LAMPS, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_LIT_ROADS, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_AMENITIES, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_WATER, min_features = 0L)
 
 if (skip_osm) {
   cat("  → Using cached OSM files (OSM_SKIP_IF_EXISTS=TRUE)\n")
-  cat(sprintf("    %s\n    %s\n", RAW_OSM_GREEN, RAW_OSM_PATHS))
+  cat(sprintf(
+    "    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n",
+    RAW_OSM_GREEN, RAW_OSM_PATHS, RAW_OSM_ROADS, RAW_OSM_RAIL,
+    RAW_OSM_LAMPS, RAW_OSM_LIT_ROADS, RAW_OSM_AMENITIES, RAW_OSM_WATER
+  ))
 } else {
   # Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
   osm_bbox <- c(BBOX_CITY["xmin"], BBOX_CITY["ymin"],
@@ -366,6 +376,105 @@ if (skip_osm) {
   }
   st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
   cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
+
+  osm_roads <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "highway",
+                      value = c("motorway", "trunk", "primary", "secondary",
+                                "tertiary", "residential", "service",
+                                "unclassified", "living_street")) |>
+      osmdata_sf()
+  }, "OSM roads")
+
+  road_lines <- if (!is.null(osm_roads$osm_lines)) {
+    osm_roads$osm_lines |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM road lines returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(road_lines, RAW_OSM_ROADS, delete_dsn = TRUE)
+  cat(sprintf("  → %d road lines written\n", nrow(road_lines)))
+
+  osm_rail <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "railway",
+                      value = c("rail", "light_rail", "subway", "tram")) |>
+      osmdata_sf()
+  }, "OSM rail")
+
+  rail_lines <- if (!is.null(osm_rail$osm_lines)) {
+    osm_rail$osm_lines |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM rail lines returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(rail_lines, RAW_OSM_RAIL, delete_dsn = TRUE)
+  cat(sprintf("  → %d rail lines written\n", nrow(rail_lines)))
+
+  osm_lamps <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "highway", value = "street_lamp") |>
+      osmdata_sf()
+  }, "OSM street lamps")
+
+  lamp_points <- if (!is.null(osm_lamps$osm_points)) {
+    osm_lamps$osm_points |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM street lamps returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(lamp_points, RAW_OSM_LAMPS, delete_dsn = TRUE)
+  cat(sprintf("  → %d street lamp points written\n", nrow(lamp_points)))
+
+  osm_lit_roads <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "lit", value = "yes") |>
+      osmdata_sf()
+  }, "OSM lit roads")
+
+  lit_lines <- if (!is.null(osm_lit_roads$osm_lines)) {
+    osm_lit_roads$osm_lines |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM lit road lines returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(lit_lines, RAW_OSM_LIT_ROADS, delete_dsn = TRUE)
+  cat(sprintf("  → %d lit road lines written\n", nrow(lit_lines)))
+
+  osm_amenities <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "amenity") |>
+      osmdata_sf()
+  }, "OSM amenities")
+
+  amenity_points <- bind_rows(
+    if (!is.null(osm_amenities$osm_points)) osm_amenities$osm_points else NULL,
+    if (!is.null(osm_amenities$osm_polygons)) st_centroid(osm_amenities$osm_polygons) else NULL
+  )
+  amenity_points <- if (!is.null(amenity_points) && nrow(amenity_points) > 0L) {
+    amenity_points |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM amenities returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(amenity_points, RAW_OSM_AMENITIES, delete_dsn = TRUE)
+  cat(sprintf("  → %d amenity points written\n", nrow(amenity_points)))
+
+  osm_water <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "waterway",
+                      value = c("river", "stream", "ditch", "drain", "canal")) |>
+      osmdata_sf()
+  }, "OSM waterways")
+
+  water_lines <- if (!is.null(osm_water$osm_lines)) {
+    osm_water$osm_lines |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM waterway lines returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(water_lines, RAW_OSM_WATER, delete_dsn = TRUE)
+  cat(sprintf("  → %d waterway lines written\n", nrow(water_lines)))
 }
 
 # ── 4. ESA WorldCover 10m landcover classification ───────────────────────────
@@ -497,15 +606,17 @@ if (config_path_exists(LST_FILE)) {
 
 if (!is.na(lst_source)) {
   cat(sprintf("Processing Landsat LST: %s\n", lst_source))
-  lst_raw <- rast(lst_source) * LST_DN_SCALE + LST_DN_OFFSET - 273.15
+  lst_raw <- rast(lst_source)
+  if (grepl("ST_B10\\.TIF$", basename(lst_source), ignore.case = TRUE)) {
+    lst_raw <- lst_raw * LST_DN_SCALE + LST_DN_OFFSET - 273.15
+  }
   names(lst_raw) <- "lst_celsius"
   lst_crop <- crop_to_city(lst_raw)
   writeRaster(lst_crop, RAW_LST, overwrite = TRUE, datatype = "FLT4S")
   lst_written <- TRUE
   cat("  → LST raster written (°C)\n")
 } else {
-  message("Skipping LST — set LST_FILE or add ST_B10 under LST_DIR in config.R")
+  message("Skipping LST — set LST_FILE or add LST_*.tif/ST_B10 under LST_DIR in config.R")
 }
 
 cat("\nIngestion complete. Check data/raw/ for outputs.\n")
-

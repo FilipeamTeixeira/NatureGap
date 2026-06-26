@@ -83,10 +83,10 @@ OSM_SKIP_IF_EXISTS   <- TRUE
 CRS_LOCAL <- "EPSG:6674"
 
 # ── Grid resolution ───────────────────────────────────────────────────────────
-# Smaller = finer detail but slower to process and heavier to upload.
-# Typical values: 25 m (very fine), 50 m (fine), 100 m (standard).
+# Primary spatial unit. All modelling, analysis, storage, and display use this
+# single 20 m hex grid; do not introduce secondary analytical grid resolutions.
 
-CELL_SIZE <- 10   # metres
+CELL_SIZE <- 20   # metres
 
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.
@@ -135,16 +135,17 @@ S2_RED_BAND_PATTERN <- "B04_10m\\.jp2$"
 S2_NIR_BAND_PATTERN <- "B08_10m\\.jp2$"
 
 # Landsat LST (optional — manual download required)
-# Download Landsat 8/9 Collection 2 Level-2 ST_B10 from https://earthexplorer.usgs.gov/
+# Use a prepared LST raster when available, or download Landsat 8/9 Collection 2
+# Level-2 ST_B10 from https://earthexplorer.usgs.gov/.
 # Path/row for Yokohama: 107/035. Set LST_FILE to NA to skip.
 
 LST_FILE <- file.path(
   DATA_IMPORT, "landsat",
-  "LC09_L2SP_107035_20230715_20230718_02_T1_ST_B10.TIF"
+  "LST_yokohama-honmoku.tif"
 )
 
 LST_DIR           <- file.path(DATA_IMPORT, "landsat")
-LST_BAND_PATTERN  <- "ST_B10\\.TIF$"
+LST_BAND_PATTERN  <- "(^LST_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
@@ -171,6 +172,12 @@ RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
 RAW_OSM_GREEN  <- file.path(DATA_RAW, "osm_green_spaces.gpkg")
 RAW_OSM_PATHS  <- file.path(DATA_RAW, "osm_paths.gpkg")
+RAW_OSM_ROADS  <- file.path(DATA_RAW, "osm_roads.gpkg")
+RAW_OSM_RAIL   <- file.path(DATA_RAW, "osm_rail.gpkg")
+RAW_OSM_LAMPS  <- file.path(DATA_RAW, "osm_street_lamps.gpkg")
+RAW_OSM_LIT_ROADS <- file.path(DATA_RAW, "osm_lit_roads.gpkg")
+RAW_OSM_AMENITIES <- file.path(DATA_RAW, "osm_amenities.gpkg")
+RAW_OSM_WATER  <- file.path(DATA_RAW, "osm_water.gpkg")
 
 # Processed pipeline outputs
 PROC_GRID_HABITAT <- file.path(DATA_PROC, "grid_habitat.gpkg")

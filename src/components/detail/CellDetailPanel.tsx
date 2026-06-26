@@ -30,6 +30,10 @@ interface CellDetailPanelProps {
   onClose: () => void;
 }
 
+function formatMetric(value: number | null | undefined, digits = 1): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : 'Unsampled';
+}
+
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -121,9 +125,9 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
         </li>
       </ul>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        Ecological residual = observed ({cell.observedRichness.toFixed(1)}) − expected
-        ({cell.expectedRichness.toFixed(1)}) = {cell.ecologicalResidual.toFixed(1)}.
-        {' '}Negative values mean observed biodiversity is below the habitat expectation.
+        Ecological residual = expected ({cell.expectedRichness.toFixed(1)}) − effort-corrected
+        richness ({formatMetric(cell.observedRichness)}) = {formatMetric(cell.ecologicalResidual)}.
+        {' '}Positive values mean effort-corrected richness is below the habitat expectation.
       </p>
     </div>
   );
@@ -144,10 +148,10 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
         </div>
       </div>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        {cell.nObs} iNaturalist and GBIF records in this cell ({cell.speciesRichnessRaw} distinct
-        scientific names). The headline observed value ({cell.observedRichness.toFixed(1)}) is
-        effort-corrected: raw richness ÷ log(1 + survey dates) so cells with many repeat visits
-        are not inflated relative to under-surveyed areas.
+        {cell.nObs} iNaturalist and GBIF records in this 20m hex ({cell.speciesRichnessRaw} distinct
+        scientific names). The headline observed value ({formatMetric(cell.observedRichness)}) is
+        effort-corrected: raw richness ÷ log(1 + accessible path km). Hexes with no accessible
+        pedestrian path length are marked unsampled rather than treated as zero-richness cells.
       </p>
       <p className="text-[12px] text-[#667066] leading-relaxed">
         Taxonomic breakdown counts distinct taxa per group (plants, birds, insects, mammals,
@@ -265,7 +269,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.observedRichness.toFixed(1)}
+                    {formatMetric(cell.observedRichness)}
                   </div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Observed (corrected)</div>
                   <div className="text-[10px] text-[#A8B4A8] mt-1">{cell.speciesRichnessRaw} raw taxa</div>
@@ -349,7 +353,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.observedRichness.toFixed(1)}
+                    {formatMetric(cell.observedRichness)}
                   </div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Effort-corrected index</div>
                 </div>

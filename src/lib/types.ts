@@ -49,10 +49,14 @@ export interface CellStatsFields {
   habitatQuality: number;
   habitatQualityIndex: number;
   speciesRichnessRaw: number;
-  observedRichness: number;
+  observedRichness: number | null;
+  effortCorrectedRichness?: number | null;
   expectedRichness: number;
   maxExpectedRichness: number;
-  ecologicalResidual: number;
+  ecologicalResidual: number | null;
+  isUnsampled?: boolean;
+  temporalBiasFlag?: boolean;
+  pathKm?: number;
   nObs: number;
   nSurveyDates: number;
   status: ImpactStatus;

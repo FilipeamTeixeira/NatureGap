@@ -1,11 +1,4 @@
 
-bbox <- c(
-  xmin = 139.640415,
-  ymin = 35.415460,
-  xmax = 139.672859,
-  ymax = 35.430148
-)
-
 library(rstac)
 library(terra)
 
@@ -16,7 +9,7 @@ stac_src <- stac("https://planetarycomputer.microsoft.com/api/stac/v1")
 items <- stac_src |>
   stac_search(
     collections = "landsat-c2-l2",
-    bbox        = bbox,
+    bbox        = BBOX_CITY,
     datetime    = "2023-06-01/2023-09-30"
   ) |>
   ext_filter(

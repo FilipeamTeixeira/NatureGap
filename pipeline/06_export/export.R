@@ -20,6 +20,21 @@ write_geojson <- function(value, output_path) {
 # Supabase Storage file limit — chunk outputs above this size (bytes).
 MAX_UPLOAD_BYTES <- 45 * 1024^2
 
+cleanup_chunked_outputs <- function(output_path, extension_pattern) {
+  base_name <- tools::file_path_sans_ext(basename(output_path))
+  out_dir <- dirname(output_path)
+  stale <- c(
+    file.path(out_dir, paste0(base_name, ".manifest.json")),
+    list.files(
+      out_dir,
+      pattern = paste0("^", base_name, "-part-[0-9]+\\.", extension_pattern, "$"),
+      full.names = TRUE
+    )
+  )
+  stale <- stale[file.exists(stale)]
+  if (length(stale) > 0L) unlink(stale)
+}
+
 write_json_chunked <- function(obj, output_path, ...) {
   args <- list(...)
   pretty_out <- isTRUE(args$pretty)
@@ -30,6 +45,7 @@ write_json_chunked <- function(obj, output_path, ...) {
   total_size <- file.info(tmp)$size
 
   if (total_size <= MAX_UPLOAD_BYTES) {
+    cleanup_chunked_outputs(output_path, "json")
     if (pretty_out) {
       unlink(tmp)
       jsonlite::write_json(obj, output_path, ...)
@@ -76,6 +92,7 @@ write_geojson_chunked <- function(value, output_path) {
   total_size <- file.info(tmp)$size
 
   if (total_size <= MAX_UPLOAD_BYTES) {
+    cleanup_chunked_outputs(output_path, "geojson")
     file.copy(tmp, output_path, overwrite = TRUE)
     unlink(tmp)
     return(invisible(NULL))
@@ -118,9 +135,9 @@ export_upload_files <- function() {
   files <- c(
     "hexgrid.geojson", "hexgrid.manifest.json",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
-    "cells.json", "cells.manifest.json"
+    "cell_attributes.manifest.json", "cells.json", "cells.manifest.json"
   )
-  for (base in c("hexgrid", "cells")) {
+  for (base in c("hexgrid", "cell_attributes", "cells")) {
     parts <- list.files(DATA_EXPORT, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
     files <- c(files, parts)
   }
@@ -453,8 +470,10 @@ grid <- grid_raw |>
     any_of(c("tree_fraction", "shrub_fraction", "grass_fraction",
              "built_fraction_wc", "green_fraction_wc",
              "impervious_fraction", "osm_green_fraction")),
-    any_of(c("ndvi_mean", "lst_rank")),
-    corridor_importance, fragmentation_index, patch_area_ha,
+    any_of(c("ndvi_mean", "lst_rank", "heat_exposure", "noise",
+             "light_pollution", "disturbance_index", "water_proximity")),
+    corridor_importance, connectivity_score, node_importance,
+    fragmentation_index, patch_area_ha,
     n_obs, species_richness, richness_corrected, effort_corrected_richness,
     taxonomic_shannon, is_unsampled, temporal_bias_flag,
     n_survey_dates, path_km,
@@ -489,7 +508,13 @@ if (file.exists(osm_parks_path)) {
     st_centroid() |>
     st_join(osm_parks_4326, join = st_within, left = TRUE) |>
     st_drop_geometry() |>
-    select(cell_id, park_id, park_name)
+    select(cell_id, park_id, park_name) |>
+    group_by(cell_id) |>
+    summarise(
+      park_id = dplyr::first(park_id[!is.na(park_id)]),
+      park_name = dplyr::first(park_name[!is.na(park_name)]),
+      .groups = "drop"
+    )
 
   grid <- grid |>
     left_join(park_assignment, by = "cell_id") |>
@@ -534,9 +559,12 @@ if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
       heat_exposure = lst_rank,
       noise = NA_real_,
       light_pollution = NA_real_,
+      disturbance_index = NA_real_,
       fragmentation = fragmentation_index,
+      fragmentation_index,
       water_proximity = NA_real_,
-      connectivity_score = corridor_importance,
+      connectivity_score = coalesce(connectivity_score, corridor_importance),
+      node_importance = NA_real_,
       path_km,
       is_unsampled,
       temporal_bias_flag,

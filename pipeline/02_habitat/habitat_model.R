@@ -25,6 +25,102 @@ if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 dir.create(DATA_PROC, recursive = TRUE, showWarnings = FALSE)
 
+rescale01 <- function(x) {
+  x <- as.numeric(x)
+  rng <- range(x, na.rm = TRUE)
+  if (!all(is.finite(rng)) || diff(rng) == 0) return(rep(0, length(x)))
+  pmin(1, pmax(0, (x - rng[1]) / diff(rng)))
+}
+
+empty_sf <- function(crs = CRS_LOCAL) {
+  st_sf(geometry = st_sfc(crs = crs))
+}
+
+read_optional_sf <- function(path, label) {
+  if (!file.exists(path)) {
+    message(sprintf("%s not found — using empty layer", label))
+    return(empty_sf())
+  }
+  out <- tryCatch(st_read(path, quiet = TRUE), error = function(e) empty_sf())
+  if (nrow(out) == 0L) return(empty_sf())
+  st_transform(out, CRS_LOCAL)
+}
+
+line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight = 1) {
+  if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
+  lines <- st_collection_extract(lines, "LINESTRING", warn = FALSE)
+  if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
+  if (!is.null(weight_col) && weight_col %in% names(lines)) {
+    lines$.weight <- as.numeric(lines[[weight_col]])
+  } else {
+    lines$.weight <- default_weight
+  }
+  inter <- suppressWarnings(st_intersection(lines |> select(.weight), grid |> select(cell_id)))
+  if (nrow(inter) == 0L) return(rep(0, nrow(grid)))
+  inter$weighted_len_m <- as.numeric(st_length(inter)) * replace_na(inter$.weight, default_weight)
+  density <- inter |>
+    st_drop_geometry() |>
+    group_by(cell_id) |>
+    summarise(weighted_len_m = sum(weighted_len_m), .groups = "drop")
+  out <- rep(0, nrow(grid))
+  out[match(density$cell_id, grid$cell_id)] <- density$weighted_len_m
+  out / (as.numeric(st_area(grid)) / 10000)
+}
+
+point_density_by_cell <- function(points, grid) {
+  if (nrow(points) == 0L) return(rep(0, nrow(grid)))
+  points <- st_collection_extract(points, "POINT", warn = FALSE)
+  if (nrow(points) == 0L) return(rep(0, nrow(grid)))
+  points_geom <- st_sf(geometry = st_geometry(points), crs = st_crs(points))
+  joined <- st_join(points_geom, grid |> select(cell_id), join = st_within, left = FALSE)
+  if (nrow(joined) == 0L) return(rep(0, nrow(grid)))
+  counts <- joined |>
+    st_drop_geometry() |>
+    count(cell_id, name = "n")
+  out <- rep(0, nrow(grid))
+  out[match(counts$cell_id, grid$cell_id)] <- counts$n
+  out / (as.numeric(st_area(grid)) / 10000)
+}
+
+distance_weighted_points <- function(points, centroids, radius_m, decay_m) {
+  if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
+  points <- st_collection_extract(points, "POINT", warn = FALSE)
+  if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
+  idx <- st_nearest_feature(centroids, points)
+  d <- as.numeric(st_distance(centroids, points[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, exp(-d / decay_m), 0)
+}
+
+distance_weighted_lines <- function(lines, centroids, radius_m, decay_m, weights = NULL) {
+  if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
+  lines <- st_collection_extract(lines, "LINESTRING", warn = FALSE)
+  if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
+  if (is.null(weights)) weights <- rep(1, nrow(lines))
+  idx <- st_nearest_feature(centroids, lines)
+  d <- as.numeric(st_distance(centroids, lines[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, exp(-d / decay_m) * weights[idx], 0)
+}
+
+nearest_proximity <- function(features, centroids, radius_m) {
+  if (nrow(features) == 0L) return(rep(0, nrow(centroids)))
+  idx <- st_nearest_feature(centroids, features)
+  d <- as.numeric(st_distance(centroids, features[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, pmax(0, 1 - d / radius_m), 0)
+}
+
+road_weight <- function(highway) {
+  x <- tolower(as.character(highway))
+  dplyr::case_when(
+    x %in% c("motorway", "trunk") ~ 5,
+    x == "primary" ~ 4,
+    x == "secondary" ~ 3,
+    x == "tertiary" ~ 2,
+    x %in% c("residential", "unclassified") ~ 1,
+    x %in% c("service", "living_street") ~ 0.6,
+    TRUE ~ 1
+  )
+}
+
 # WorldCover class codes
 WC_TREE     <- 10L
 WC_SHRUB    <- 20L
@@ -62,8 +158,8 @@ grid <- st_make_grid(bbox_sf, cellsize = CELL_SIZE, square = FALSE) |>
 cat(sprintf("Grid: %d cells at %dm resolution\n", nrow(grid), CELL_SIZE))
 
 # ── 2. ESA WorldCover: vegetation class fractions per cell ───────────────────
-# Each 250m × 250m cell contains ~625 WorldCover pixels (10m).
-# Extract all pixel values and tabulate class fractions.
+# Each 20 m hex contains several WorldCover pixels (10m). Extract all pixel
+# values and tabulate class fractions.
 #
 # Derived fields:
 #   tree_fraction      — proportion of cell with class 10 (tree cover)
@@ -128,7 +224,7 @@ if (file.exists(imp_path)) {
 }
 
 # ── 4. OSM green space: supplemental area fraction ───────────────────────────
-# Provides fine-grained park boundary data to supplement WorldCover at 250m.
+# Provides fine-grained park boundary data to supplement WorldCover at 20 m.
 
 green <- st_read(RAW_OSM_GREEN, quiet = TRUE)
 cell_area <- CELL_SIZE^2
@@ -195,7 +291,76 @@ if (file.exists(RAW_LST)) {
   }
 }
 
-# ── 7. Composite habitat quality index ───────────────────────────────────────
+grid <- grid |>
+  mutate(heat_exposure = replace_na(lst_rank, 0))
+
+# ── 7. Environmental stressors on 20 m hex cells ─────────────────────────────
+
+cell_centroids <- st_centroid(grid)
+cell_area_ha <- as.numeric(st_area(grid)) / 10000
+
+roads <- read_optional_sf(RAW_OSM_ROADS, "OSM roads")
+rail <- read_optional_sf(RAW_OSM_RAIL, "OSM rail")
+lamps <- read_optional_sf(RAW_OSM_LAMPS, "OSM street lamps")
+lit_roads <- read_optional_sf(RAW_OSM_LIT_ROADS, "OSM lit roads")
+amenities <- read_optional_sf(RAW_OSM_AMENITIES, "OSM amenities")
+water <- read_optional_sf(RAW_OSM_WATER, "OSM water")
+
+if (nrow(roads) > 0L) {
+  roads$.road_weight <- road_weight(roads$highway)
+}
+
+road_density <- line_density_by_cell(roads, grid, ".road_weight")
+rail_density <- line_density_by_cell(rail, grid, default_weight = 3)
+road_proximity <- distance_weighted_lines(
+  roads,
+  cell_centroids,
+  radius_m = 150,
+  decay_m = 60,
+  weights = if (nrow(roads) > 0L) roads$.road_weight else NULL
+)
+rail_proximity <- distance_weighted_lines(
+  rail,
+  cell_centroids,
+  radius_m = 200,
+  decay_m = 80,
+  weights = rep(3, nrow(rail))
+)
+
+lamp_density <- point_density_by_cell(lamps, grid)
+lamp_proximity <- distance_weighted_points(lamps, cell_centroids, radius_m = 80, decay_m = 30)
+lit_road_density <- line_density_by_cell(lit_roads, grid)
+
+path_density <- (grid$path_km * 1000) / pmax(cell_area_ha, 0.0001)
+amenity_proximity <- distance_weighted_points(amenities, cell_centroids, radius_m = 120, decay_m = 50)
+
+water_prox <- nearest_proximity(water, cell_centroids, radius_m = 250)
+permeable_fraction <- pmin(1, pmax(0, 1 - replace_na(grid$impervious_fraction, 0)))
+
+grid <- grid |>
+  mutate(
+    noise = rescale01(
+      0.55 * rescale01(road_density) +
+        0.20 * rescale01(road_proximity) +
+        0.20 * rescale01(rail_density) +
+        0.05 * rescale01(rail_proximity)
+    ),
+    light_pollution = rescale01(
+      0.50 * rescale01(lamp_density) +
+        0.30 * rescale01(lamp_proximity) +
+        0.20 * rescale01(lit_road_density)
+    ),
+    disturbance_index = rescale01(
+      0.60 * rescale01(path_density) +
+        0.40 * rescale01(amenity_proximity)
+    ),
+    water_proximity = rescale01(
+      0.70 * water_prox +
+        0.30 * permeable_fraction
+    )
+  )
+
+# ── 8. Composite habitat quality index ───────────────────────────────────────
 #
 # Combines WorldCover vegetation classes and impervious surface into a
 # single 0–1 quality index per cell.
@@ -234,7 +399,7 @@ cat(sprintf(
 st_write(grid, PROC_GRID_HABITAT, delete_dsn = TRUE)
 cat(sprintf("Written: %s\n", PROC_GRID_HABITAT))
 
-# ── 8. Export habitat quality raster for PMTiles ─────────────────────────────
+# ── 9. Export habitat quality raster for PMTiles ─────────────────────────────
 
 hab_rast <- rasterize(
   vect(grid),
@@ -243,4 +408,3 @@ hab_rast <- rasterize(
 )
 writeRaster(hab_rast, PROC_HABITAT_TIF, overwrite = TRUE)
 cat("Written: habitat_quality.tif\n")
-

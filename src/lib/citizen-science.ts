@@ -47,6 +47,7 @@ export interface StructuredSurveyFeature {
   id: string;
   status: string;
   survey_point_id: string;
+  cell_id: string | null;
   started_at: string;
   submitted_at: string | null;
   coordinates: [number, number];
@@ -177,7 +178,7 @@ export async function fetchStructuredSurveys(
   const pointById = new Map(surveyPoints.map((p) => [p.id, p]));
   const { data, error } = await supabase
     .from('structured_surveys')
-    .select('id, survey_point_id, started_at, submitted_at, status')
+    .select('id, survey_point_id, cell_id, started_at, submitted_at, status')
     .limit(1000);
   if (error || !data) return [];
   return data.flatMap((row) => {
@@ -212,7 +213,7 @@ export async function uploadCitizenPhoto(file: File, folder: string): Promise<st
 
 export async function startStructuredSurvey(surveyPointId: string) {
   return invokeFunction<{
-    structured_survey: { id: string; survey_point_id: string; started_at: string; duration_seconds: number; status: string };
+    structured_survey: { id: string; survey_point_id: string; cell_id: string; started_at: string; duration_seconds: number; status: string };
     minimum_duration_seconds: number;
     nominal_duration_seconds: number;
   }>('start-structured-survey', { survey_point_id: surveyPointId });

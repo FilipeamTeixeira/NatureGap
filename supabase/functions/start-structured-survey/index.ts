@@ -1,6 +1,7 @@
 import { handleOptions, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { assertRole, requireAuth } from '../_shared/auth.ts';
 import { readJson, requiredUuid } from '../_shared/validation.ts';
+import { findSurveyPointCellId } from '../_shared/domain.ts';
 
 Deno.serve(async (req) => {
   const options = handleOptions(req);
@@ -26,18 +27,24 @@ Deno.serve(async (req) => {
       throw Object.assign(new Error('Structured surveys must use an approved survey point'), { status: 400 });
     }
 
+    const cellId = await findSurveyPointCellId(auth.serviceClient, surveyPointId);
+    if (!cellId) {
+      throw Object.assign(new Error('No 20m hex cell found for survey point'), { status: 400 });
+    }
+
     const startedAt = new Date().toISOString();
     const { data, error } = await auth.userClient
       .from('structured_surveys')
       .insert({
         survey_point_id: surveyPointId,
+        cell_id: cellId,
         user_id: auth.user.id,
         started_at: startedAt,
         duration_seconds: 0,
         habitat_indicators: {},
         status: 'submitted',
       })
-      .select('id, survey_point_id, started_at, duration_seconds, status')
+      .select('id, survey_point_id, cell_id, started_at, duration_seconds, status')
       .single();
 
     if (error) throw error;
