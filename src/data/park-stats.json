@@ -1,0 +1,2942 @@
+{
+  "city-green": {
+    "impactScore": -12,
+    "habitatQuality": 29,
+    "habitatQualityIndex": 0.293,
+    "speciesRichnessRaw": 537,
+    "observedRichness": 328,
+    "expectedRichness": 102.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -1415212.9,
+    "nObs": 746,
+    "nSurveyDates": 12,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 5.2,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 454
+      },
+      {
+        "type": "bird",
+        "count": 34
+      },
+      {
+        "type": "insect",
+        "count": 21
+      },
+      {
+        "type": "mammal",
+        "count": 5
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (88)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (90)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (89)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (93)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (102)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (97)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (100)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (298)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (193)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (104)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (87)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (157)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (160)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (227)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (178)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (238)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (284)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (71)", "Observed richness (9.1, effort-corrected) is below the habitat expectation (88)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (268)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (148)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (256)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (98)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (168)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (105)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (86)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (73)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (95)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (106)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (211)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (312)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (101)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (44)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (41)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (217)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (299)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (94)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (83)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (84)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (31)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (262)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (118)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (1.4, effort-corrected) is below the habitat expectation (148)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (50)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (117)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (48)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (64)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (208)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (77)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (70)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (62)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (172)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (36)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (49)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (42)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (137)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (68)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (88)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (38)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (35)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (40)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (72)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (65)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (80)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (224)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (56)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (214)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (74)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (82)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (37)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (92)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (96)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (79)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (59)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (139)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (58)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (85)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (221)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (174)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (30)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (81)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (177)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (53)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (69)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (76)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (25)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (28)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (45)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (24)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (112)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (29)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (78)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (52)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (187)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (20)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (235)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (32)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (51)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (54)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (150)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (121)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (33)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (205)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (275)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (39)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (125)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (46)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (154)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (60)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (218)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (88)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (156)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (298)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (294)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (130)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (61)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (67)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (255)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (55)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (57)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (213)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (192)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (253)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (21)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (43)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (75)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (152)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (63)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (267)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (222)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (290)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (297)", "Observed richness (2.7, effort-corrected) is below the habitat expectation (94)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (23)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (47)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (110)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (303)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (230)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (240)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (309)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (127)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (114)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (295)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (180)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (116)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (287)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (155)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (293)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (51)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (260)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (126)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (206)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (296)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (181)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (66)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (251)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (276)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (91)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (282)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (216)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (34)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (188)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (22)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (120)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (109)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (223)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (225)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (99)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (27)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (242)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (54)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (136)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (234)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (138)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (124)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (84)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (26)", "Observed richness (8.2, effort-corrected) is below the habitat expectation (66)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (108)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (287)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (141)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (184)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (143)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (145)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (183)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (129)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (281)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (166)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (237)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (204)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (215)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (153)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (279)", "Observed richness (7.2, effort-corrected) is below the habitat expectation (148)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (223)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (286)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (236)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (241)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (291)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (87)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (37)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (147)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (131)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (158)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (171)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (165)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (113)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (228)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (128)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (292)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (132)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (144)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (249)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (161)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (111)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (61)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (252)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (278)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (197)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (176)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (277)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (285)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (311)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (232)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (280)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (189)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (190)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (219)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (283)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (288)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (233)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (146)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (103)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (151)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (169)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (243)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (207)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (254)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (107)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (248)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (220)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (306)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (198)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (196)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (179)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (175)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (200)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (261)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (182)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (191)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (201)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (300)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (258)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (167)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (208)", "Observed richness (3.1, effort-corrected) is below the habitat expectation (34)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (170)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (48)", "Observed richness (26.2, effort-corrected) is below the habitat expectation (193)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (164)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (162)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (195)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (272)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (119)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (202)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (265)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (270)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (289)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (159)", "Observed richness (3.6, effort-corrected) is below the habitat expectation (293)", "Observed richness (0.9, effort-corrected) is below the habitat expectation (297)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (210)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (35)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (318)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (163)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (142)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (203)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (194)", "Observed richness (10.0, effort-corrected) is below the habitat expectation (40)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (135)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (123)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (271)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (310)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (274)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (246)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (226)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (55)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (304)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (302)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (229)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (149)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (313)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (269)", "Observed richness (10.1, effort-corrected) is below the habitat expectation (275)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (339)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (247)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (317)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (74)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (307)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (52)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (320)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (301)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (173)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (314)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (328)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (49)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (315)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (54)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (42)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (322)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (259)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (39)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (275)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (231)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (186)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (323)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (290)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (305)", "Observed richness (4.3, effort-corrected) is below the habitat expectation (181)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (228)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (209)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (275)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (47)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (132)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (40)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (57)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (263)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (212)", "Observed richness (2.2, effort-corrected) is below the habitat expectation (33)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (134)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (58)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (97)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (244)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (325)", "Observed richness (4.3, effort-corrected) is below the habitat expectation (88)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (324)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (185)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (43)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (266)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (264)", "Observed richness (16.9, effort-corrected) is below the habitat expectation (121)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (73)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (319)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (239)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (250)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (199)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (192)", "Observed richness (11.5, effort-corrected) is below the habitat expectation (88)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)"],
+    "interventions": []
+  },
+  "park-2": {
+    "impactScore": -19,
+    "habitatQuality": 60,
+    "habitatQualityIndex": 0.5991,
+    "speciesRichnessRaw": 67,
+    "observedRichness": 37.4,
+    "expectedRichness": 209.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -14849.3,
+    "nObs": 67,
+    "nSurveyDates": 5,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 75.2,
+    "taxonomicDiversity": 0.1,
+    "species": [
+      {
+        "type": "plant",
+        "count": 67
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (238)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (203)", "Observed richness (37.4, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (185)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (127)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (272)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (255)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (334)"],
+    "interventions": []
+  },
+  "park-3": {
+    "impactScore": -19,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.3677,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 128.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -3603.4,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (112)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (128)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (127)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (125)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (111)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (124)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (131)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)"],
+    "interventions": []
+  },
+  "park-35": {
+    "impactScore": -33,
+    "habitatQuality": 66,
+    "habitatQualityIndex": 0.6596,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 230.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -461.8,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (134)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-6": {
+    "impactScore": -31,
+    "habitatQuality": 62,
+    "habitatQualityIndex": 0.6196,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 216.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -433.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (109)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (325)"],
+    "interventions": []
+  },
+  "park-57": {
+    "impactScore": -16,
+    "habitatQuality": 33,
+    "habitatQualityIndex": 0.33,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 115.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -115.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-55": {
+    "impactScore": -28,
+    "habitatQuality": 59,
+    "habitatQualityIndex": 0.5906,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 206.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -826.8,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (170)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (296)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (126)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (234)"],
+    "interventions": []
+  },
+  "park-93": {
+    "impactScore": -14,
+    "habitatQuality": 29,
+    "habitatQualityIndex": 0.2905,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 101.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -203.3,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (104)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (99)"],
+    "interventions": []
+  },
+  "park-32": {
+    "impactScore": -15,
+    "habitatQuality": 30,
+    "habitatQualityIndex": 0.3009,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 105.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -105.3,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (105)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-22": {
+    "impactScore": -15,
+    "habitatQuality": 31,
+    "habitatQualityIndex": 0.3104,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 108.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -325.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (103)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (108)"],
+    "interventions": []
+  },
+  "park-50": {
+    "impactScore": -15,
+    "habitatQuality": 30,
+    "habitatQualityIndex": 0.2968,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 103.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -103.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (104)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-92": {
+    "impactScore": -16,
+    "habitatQuality": 32,
+    "habitatQualityIndex": 0.3194,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 111.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -223.6,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (108)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)"],
+    "interventions": []
+  },
+  "park-52": {
+    "impactScore": -23,
+    "habitatQuality": 46,
+    "habitatQualityIndex": 0.4574,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 160.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -320.2,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (74)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (247)"],
+    "interventions": []
+  },
+  "park-51": {
+    "impactScore": -43,
+    "habitatQuality": 85,
+    "habitatQualityIndex": 0.8529,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 298.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -298.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 4,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (299)"],
+    "interventions": []
+  },
+  "park-23": {
+    "impactScore": -47,
+    "habitatQuality": 89,
+    "habitatQualityIndex": 0.888,
+    "speciesRichnessRaw": 1,
+    "observedRichness": 1.4,
+    "expectedRichness": 310.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -17403.7,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 1.2,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 1
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (131)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (191)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (318)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (311)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (1.4, effort-corrected) is below the habitat expectation (188)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (275)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (281)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (292)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (334)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (301)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (340)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (299)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (329)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (330)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (320)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (272)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (258)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (338)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (328)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (321)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (276)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (324)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-5173-rank-5",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #5 for intervention priority (composite score 0.62). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-6502-rank-16",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #16 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-33": {
+    "impactScore": -19,
+    "habitatQuality": 45,
+    "habitatQualityIndex": 0.4529,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 158.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -951.2,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (116)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (321)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (115)"],
+    "interventions": []
+  },
+  "park-10": {
+    "impactScore": -20,
+    "habitatQuality": 63,
+    "habitatQualityIndex": 0.6321,
+    "speciesRichnessRaw": 33,
+    "observedRichness": 23.9,
+    "expectedRichness": 221.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -27186.5,
+    "nObs": 75,
+    "nSurveyDates": 5,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 58.4,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1
+      },
+      {
+        "type": "bird",
+        "count": 32
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (328)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (325)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (315)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (332)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (342)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (138)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (334)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (339)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (132)", "Observed richness (2.7, effort-corrected) is below the habitat expectation (344)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (348)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (2.9, effort-corrected) is below the habitat expectation (344)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (343)", "Observed richness (14.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (344)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (137)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (129)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (139)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (131)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (242)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (329)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (190)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (119)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (124)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (110)"],
+    "interventions": []
+  },
+  "park-1": {
+    "impactScore": -49,
+    "habitatQuality": 95,
+    "habitatQualityIndex": 0.952,
+    "speciesRichnessRaw": 70,
+    "observedRichness": 71.1,
+    "expectedRichness": 333.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -213846,
+    "nObs": 121,
+    "nSurveyDates": 5,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 9.1,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 10
+      },
+      {
+        "type": "bird",
+        "count": 36
+      },
+      {
+        "type": "insect",
+        "count": 11
+      },
+      {
+        "type": "mammal",
+        "count": 2
+      },
+      {
+        "type": "fungi",
+        "count": 5
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (104)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (278)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (306)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (342)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (304)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (331)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (334)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (333)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (329)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (330)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (315)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (323)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (340)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (1.4, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (339)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (348)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (346)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (224)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (301)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (338)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (325)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (143)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (310)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (328)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (336)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (265)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (199)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (264)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (316)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (318)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (324)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (340)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (332)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (344)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (345)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (321)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (349)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (231)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (269)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (326)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (314)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (261)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (322)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (294)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (302)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (220)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (290)", "Observed richness (12.4, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (221)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (286)", "Observed richness (7.2, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (298)", "Observed richness (7.8, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (313)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (203)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (237)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (253)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (283)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (223)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (276)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (228)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (175)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (289)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (319)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (217)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (168)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (254)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (201)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (348)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-8088-rank-3",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #3 for intervention priority (composite score 0.62). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-7986-rank-4",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #4 for intervention priority (composite score 0.62). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9315-rank-6",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #6 for intervention priority (composite score 0.59). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9213-rank-7",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #7 for intervention priority (composite score 0.58). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9162-rank-8",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #8 for intervention priority (composite score 0.58). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-11048-rank-9",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #9 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9111-rank-10",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #10 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9060-rank-12",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #12 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-10946-rank-13",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #13 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8863-rank-14",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #14 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9009-rank-17",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #17 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8958-rank-18",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #18 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9008-rank-19",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #19 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8906-rank-20",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #20 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-11": {
+    "impactScore": -49,
+    "habitatQuality": 87,
+    "habitatQualityIndex": 0.8698,
+    "speciesRichnessRaw": 285,
+    "observedRichness": 254.9,
+    "expectedRichness": 304.4,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -178742.8,
+    "nObs": 754,
+    "nSurveyDates": 33,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 65.1,
+    "taxonomicDiversity": 0.1,
+    "species": [
+      {
+        "type": "plant",
+        "count": 40
+      },
+      {
+        "type": "bird",
+        "count": 184
+      },
+      {
+        "type": "insect",
+        "count": 32
+      },
+      {
+        "type": "mammal",
+        "count": 18
+      },
+      {
+        "type": "fungi",
+        "count": 5
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (328)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (340)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (338)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (325)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (342)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (317)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (336)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (292)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (2.9, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (318)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (345)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (339)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (346)", "Observed richness (2.2, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (262)", "Observed richness (3.6, effort-corrected) is below the habitat expectation (348)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (343)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (343)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (284)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (344)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (342)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (330)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (344)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (301)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (234)", "Observed richness (3.6, effort-corrected) is below the habitat expectation (350)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (253)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (348)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (349)", "Observed richness (8.2, effort-corrected) is below the habitat expectation (316)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (4.3, effort-corrected) is below the habitat expectation (343)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (332)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (331)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (326)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (134)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (305)", "Observed richness (2.7, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (330)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (203)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (285)", "Observed richness (0.9, effort-corrected) is below the habitat expectation (329)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (321)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (145)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (83)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (335)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (336)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (344)", "Observed richness (10.8, effort-corrected) is below the habitat expectation (233)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (120)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (256)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (250)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (83)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (311)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (265)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (286)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (127)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (347)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (281)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (136)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (105)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (98)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (290)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (111)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (277)", "Lies on an important habitat connectivity corridor", "Observed richness (14.5, effort-corrected) is below the habitat expectation (345)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (140)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (241)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (217)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (342)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (226)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (140)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (245)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (338)", "Observed richness (6.4, effort-corrected) is below the habitat expectation (140)", "Observed richness (3.9, effort-corrected) is below the habitat expectation (133)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (137)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (308)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (333)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (290)", "Observed richness (1.9, effort-corrected) is below the habitat expectation (135)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (133)", "Observed richness (2.2, effort-corrected) is below the habitat expectation (137)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (320)", "Observed richness (0.9, effort-corrected) is below the habitat expectation (133)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (133)", "Observed richness (4.3, effort-corrected) is below the habitat expectation (170)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (178)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (242)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (168)", "Observed richness (8.2, effort-corrected) is below the habitat expectation (343)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (320)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (163)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (193)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (283)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (238)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (138)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (175)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (342)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (347)", "Observed richness (5.8, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "Observed richness (3.6, effort-corrected) is below the habitat expectation (343)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (301)", "Observed richness (6.4, effort-corrected) is below the habitat expectation (133)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (193)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (117)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (329)", "Observed richness (1.8, effort-corrected) is below the habitat expectation (238)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (301)", "Observed richness (8.7, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (313)", "Observed richness (2.7, effort-corrected) is below the habitat expectation (308)", "Observed richness (1.4, effort-corrected) is below the habitat expectation (254)", "Observed richness (24.5, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (324)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)", "Observed richness (2.2, effort-corrected) is below the habitat expectation (246)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (260)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (247)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-9092-rank-2",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #2 for intervention priority (composite score 0.71). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8777-rank-11",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #11 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8726-rank-15",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #15 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-21": {
+    "impactScore": -12,
+    "habitatQuality": 25,
+    "habitatQualityIndex": 0.2462,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 86.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -86.2,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (86)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-7": {
+    "impactScore": -20,
+    "habitatQuality": 68,
+    "habitatQualityIndex": 0.6792,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 237.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -6418.3,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (315)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (138)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (131)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (339)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (132)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (348)"],
+    "interventions": []
+  },
+  "park-48": {
+    "impactScore": -6,
+    "habitatQuality": 13,
+    "habitatQualityIndex": 0.1272,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 44.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -44.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (45)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-87": {
+    "impactScore": -49,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 0.9996,
+    "speciesRichnessRaw": 4,
+    "observedRichness": 3.6,
+    "expectedRichness": 349.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -346.2,
+    "nObs": 8,
+    "nSurveyDates": 2,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 257.6,
+    "taxonomicDiversity": 1.4,
+    "species": [
+      {
+        "type": "plant",
+        "count": 2
+      },
+      {
+        "type": "bird",
+        "count": 1
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 1
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": "Observed richness (3.6, effort-corrected) is below the habitat expectation (350)",
+    "interventions": []
+  },
+  "park-90": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 0.998,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 349.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -349.3,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (349)"],
+    "interventions": []
+  },
+  "park-44": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -2100,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 4,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-9213-rank-7",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #7 for intervention priority (composite score 0.58). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9111-rank-10",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #10 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9060-rank-12",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #12 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8958-rank-18",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #18 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-9008-rank-19",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #19 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-8906-rank-20",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #20 for intervention priority (composite score 0.56). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-45": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-66": {
+    "impactScore": -50,
+    "habitatQuality": 97,
+    "habitatQualityIndex": 0.9724,
+    "speciesRichnessRaw": 4,
+    "observedRichness": 5.8,
+    "expectedRichness": 340.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -2717,
+    "nObs": 4,
+    "nSurveyDates": 1,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 42.5,
+    "taxonomicDiversity": 0.2,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 4
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (347)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (2.9, effort-corrected) is below the habitat expectation (308)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (348)", "Observed richness (2.9, effort-corrected) is below the habitat expectation (320)"],
+    "interventions": []
+  },
+  "park-12": {
+    "impactScore": -30,
+    "habitatQuality": 61,
+    "habitatQualityIndex": 0.6138,
+    "speciesRichnessRaw": 5,
+    "observedRichness": 7.2,
+    "expectedRichness": 214.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -9016.2,
+    "nObs": 5,
+    "nSurveyDates": 1,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 11.4,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 5
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (273)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (167)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (194)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (349)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (189)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (266)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (116)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (139)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (182)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (297)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (111)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (207)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (230)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (200)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (279)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)", "Lies on an important habitat connectivity corridor", "Observed richness (0.0, effort-corrected) is below the habitat expectation (280)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (260)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (257)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (137)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (162)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (109)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (229)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (227)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (174)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (294)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (7.2, effort-corrected) is below the habitat expectation (128)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (217)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (265)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (113)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-9358-rank-1",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #1 for intervention priority (composite score 0.73). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-36": {
+    "impactScore": -32,
+    "habitatQuality": 63,
+    "habitatQualityIndex": 0.6269,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 219.4,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -438.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (194)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)"],
+    "interventions": []
+  },
+  "park-81": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -700,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-65": {
+    "impactScore": -48,
+    "habitatQuality": 97,
+    "habitatQualityIndex": 0.9652,
+    "speciesRichnessRaw": 1,
+    "observedRichness": 1.4,
+    "expectedRichness": 337.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -336.4,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 28,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (1.4, effort-corrected) is below the habitat expectation (338)"],
+    "interventions": []
+  },
+  "park-41": {
+    "impactScore": -38,
+    "habitatQuality": 77,
+    "habitatQualityIndex": 0.7695,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 269.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -538.6,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (189)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-13": {
+    "impactScore": -30,
+    "habitatQuality": 62,
+    "habitatQualityIndex": 0.6175,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 216.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -864.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (182)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (297)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-40": {
+    "impactScore": -30,
+    "habitatQuality": 59,
+    "habitatQualityIndex": 0.5927,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 207.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -207.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (207)"],
+    "interventions": []
+  },
+  "park-15": {
+    "impactScore": -35,
+    "habitatQuality": 65,
+    "habitatQualityIndex": 0.6462,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 226.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -1130.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (200)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (266)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (140)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (280)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (245)"],
+    "interventions": []
+  },
+  "park-42": {
+    "impactScore": -38,
+    "habitatQuality": 77,
+    "habitatQualityIndex": 0.7688,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 269.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -538.1,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (279)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (260)"],
+    "interventions": []
+  },
+  "park-82": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-80": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-39": {
+    "impactScore": -25,
+    "habitatQuality": 50,
+    "habitatQualityIndex": 0.5014,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 175.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -351,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (229)"],
+    "interventions": []
+  },
+  "park-14": {
+    "impactScore": -27,
+    "habitatQuality": 67,
+    "habitatQualityIndex": 0.6673,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 233.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -700.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 13,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Lies on an important habitat connectivity corridor", "Observed richness (0.0, effort-corrected) is below the habitat expectation (189)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (162)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-9358-rank-1",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #1 for intervention priority (composite score 0.73). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "high",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-83": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-37": {
+    "impactScore": -38,
+    "habitatQuality": 75,
+    "habitatQualityIndex": 0.7466,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 261.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -522.6,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (349)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (174)"],
+    "interventions": []
+  },
+  "park-38": {
+    "impactScore": -34,
+    "habitatQuality": 69,
+    "habitatQualityIndex": 0.6884,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 241,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -481.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (217)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (265)"],
+    "interventions": []
+  },
+  "park-84": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-85": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-31": {
+    "impactScore": -12,
+    "habitatQuality": 23,
+    "habitatQualityIndex": 0.2346,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 82.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -164.2,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (91)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (73)"],
+    "interventions": []
+  },
+  "park-64": {
+    "impactScore": -34,
+    "habitatQuality": 70,
+    "habitatQualityIndex": 0.7,
+    "speciesRichnessRaw": 8,
+    "observedRichness": 10.5,
+    "expectedRichness": 245,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -479.5,
+    "nObs": 16,
+    "nSurveyDates": 2,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 158,
+    "taxonomicDiversity": 1.2,
+    "species": [
+      {
+        "type": "plant",
+        "count": 4
+      },
+      {
+        "type": "bird",
+        "count": 2
+      },
+      {
+        "type": "insect",
+        "count": 1
+      },
+      {
+        "type": "mammal",
+        "count": 1
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["Observed richness (1.8, effort-corrected) is below the habitat expectation (140)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Observed richness (8.7, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-61": {
+    "impactScore": -50,
+    "habitatQuality": 100,
+    "habitatQualityIndex": 1,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 350,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -350,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)"],
+    "interventions": []
+  },
+  "park-34": {
+    "impactScore": -50,
+    "habitatQuality": 95,
+    "habitatQualityIndex": 0.946,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 331.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -5297.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (350)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (315)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (332)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (228)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (319)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (254)"],
+    "interventions": [
+      {
+        "id": "yokohama-honmoku-11048-rank-9",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #9 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "medium",
+        "category": "pollinator"
+      },
+      {
+        "id": "yokohama-honmoku-10946-rank-13",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #13 for intervention priority (composite score 0.57). Counterfactual not yet computed <e2><80><94> run full pipeline",
+        "impact": "low",
+        "category": "pollinator"
+      }
+    ]
+  },
+  "park-30": {
+    "impactScore": -12,
+    "habitatQuality": 24,
+    "habitatQualityIndex": 0.2445,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 85.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -85.6,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (86)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-25": {
+    "impactScore": -11,
+    "habitatQuality": 22,
+    "habitatQualityIndex": 0.223,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 78,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -78,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (78)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-20": {
+    "impactScore": -28,
+    "habitatQuality": 60,
+    "habitatQualityIndex": 0.6031,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 211.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -1688.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (333)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (109)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (288)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (319)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (126)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (248)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (156)"],
+    "interventions": []
+  },
+  "park-17": {
+    "impactScore": -44,
+    "habitatQuality": 78,
+    "habitatQualityIndex": 0.7807,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 273.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -3278.9,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (226)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (195)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (298)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (230)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (336)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (117)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (197)"],
+    "interventions": []
+  },
+  "park-53": {
+    "impactScore": -16,
+    "habitatQuality": 33,
+    "habitatQualityIndex": 0.3258,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 114,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -342.1,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (110)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)"],
+    "interventions": []
+  },
+  "park-54": {
+    "impactScore": -15,
+    "habitatQuality": 30,
+    "habitatQualityIndex": 0.3042,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 106.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -106.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (106)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-9": {
+    "impactScore": -46,
+    "habitatQuality": 73,
+    "habitatQualityIndex": 0.7261,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 254.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -5337,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (107)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (113)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (122)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (117)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (182)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (120)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (161)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (171)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (342)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (343)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (333)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (287)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (249)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (337)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (335)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (327)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (319)"],
+    "interventions": []
+  },
+  "park-28": {
+    "impactScore": -12,
+    "habitatQuality": 25,
+    "habitatQualityIndex": 0.2492,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 87.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -87.2,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (87)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-29": {
+    "impactScore": -15,
+    "habitatQuality": 30,
+    "habitatQualityIndex": 0.3021,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 105.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -105.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (106)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-18": {
+    "impactScore": -18,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.3681,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 128.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -128.8,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (129)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-19": {
+    "impactScore": -18,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.3681,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 128.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -128.8,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (129)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-27": {
+    "impactScore": -19,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.3688,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 129.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -645.5,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (161)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (114)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (107)"],
+    "interventions": []
+  },
+  "park-16": {
+    "impactScore": -43,
+    "habitatQuality": 81,
+    "habitatQualityIndex": 0.8101,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 283.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -1417.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-worse",
+    "habitatPotential": "high",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "fragmentationIndex": 0,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (181)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (304)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (341)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (283)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (308)"],
+    "interventions": []
+  },
+  "park-4": {
+    "impactScore": -16,
+    "habitatQuality": 33,
+    "habitatQualityIndex": 0.3257,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 114,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -114,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (114)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches"],
+    "interventions": []
+  },
+  "park-8": {
+    "impactScore": -19,
+    "habitatQuality": 36,
+    "habitatQualityIndex": 0.3616,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 126.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -379.7,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (133)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (116)"],
+    "interventions": []
+  },
+  "park-56": {
+    "impactScore": -19,
+    "habitatQuality": 34,
+    "habitatQualityIndex": 0.3372,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "expectedRichness": 118,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -590.1,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "worse",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "fragmentationIndex": 100,
+    "pressures": ["No biodiversity observations recorded in this cell", "Observed richness (0.0, effort-corrected) is below the habitat expectation (101)", "High habitat fragmentation <e2><80><94> relatively isolated from neighbouring patches", "Observed richness (0.0, effort-corrected) is below the habitat expectation (130)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (93)", "Observed richness (0.0, effort-corrected) is below the habitat expectation (136)"],
+    "interventions": []
+  }
+}

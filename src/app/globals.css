@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  /* Design system — NatureGap v2 */
+  --color-bg: #F7F8F5;
+  --color-surface: #FFFFFF;
+  --color-border: #E4E7E1;
+  --color-primary: #2E6F40;
+  --color-primary-2: #73A56D;
+  --color-primary-light: #DDEAD8;
+  --color-orange: #E8A44C;
+  --color-red: #C95B4B;
+  --color-blue: #5E8FB8;
+  --color-text-1: #1F2A1F;
+  --color-text-2: #667066;
+
+  /* Legacy aliases (kept for backward compat) */
+  --color-forest: #2E6F40;
+  --color-forest-dark: #1a4a28;
+  --color-leaf: #73A56D;
+  --color-meadows: #73A56D;
+  --color-sun: #E8A44C;
+  --color-soil: #8b6031;
+  --color-sky: #5E8FB8;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #F7F8F5;
+  color: #1F2A1F;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* MapLibre popup reset */
+.naturegap-popup .maplibregl-popup-content {
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid #E4E7E1;
+  overflow: hidden;
+}
+
+.naturegap-popup .maplibregl-popup-tip {
+  display: none;
+}
+
+/* MapLibre controls */
+.maplibregl-ctrl-group {
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid #E4E7E1 !important;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl button {
+  color: #667066 !important;
+}
+
+.maplibregl-ctrl button:hover {
+  background-color: #F7F8F5 !important;
+}
+
+.maplibregl-ctrl-attrib {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: 10px !important;
+  color: #667066 !important;
+}
