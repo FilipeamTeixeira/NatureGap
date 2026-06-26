@@ -21,7 +21,7 @@ PIPELINE_ROOT <- local({
   stop("Cannot locate pipeline directory (expected 01_ingest/)")
 })
 
-DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "to_import")
+DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 
 # ── City identity ─────────────────────────────────────────────────────────────
 # CITY_ID must be a stable slug — it is used as a primary-key prefix in
@@ -96,68 +96,65 @@ CELL_SIZE <- 20   # metres
 MAX_EXPECTED_RICHNESS <- 350L
 
 # ── Input raster files ────────────────────────────────────────────────────────
-# Paths are relative to PIPELINE_ROOT (see pipeline/data/to_import/).
-#
-# WorldCover (ESA 10 m land cover):
-#   Download: https://esa-worldcover.org/
-#   Tile name example for Japan: ESA_WorldCover_10m_2021_v200_N33E138_Map.tif
+# Raster inputs are downloaded/prepared by the scripts listed below before
+# ingest reads them. Shared raster inputs live under pipeline/data/raw/.
+
+AUTO_DOWNLOAD_RASTER_INPUTS <- TRUE
+
+RASTER_INPUT_DOWNLOADERS <- file.path(
+  PIPELINE_ROOT,
+  c(
+    "00_download/download_worldcover.R",
+    "00_download/download_sentinel2.R",
+    "00_download/download_landsat_temp.R"
+  )
+)
 
 WC_FILE <- file.path(
   DATA_IMPORT, "worldcover",
-  "ESA_WorldCover_10m_2021_v200_N33E138_Map.tif"
+  paste0("worldcover_", CITY_ID, ".tif")
 )
 
 # EMC-BUILT (Copernicus impervious surface fraction):
-#   Download: https://human-settlement.emergency.copernicus.eu/
-#   File name example: EMC_BUILT_S_E2022_GLOBE_R2025A_54009_10_V1_0_R5_C31.tif
+#   Download manually: https://human-settlement.emergency.copernicus.eu/
+#   File name expected by the pipeline: EMC_CITY_ID.tif
+#   Example: EMC_yokohama-honmoku.tif
 
 EMC_FILE <- file.path(
-  DATA_IMPORT, "emc_built",
-  "EMC_BUILT_S_E2022_GLOBE_R2025A_54009_10_V1_0_R5_C31.tif"
+  PIPELINE_ROOT, "data", "raw", "emc_built",
+  paste0("EMC_", CITY_ID, ".tif")
 )
-
-# Sentinel-2 NDVI (optional — manual download required)
-# Download from https://browser.dataspace.copernicus.eu/ (tile T54SUE for Yokohama)
-#
-# Two options (ingest prefers S2_NDVI_FILE when it exists):
-#   1. Pre-computed NDVI GeoTIFF — set S2_NDVI_FILE below (export at NDVI_RES_M)
-#   2. Raw L2A .SAFE product     — place under S2_SAFE_DIR and set S2_NDVI_FILE to NA
 
 NDVI_RES_M <- 10L
 
 S2_NDVI_FILE <- file.path(
   DATA_IMPORT, "sentinel2",
-  "ndvi_yokohama_honmoku_10m.tif"
+  paste0("ndvi_", CITY_ID, ".tif")
 )
 
 S2_SAFE_DIR <- file.path(DATA_IMPORT, "sentinel2")
 S2_RED_BAND_PATTERN <- "B04_10m\\.jp2$"
 S2_NIR_BAND_PATTERN <- "B08_10m\\.jp2$"
 
-# Landsat LST (optional — manual download required)
-# Use a prepared LST raster when available, or download Landsat 8/9 Collection 2
-# Level-2 ST_B10 from https://earthexplorer.usgs.gov/.
-# Path/row for Yokohama: 107/035. Set LST_FILE to NA to skip.
-
 LST_FILE <- file.path(
   DATA_IMPORT, "landsat",
-  "LST_yokohama-honmoku.tif"
+  paste0("lst_", CITY_ID, ".tif")
 )
 
 LST_DIR           <- file.path(DATA_IMPORT, "landsat")
-LST_BAND_PATTERN  <- "(^LST_.*\\.tif$|ST_B10\\.TIF$)"
+LST_BAND_PATTERN  <- "(^[Ll][Ss][Tt]_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
-# to_import/ is shared (rasters are large and often cover multiple cities).
+# data/raw/ is shared for source rasters; city-specific outputs live under
+# data/CITY_ID/.
 
 DATA_ROOT   <- file.path(PIPELINE_ROOT, "data", CITY_ID)
 DATA_RAW    <- file.path(DATA_ROOT, "raw")
 DATA_PROC   <- file.path(DATA_ROOT, "processed")
 DATA_EXPORT <- file.path(DATA_ROOT, "export")
-DATA_TO_IMP <- DATA_IMPORT
 
 for (d in c(DATA_RAW, DATA_PROC, DATA_EXPORT)) {
   dir.create(d, recursive = TRUE, showWarnings = FALSE)

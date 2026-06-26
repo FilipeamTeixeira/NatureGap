@@ -5,12 +5,11 @@
 #   - iNaturalist  (REST API — research + needs_id / “Verifiable”)
 #   - GBIF         (rgbif)
 #   - OpenStreetMap (osmdata)
-#   - ESA WorldCover 10m landcover classification (from data/to_import/)
-#   - EMC-BUILT impervious surface fraction       (from data/to_import/)
+#   - ESA WorldCover 10m landcover classification (from data/raw/)
+#   - EMC-BUILT impervious surface fraction       (from data/raw/)
 #
-# Optional (manual download required — see comments in sections 6 & 7):
-#   - Sentinel-2 NDVI
-#   - Landsat LST
+# Raster inputs are prepared by download_*.R scripts when
+# AUTO_DOWNLOAD_RASTER_INPUTS is enabled in config.R.
 
 library(sf)
 library(terra)
@@ -25,6 +24,28 @@ dir.create(DATA_RAW, recursive = TRUE, showWarnings = FALSE)
 
 config_path_exists <- function(path) {
   !is.null(path) && length(path) == 1L && !is.na(path) && nzchar(path) && file.exists(path)
+}
+
+run_raster_input_downloaders <- function() {
+  if (!exists("AUTO_DOWNLOAD_RASTER_INPUTS") || !isTRUE(AUTO_DOWNLOAD_RASTER_INPUTS)) {
+    return(invisible(FALSE))
+  }
+
+  if (!exists("RASTER_INPUT_DOWNLOADERS") || length(RASTER_INPUT_DOWNLOADERS) == 0L) {
+    return(invisible(FALSE))
+  }
+
+  cat("Preparing raster inputs...\n")
+  for (script in RASTER_INPUT_DOWNLOADERS) {
+    if (!file.exists(script)) {
+      warning("Raster downloader not found: ", script)
+      next
+    }
+    cat(sprintf("  -> %s\n", basename(script)))
+    source(script, local = FALSE)
+  }
+
+  invisible(TRUE)
 }
 
 fetch_osm_sf <- function(query_fn, label) {
@@ -97,12 +118,49 @@ osm_cache_ok <- function(path, min_features = 1L) {
   }, error = function(e) FALSE)
 }
 
-city_raster_ext <- function() {
-  ext(BBOX_CITY["xmin"], BBOX_CITY["xmax"], BBOX_CITY["ymin"], BBOX_CITY["ymax"])
+city_raster_ext <- function(r) {
+  bbox_poly <- st_as_sfc(
+    st_bbox(
+      c(
+        xmin = unname(BBOX_CITY["xmin"]),
+        ymin = unname(BBOX_CITY["ymin"]),
+        xmax = unname(BBOX_CITY["xmax"]),
+        ymax = unname(BBOX_CITY["ymax"])
+      ),
+      crs = 4326
+    )
+  )
+
+  raster_crs <- crs(r)
+  if (!is.na(raster_crs) && nzchar(raster_crs)) {
+    bbox_poly <- st_transform(bbox_poly, raster_crs)
+  }
+
+  ext(vect(bbox_poly))
 }
 
 crop_to_city <- function(r) {
-  crop(r, city_raster_ext())
+  city_ext <- city_raster_ext(r)
+  raster_ext <- as.vector(ext(r))
+  crop_ext <- as.vector(city_ext)
+  names(raster_ext) <- names(crop_ext) <- c("xmin", "xmax", "ymin", "ymax")
+  overlaps <- raster_ext["xmin"] <= crop_ext["xmax"] &&
+    raster_ext["xmax"] >= crop_ext["xmin"] &&
+    raster_ext["ymin"] <= crop_ext["ymax"] &&
+    raster_ext["ymax"] >= crop_ext["ymin"]
+
+  if (!overlaps) {
+    stop(
+      sprintf(
+        "Raster extent does not overlap %s after CRS alignment. Raster CRS: %s",
+        CITY_ID,
+        crs(r)
+      ),
+      call. = FALSE
+    )
+  }
+
+  crop(r, city_ext)
 }
 
 #' Reduce a possibly multi-band NDVI stack to a single layer for the pipeline.
@@ -119,6 +177,8 @@ prepare_ndvi_raster <- function(r) {
   names(out) <- "ndvi"
   out
 }
+
+run_raster_input_downloaders()
 
 # ── 1. iNaturalist observations ───────────────────────────────────────────────
 # rinat only accepts quality=c("casual","research") and silently drops needs_id.
@@ -479,7 +539,7 @@ if (skip_osm) {
 
 # ── 4. ESA WorldCover 10m landcover classification ───────────────────────────
 #
-# Source: data/to_import/worldcover/ESA_WorldCover_10m_2021_v200_N33E138_Map.tif
+# Source: WC_FILE, prepared by download_worldcover.R
 # CRS:    WGS84 (EPSG:4326)
 # Classes (values stored in pixel):
 #   10  Tree cover         20  Shrubland           30  Grassland
@@ -502,14 +562,14 @@ if (file.exists(wc_path)) {
               mean(res(lc_crop)) * 111319.5))
 } else {
   warning(sprintf(
-    "WorldCover not found: %s\n  Download from https://esa-worldcover.org/",
+    "WorldCover not found: %s\n  Run download_worldcover.R or enable AUTO_DOWNLOAD_RASTER_INPUTS.",
     wc_path
   ))
 }
 
 # ── 5. EMC-BUILT impervious surface fraction ──────────────────────────────────
 #
-# Source: data/to_import/emc_built/EMC_BUILT_S_E2022_GLOBE_R2025A_54009_10_V1_0_R5_C31.tif
+# Source: EMC_FILE, manually downloaded as EMC_CITY_ID.tif
 # CRS:    ESRI:54009 (World Mollweide) — must be reprojected before use
 # Values: built-up surface area in m² per 10m pixel (max = 100 for fully built)
 #         Divide by 100 to get fraction 0–1.
@@ -551,8 +611,9 @@ if (file.exists(emc_path)) {
   ))
 } else {
   warning(sprintf(
-    "EMC-BUILT not found: %s\n  Download from https://human-settlement.emergency.copernicus.eu/",
-    emc_path
+    "EMC-BUILT not found: %s\n  Download manually and save as EMC_%s.tif.",
+    emc_path,
+    CITY_ID
   ))
 }
 
@@ -587,7 +648,7 @@ if (config_path_exists(S2_NDVI_FILE)) {
 
 if (!ndvi_written) {
   message(
-    "Skipping NDVI — set S2_NDVI_FILE or add a .SAFE product under S2_SAFE_DIR in config.R"
+    "Skipping NDVI - run download_sentinel2.R, set S2_NDVI_FILE, or add a .SAFE product under S2_SAFE_DIR."
   )
 }
 
@@ -616,7 +677,7 @@ if (!is.na(lst_source)) {
   lst_written <- TRUE
   cat("  → LST raster written (°C)\n")
 } else {
-  message("Skipping LST — set LST_FILE or add LST_*.tif/ST_B10 under LST_DIR in config.R")
+  message("Skipping LST - run download_landsat_temp.R, set LST_FILE, or add LST_*.tif/ST_B10 under LST_DIR.")
 }
 
 cat("\nIngestion complete. Check data/raw/ for outputs.\n")

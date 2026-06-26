@@ -375,6 +375,11 @@ begin
       'cell_id',
       case when tg_op = 'INSERT' then new.cell_id else old.cell_id end
     );
+  elsif tg_table_name = 'user_roles' then
+    pk := jsonb_build_object(
+      'user_id',
+      case when tg_op = 'INSERT' then new.user_id else old.user_id end
+    );
   else
     pk := jsonb_build_object(
       'id',
