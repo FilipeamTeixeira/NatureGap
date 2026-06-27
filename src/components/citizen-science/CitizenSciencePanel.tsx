@@ -20,16 +20,18 @@ import {
   addSurveyRecord,
   startStructuredSurvey,
   submitQuickSighting,
+  submitSuggestion,
   submitStructuredSurvey,
   uploadCitizenPhoto,
   type AppRole,
   type HabitatIndicators,
   type SpeciesReferenceOption,
+  type SuggestionType,
   type SurveyPointFeature,
   type TaxonGroup,
 } from '@/lib/citizen-science';
 
-type Mode = 'quick' | 'survey';
+type Mode = 'quick' | 'survey' | 'suggest';
 
 const TAXON_GROUPS: { value: TaxonGroup; label: string }[] = [
   { value: 'bird', label: 'Bird' },
@@ -49,6 +51,14 @@ const EMPTY_HABITAT: HabitatIndicators = {
   water_presence: 'none',
   light_pollution: 'low',
 };
+
+const SUGGESTION_TYPES: { value: SuggestionType; label: string }[] = [
+  { value: 'survey_point', label: 'Survey point' },
+  { value: 'species', label: 'Species' },
+  { value: 'action', label: 'Action' },
+  { value: 'habitat_photo', label: 'Habitat photo' },
+  { value: 'local_note', label: 'Local knowledge' },
+];
 
 interface SurveyRecordDraft {
   taxon_group: TaxonGroup;
@@ -139,6 +149,10 @@ export default function CitizenSciencePanel({
   ]);
   const [surveyBusy, setSurveyBusy] = useState(false);
   const [surveyMessage, setSurveyMessage] = useState<{ kind: 'success' | 'error' | 'warning'; text: string } | null>(null);
+  const [suggestionType, setSuggestionType] = useState<SuggestionType>('local_note');
+  const [suggestionText, setSuggestionText] = useState('');
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
+  const [suggestionMessage, setSuggestionMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   const canSurvey = role === 'surveyor' || role === 'admin';
   const canQuick = role === 'contributor' || role === 'admin';
@@ -244,8 +258,8 @@ export default function CitizenSciencePanel({
 
   async function handleSubmitSurvey() {
     if (!activeSurvey) return;
-    if (elapsed < 12 * 60) {
-      setSurveyMessage({ kind: 'warning', text: 'Survey submission unlocks after 12 minutes.' });
+    if (elapsed < 15 * 60) {
+      setSurveyMessage({ kind: 'warning', text: 'Survey submission unlocks after 15 minutes.' });
       return;
     }
     if (habitat.invasive_species_presence && !invasivePhoto && !habitat.invasive_species_photo_url) {
@@ -256,10 +270,29 @@ export default function CitizenSciencePanel({
     setSurveyBusy(true);
     setSurveyMessage(null);
     try {
+      const unsavedRecords = records.filter((item) => !item.saved);
+      for (const record of unsavedRecords) {
+        await addSurveyRecord({
+          survey_id: activeSurvey.id,
+          taxon_group: record.taxon_group,
+          species_id: record.species_id || null,
+          count: record.count,
+          notes: record.notes || null,
+        });
+      }
+      if (unsavedRecords.length > 0) {
+        setRecords((prev) => prev.map((item) => ({ ...item, saved: true })));
+      }
+
       const invasiveUrl = invasivePhoto ? await uploadCitizenPhoto(invasivePhoto, 'habitat-indicators') : habitat.invasive_species_photo_url;
       const result = await submitStructuredSurvey(activeSurvey.id, {
         ...habitat,
         invasive_species_photo_url: habitat.invasive_species_presence ? invasiveUrl : undefined,
+      }, {
+        gps_accuracy_m: gps.accuracyM,
+        gps_available: Boolean(gps.coordinates),
+        elapsed_seconds_client: elapsed,
+        survey_record_count: records.length,
       });
       setSurveyMessage({
         kind: 'success',
@@ -275,6 +308,35 @@ export default function CitizenSciencePanel({
       setSurveyMessage({ kind: 'error', text: error instanceof Error ? error.message : 'Could not submit survey.' });
     } finally {
       setSurveyBusy(false);
+    }
+  }
+
+  async function handleSuggestionSubmit() {
+    setSuggestionMessage(null);
+    if (!suggestionText.trim()) {
+      setSuggestionMessage({ kind: 'error', text: 'Add a short suggestion before submitting.' });
+      return;
+    }
+
+    setSuggestionBusy(true);
+    try {
+      const coordinates = gps.coordinates
+        ? { lng: gps.coordinates[0], lat: gps.coordinates[1], gps_accuracy_m: gps.accuracyM }
+        : {};
+      const result = await submitSuggestion({
+        type: suggestionType,
+        payload: {
+          text: suggestionText.trim(),
+          selected_survey_point_id: selectedSurveyPoint?.id ?? null,
+          ...coordinates,
+        },
+      });
+      setSuggestionMessage({ kind: 'success', text: `Suggestion submitted (${result.suggestion.status}).` });
+      setSuggestionText('');
+    } catch (error) {
+      setSuggestionMessage({ kind: 'error', text: error instanceof Error ? error.message : 'Could not submit suggestion.' });
+    } finally {
+      setSuggestionBusy(false);
     }
   }
 
@@ -302,6 +364,13 @@ export default function CitizenSciencePanel({
               className={cn('px-3 py-1.5 rounded-md text-[12px] font-medium', mode === 'survey' ? 'bg-white text-[#1F2A1F] shadow-sm' : 'text-[#667066]')}
             >
               Survey
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('suggest')}
+              className={cn('px-3 py-1.5 rounded-md text-[12px] font-medium', mode === 'suggest' ? 'bg-white text-[#1F2A1F] shadow-sm' : 'text-[#667066]')}
+            >
+              Suggest
             </button>
           </div>
         </div>
@@ -395,6 +464,9 @@ export default function CitizenSciencePanel({
 
             <div className="flex flex-col gap-2">
               <FieldLabel>Photo</FieldLabel>
+              {quickSpeciesId && selectedSpecies.find((item) => item.id === quickSpeciesId)?.requires_photo_on_first_record && (
+                <p className="text-[11px] text-[#8A5B12]">First record of this species in a cell requires a photo.</p>
+              )}
               <label className="flex items-center gap-3 rounded-lg border border-dashed border-[#D1D8CE] px-3 py-3 text-[12px] text-[#667066] cursor-pointer hover:border-[#2E6F40]">
                 <Camera size={14} strokeWidth={1.7} />
                 <span className="truncate">{quickPhoto ? quickPhoto.name : 'Attach optional photo'}</span>
@@ -419,7 +491,7 @@ export default function CitizenSciencePanel({
               {quickBusy ? 'Submitting...' : 'Submit sighting'}
             </button>
           </div>
-        ) : (
+        ) : mode === 'survey' ? (
           <div className="flex flex-col gap-4">
             {!canSurvey && hasAuth && (
               <StatusMessage kind="warning">Survey tools are available to Surveyor and Admin roles.</StatusMessage>
@@ -456,8 +528,8 @@ export default function CitizenSciencePanel({
                   {surveyBusy ? 'Starting...' : 'Start survey'}
                 </button>
               ) : (
-                <StatusMessage kind={elapsed >= 12 * 60 ? 'success' : 'warning'}>
-                  {elapsed >= 12 * 60 ? 'Submission unlocked.' : `Submission unlocks in ${formatTime(12 * 60 - elapsed)}.`}
+                <StatusMessage kind={elapsed >= 15 * 60 ? 'success' : 'warning'}>
+                  {elapsed >= 15 * 60 ? 'Submission unlocked.' : `Submission unlocks in ${formatTime(15 * 60 - elapsed)}.`}
                 </StatusMessage>
               )}
             </div>
@@ -606,7 +678,7 @@ export default function CitizenSciencePanel({
 
                 <button
                   type="button"
-                  disabled={surveyBusy || elapsed < 12 * 60 || (habitat.invasive_species_presence && !invasivePhoto)}
+                  disabled={surveyBusy || elapsed < 15 * 60 || (habitat.invasive_species_presence && !invasivePhoto)}
                   onClick={handleSubmitSurvey}
                   className="h-11 rounded-lg bg-[#2E6F40] text-white text-[13px] font-semibold disabled:bg-[#D1D8CE]"
                 >
@@ -616,6 +688,48 @@ export default function CitizenSciencePanel({
             )}
 
             {!activeSurvey && surveyMessage && <StatusMessage kind={surveyMessage.kind}>{surveyMessage.text}</StatusMessage>}
+          </div>
+        ) : (
+          <div className="bg-white border border-[#E4E7E1] rounded-lg p-4 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Leaf size={15} className="text-[#2E6F40]" strokeWidth={1.7} />
+              <h3 className="text-[14px] font-semibold text-[#1F2A1F]">Suggestions queue</h3>
+            </div>
+
+            {!hasAuth && (
+              <StatusMessage kind="warning">Sign in to submit suggestions.</StatusMessage>
+            )}
+
+            <div className="flex flex-col gap-2">
+              <FieldLabel>Type</FieldLabel>
+              <Select value={suggestionType} onChange={(value) => setSuggestionType(value as SuggestionType)}>
+                {SUGGESTION_TYPES.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <FieldLabel>Suggestion</FieldLabel>
+              <textarea
+                value={suggestionText}
+                onChange={(event) => setSuggestionText(event.target.value)}
+                rows={5}
+                className="rounded-lg border border-[#E4E7E1] px-3 py-2 text-[13px] outline-none focus:border-[#2E6F40] resize-none"
+              />
+            </div>
+
+            {suggestionMessage && <StatusMessage kind={suggestionMessage.kind}>{suggestionMessage.text}</StatusMessage>}
+
+            <button
+              type="button"
+              disabled={!hasAuth || suggestionBusy || !suggestionText.trim()}
+              onClick={handleSuggestionSubmit}
+              className="h-10 rounded-lg bg-[#2E6F40] text-white text-[13px] font-semibold disabled:bg-[#D1D8CE] disabled:text-white flex items-center justify-center gap-2"
+            >
+              <Send size={14} strokeWidth={1.8} />
+              {suggestionBusy ? 'Submitting...' : 'Submit suggestion'}
+            </button>
           </div>
         )}
       </div>

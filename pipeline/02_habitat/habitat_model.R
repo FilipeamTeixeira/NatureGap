@@ -3,14 +3,11 @@
 # if observer effort were uniform across the city.
 #
 # Primary data sources (from step 01):
-#   data/raw/landcover.tif      — ESA WorldCover 10m landcover classification
-#   data/raw/impervious.tif     — EMC-BUILT impervious surface fraction (0–1)
-#   data/raw/osm_green_spaces.gpkg
-#   data/raw/osm_paths.gpkg
-#
-# Optional (uncomment if available from step 01):
 #   data/raw/ndvi.tif           — Sentinel-2 NDVI
+#   data/raw/canopy_height.tif  — LiDAR canopy height, metres
 #   data/raw/lst.tif            — Landsat surface temperature
+#   data/raw/lidar_variance.tif — optional precomputed LiDAR variance
+#   data/raw/osm_paths.gpkg
 #
 # Outputs:
 #   data/processed/grid_habitat.gpkg   — cell grid with habitat index fields
@@ -32,6 +29,25 @@ rescale01 <- function(x) {
   pmin(1, pmax(0, (x - rng[1]) / diff(rng)))
 }
 
+fixed_rescale01 <- function(x, min_value, max_value) {
+  x <- as.numeric(x)
+  pmin(1, pmax(0, (x - min_value) / (max_value - min_value)))
+}
+
+percent_rank01 <- function(x) {
+  x <- as.numeric(x)
+  out <- rep(NA_real_, length(x))
+  ok <- !is.na(x)
+  n <- sum(ok)
+  if (n == 0L) return(out)
+  if (n == 1L) {
+    out[ok] <- 0
+    return(out)
+  }
+  out[ok] <- (rank(x[ok], ties.method = "average") - 1) / (n - 1)
+  out
+}
+
 empty_sf <- function(crs = CRS_LOCAL) {
   st_sf(geometry = st_sfc(crs = crs))
 }
@@ -48,7 +64,7 @@ read_optional_sf <- function(path, label) {
 
 line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight = 1) {
   if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
-  lines <- st_collection_extract(lines, "LINESTRING", warn = FALSE)
+  lines <- suppressWarnings(st_collection_extract(lines, "LINESTRING", warn = FALSE))
   if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
   if (!is.null(weight_col) && weight_col %in% names(lines)) {
     lines$.weight <- as.numeric(lines[[weight_col]])
@@ -69,7 +85,7 @@ line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight 
 
 point_density_by_cell <- function(points, grid) {
   if (nrow(points) == 0L) return(rep(0, nrow(grid)))
-  points <- st_collection_extract(points, "POINT", warn = FALSE)
+  points <- suppressWarnings(st_collection_extract(points, "POINT", warn = FALSE))
   if (nrow(points) == 0L) return(rep(0, nrow(grid)))
   points_geom <- st_sf(geometry = st_geometry(points), crs = st_crs(points))
   joined <- st_join(points_geom, grid |> select(cell_id), join = st_within, left = FALSE)
@@ -84,7 +100,7 @@ point_density_by_cell <- function(points, grid) {
 
 distance_weighted_points <- function(points, centroids, radius_m, decay_m) {
   if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
-  points <- st_collection_extract(points, "POINT", warn = FALSE)
+  points <- suppressWarnings(st_collection_extract(points, "POINT", warn = FALSE))
   if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
   idx <- st_nearest_feature(centroids, points)
   d <- as.numeric(st_distance(centroids, points[idx, ], by_element = TRUE))
@@ -93,7 +109,7 @@ distance_weighted_points <- function(points, centroids, radius_m, decay_m) {
 
 distance_weighted_lines <- function(lines, centroids, radius_m, decay_m, weights = NULL) {
   if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
-  lines <- st_collection_extract(lines, "LINESTRING", warn = FALSE)
+  lines <- suppressWarnings(st_collection_extract(lines, "LINESTRING", warn = FALSE))
   if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
   if (is.null(weights)) weights <- rep(1, nrow(lines))
   idx <- st_nearest_feature(centroids, lines)
@@ -137,23 +153,15 @@ WC_MOSS     <- 100L
 # All classes that count as "vegetated" for the habitat index
 WC_GREEN <- c(WC_TREE, WC_SHRUB, WC_GRASS, WC_WETLAND, WC_MANGROVE)
 
-# ── 1. Build reference grid ───────────────────────────────────────────────────
+# ── 1. Load canonical spatial base grid ──────────────────────────────────────
 
-bb <- unname(BBOX_CITY)
+if (!file.exists(PROC_HEX_CELLS)) {
+  stop("hex_cells.gpkg not found — run step 02 spatial base first.", call. = FALSE)
+}
 
-bbox_sf <- st_bbox(
-  c(xmin = bb[1],
-    ymin = bb[2],
-    xmax = bb[3],
-    ymax = bb[4]),
-  crs = 4326
-) |>
-  st_as_sfc() |>
-  st_transform(CRS_LOCAL)
-
-grid <- st_make_grid(bbox_sf, cellsize = CELL_SIZE, square = FALSE) |>
-  st_as_sf() |>
-  mutate(cell_id = row_number())
+grid <- st_read(PROC_HEX_CELLS, quiet = TRUE) |>
+  st_transform(CRS_LOCAL) |>
+  select(cell_id, any_of("green_space_id"))
 
 cat(sprintf("Grid: %d cells at %dm resolution\n", nrow(grid), CELL_SIZE))
 
@@ -229,7 +237,7 @@ if (file.exists(imp_path)) {
 green <- st_read(RAW_OSM_GREEN, quiet = TRUE)
 cell_area <- CELL_SIZE^2
 
-inter <- st_intersection(green, grid)
+inter <- suppressWarnings(st_intersection(green, grid))
 
 inter$area_m2 <- as.numeric(st_area(st_geometry(inter)))
 
@@ -250,7 +258,7 @@ grid <- grid |>
 
 paths <- st_read(RAW_OSM_PATHS, quiet = TRUE)
 
-inter <- st_intersection(paths, grid)
+inter <- suppressWarnings(st_intersection(paths, grid))
 
 inter$len_m <- as.numeric(st_length(st_geometry(inter)))
 
@@ -263,21 +271,61 @@ grid <- grid |>
   left_join(path_length, by = "cell_id") |>
   mutate(
     path_length_m = replace_na(path_length_m, 0),
-    path_km       = path_length_m / 1000
+    path_km       = path_length_m / 1000,
+    is_unsampled  = path_km <= 0
   ) |>
   select(-path_length_m)
 
-# ── 6. Optional: NDVI and LST ────────────────────────────────────────────────
-# Paths configured in pipeline/config.R (RAW_NDVI, RAW_LST).
+# ── 6. Required ecological raster indices ───────────────────────────────────
+# Missing required rasters remain NA. No proxy substitution is applied.
 
 grid$ndvi_mean <- NA_real_
+grid$ndvi_idx <- NA_real_
+grid$canopy_height_m <- NA_real_
+grid$canopy_height_idx <- NA_real_
 grid$lst_rank  <- NA_real_
+grid$lst_idx <- NA_real_
+grid$lst_celsius <- NA_real_
+grid$lidar_variance <- NA_real_
+grid$lidar_variance_idx <- NA_real_
 
 if (file.exists(RAW_NDVI)) {
   cat("Extracting NDVI per cell...\n")
   ndvi <- rast(RAW_NDVI) |> project(CRS_LOCAL, method = "bilinear")
   ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
   grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
+  grid$ndvi_idx <- fixed_rescale01(grid$ndvi_mean, -0.2, 1.0)
+} else {
+  message("NDVI raster not found — ndvi_idx set to NA.")
+}
+
+canopy_path <- if (file.exists(RAW_CANOPY_HEIGHT)) {
+  RAW_CANOPY_HEIGHT
+} else if (exists("CANOPY_HEIGHT_FILE") && file.exists(CANOPY_HEIGHT_FILE)) {
+  CANOPY_HEIGHT_FILE
+} else {
+  NA_character_
+}
+
+lidar_variance_path <- if (file.exists(RAW_LIDAR_VARIANCE)) {
+  RAW_LIDAR_VARIANCE
+} else if (exists("LIDAR_VARIANCE_FILE") && file.exists(LIDAR_VARIANCE_FILE)) {
+  LIDAR_VARIANCE_FILE
+} else {
+  NA_character_
+}
+
+if (!is.na(canopy_path)) {
+  cat("Extracting LiDAR canopy height per cell...\n")
+  canopy <- rast(canopy_path) |> project(CRS_LOCAL, method = "bilinear")
+  canopy_mean <- terra::extract(canopy, vect(grid), fun = mean, na.rm = TRUE)
+  grid$canopy_height_m <- replace_na(canopy_mean[[2]], NA_real_)
+  grid$canopy_height_idx <- fixed_rescale01(pmin(grid$canopy_height_m, 20), 0, 20)
+
+  canopy_var <- terra::extract(canopy, vect(grid), fun = stats::var, na.rm = TRUE)
+  grid$lidar_variance <- replace_na(canopy_var[[2]], NA_real_)
+} else {
+  message("LiDAR canopy height raster not found — canopy_height_idx set to NA.")
 }
 
 if (file.exists(RAW_LST)) {
@@ -285,18 +333,33 @@ if (file.exists(RAW_LST)) {
   lst <- rast(RAW_LST) |> project(CRS_LOCAL, method = "bilinear")
   lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
   grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
-  n_lst <- sum(!is.na(grid$lst_celsius))
-  if (n_lst > 0L) {
-    grid$lst_rank <- rank(grid$lst_celsius, na.last = "keep") / n_lst
-  }
+  grid$lst_rank <- percent_rank01(grid$lst_celsius)
+  grid$lst_idx <- 1 - grid$lst_rank
+} else {
+  message("LST raster not found — lst_idx set to NA.")
+}
+
+if (!is.na(lidar_variance_path)) {
+  cat("Extracting precomputed LiDAR variance per cell...\n")
+  lidar_variance <- rast(lidar_variance_path) |> project(CRS_LOCAL, method = "bilinear")
+  lidar_variance_mean <- terra::extract(lidar_variance, vect(grid), fun = mean, na.rm = TRUE)
+  grid$lidar_variance <- replace_na(lidar_variance_mean[[2]], NA_real_)
+}
+
+grid$lidar_variance_idx <- if (all(is.na(grid$lidar_variance))) {
+  rep(NA_real_, nrow(grid))
+} else {
+  rescale01(grid$lidar_variance)
 }
 
 grid <- grid |>
-  mutate(heat_exposure = replace_na(lst_rank, 0))
+  mutate(
+    heat_exposure = lst_rank
+  )
 
 # ── 7. Environmental stressors on 20 m hex cells ─────────────────────────────
 
-cell_centroids <- st_centroid(grid)
+cell_centroids <- suppressWarnings(st_centroid(grid))
 cell_area_ha <- as.numeric(st_area(grid)) / 10000
 
 roads <- read_optional_sf(RAW_OSM_ROADS, "OSM roads")
@@ -350,10 +413,16 @@ grid <- grid |>
         0.30 * rescale01(lamp_proximity) +
         0.20 * rescale01(lit_road_density)
     ),
-    disturbance_index = rescale01(
+    osm_disturbance_idx = rescale01(
       0.60 * rescale01(path_density) +
         0.40 * rescale01(amenity_proximity)
     ),
+    disturbance_idx = if_else(
+      is.na(lidar_variance_idx),
+      NA_real_,
+      (osm_disturbance_idx + lidar_variance_idx) / 2
+    ),
+    disturbance_index = disturbance_idx,
     water_proximity = rescale01(
       0.70 * water_prox +
         0.30 * permeable_fraction
@@ -361,42 +430,25 @@ grid <- grid |>
   )
 
 # ── 8. Composite habitat quality index ───────────────────────────────────────
-#
-# Combines WorldCover vegetation classes and impervious surface into a
-# single 0–1 quality index per cell.
-#
-# Component               Weight   Source
-# ─────────────────────── ──────   ─────────────────────────────────────────
-# Tree cover fraction        0.35   WorldCover class 10 (tree cover)
-# Green fraction             0.25   WorldCover any vegetated class
-# Imperviousness (inverted)  0.25   EMC-BUILT (high imperviousness = low quality)
-# OSM green fraction         0.15   Parks / reserves from OSM (supplemental)
-#
-# Weights are provisional; see docs/methodology.md for calibration notes.
-
-# Safe fallbacks: if a source is missing, use OSM green fraction as proxy
-safe_tree   <- if_else(!is.na(grid$tree_fraction),     grid$tree_fraction,     grid$osm_green_fraction * 0.5)
-safe_green  <- if_else(!is.na(grid$green_fraction_wc), grid$green_fraction_wc, grid$osm_green_fraction)
-safe_imp    <- if_else(!is.na(grid$impervious_fraction),
-                       grid$impervious_fraction,
-                       replace_na(grid$built_fraction_wc, 0))
 
 grid <- grid |>
   mutate(
-    habitat_quality = 0.35 * safe_tree  +
-                      0.25 * safe_green +
-                      0.25 * (1 - safe_imp) +
-                      0.15 * osm_green_fraction
+    habitat_quality = 0.35 * replace_na(ndvi_idx, 0) +
+                      0.30 * replace_na(canopy_height_idx, 0) +
+                      0.20 * replace_na(lst_idx, 0) +
+                      0.15 * (1 - replace_na(disturbance_idx, 1))
   )
 
 cat(sprintf(
   "Habitat quality: min=%.3f, mean=%.3f, max=%.3f\n",
-  min(grid$habitat_quality,  na.rm = TRUE),
-  mean(grid$habitat_quality, na.rm = TRUE),
-  max(grid$habitat_quality,  na.rm = TRUE)
+  min(grid$habitat_quality),
+  mean(grid$habitat_quality),
+  max(grid$habitat_quality)
 ))
 
+st_write(grid, PROC_HEX_CELLS, delete_dsn = TRUE)
 st_write(grid, PROC_GRID_HABITAT, delete_dsn = TRUE)
+cat(sprintf("Written: %s\n", PROC_HEX_CELLS))
 cat(sprintf("Written: %s\n", PROC_GRID_HABITAT))
 
 # ── 9. Export habitat quality raster for PMTiles ─────────────────────────────

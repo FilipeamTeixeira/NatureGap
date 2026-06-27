@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "cityId": "yokohama-honmoku",
+  "datasetId": "20260627T120000Z",
+  "dataVersion": "20260627T120000Z",
+  "generatedAt": "2026-06-27T12:00:00Z",
+  "sourceLayer": "hexgrid",
+  "requiredRenderFields": [
+    "cellId",
+    "parkId",
+    "parkName",
+    "impactScore",
+    "expectedRichness",
+    "ecologicalResidual",
+    "habitatQuality",
+    "observedRichness",
+    "corridorImportance",
+    "treeCover",
+    "heatExposure",
+    "landUseGreen",
+    "interventionRank"
+  ],
+  "counts": {
+    "cells": 15453,
+    "parks": 93
+  },
+  "pmtiles": {
+    "path": "hexgrid.pmtiles",
+    "sourceLayer": "hexgrid",
+    "minZoom": 0,
+    "maxZoom": 18,
+    "bounds": [
+      139.6398199,
+      35.414597,
+      139.672325,
+      35.431265
+    ]
+  },
+  "files": {
+    "cell_attributes.geojson": {
+      "path": "cell_attributes.geojson",
+      "bytes": 28033774
+    },
+    "hexgrid.pmtiles": {
+      "path": "hexgrid.pmtiles",
+      "bytes": 774936
+    },
+    "park-stats.json": {
+      "path": "park-stats.json",
+      "bytes": 144757
+    },
+    "parks.geojson": {
+      "path": "parks.geojson",
+      "bytes": 68292
+    },
+    "top_interventions.json": {
+      "path": "top_interventions.json",
+      "bytes": 35080
+    }
+  }
+}

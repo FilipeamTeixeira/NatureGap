@@ -72,6 +72,10 @@ export interface CellStatsFields {
   heatExposure?: number;
   /** 0–100 vegetated land-cover fraction. */
   landUseGreen?: number;
+  /** Dominant categorical land-cover class used for map fills. */
+  landUseClass?: 'tree' | 'shrub' | 'grass' | 'water' | 'built' | 'bare' | 'mixed' | 'unknown';
+  /** 1-based intervention priority rank when exported for rendering. */
+  interventionRank?: number;
   pressures: string[];
   interventions: Intervention[];
 }

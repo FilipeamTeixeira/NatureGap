@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
 
   try {
     const auth = await requireAuth(req);
-    assertRole(auth.role, ['surveyor']);
+    assertRole(auth.role, ['contributor']);
 
     const body = await readJson(req);
     const type = requiredEnum(body, 'type', SUGGESTION_TYPES);

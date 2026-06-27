@@ -1,4 +1,8 @@
-import { fetchPipelineJson } from './storage-fetch';
+import localGreenSpaces from '@/data/green-spaces.json';
+import localParkStats from '@/data/park-stats.json';
+import { STORAGE } from './config';
+import { parseGreenSpaces, parseParkStats, type ParkStats } from './data-validation';
+import { fetchPipelineJson, mergeCellChunks } from './storage-fetch';
 
 export interface GreenSpace {
   /** Stable identifier — matches hexgrid `parkId` and park-stats `id`. */
@@ -13,7 +17,8 @@ export interface GreenSpace {
   ring: [number, number][];
 }
 
-let runtimeParks: GreenSpace[] = [];
+let runtimeParks: GreenSpace[] = parseGreenSpaces(localGreenSpaces);
+let runtimeParkStats: Record<string, ParkStats> = parseParkStats(localParkStats);
 let initParksCalled = false;
 
 function deriveId(props: Record<string, unknown>): string {
@@ -71,8 +76,26 @@ export async function initParks(): Promise<void> {
   } catch (e) {
     console.warn('[green-spaces] Failed to load parks:', e);
   }
+
+  try {
+    const stats = await fetchPipelineJson(
+      STORAGE.PARK_STATS_KEY,
+      'park-stats.manifest.json',
+      mergeCellChunks,
+    );
+    if (stats) {
+      runtimeParkStats = parseParkStats(stats);
+      console.info(`[green-spaces] Loaded ${Object.keys(runtimeParkStats).length} park stats from Storage`);
+    }
+  } catch (e) {
+    console.warn('[green-spaces] Failed to load park stats:', e);
+  }
 }
 
 export function getParks(): GreenSpace[] {
   return runtimeParks;
+}
+
+export function getParkStats(): Record<string, ParkStats> {
+  return runtimeParkStats;
 }

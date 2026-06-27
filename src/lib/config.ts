@@ -74,10 +74,12 @@ export const SCORE_COLORS = {
 
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
-  /** Dataset namespace to scan in Storage. Files may be nested under timestamped folders. */
-  CITY_ID:         'yokohama-honmoku',
-  DATASET_IDS:     ['yokohama-honmoku', 'amsterdam-schimmelstraat'],
-  /** Logical export names used as matching patterns, not fixed Storage paths. */
+  /** Cities to try without relying on Supabase Storage list permissions. */
+  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'yokohama-honmoku')
+    .split(',')
+    .map((city) => city.trim())
+    .filter(Boolean),
+  /** Logical export names resolved through pipeline-export/<city>/current.json. */
   PARK_STATS_KEY:  'park-stats.json',
   HEXGRID_PMTILES_KEY: 'hexgrid.pmtiles',
   HEXGRID_SOURCE_LAYER: 'hexgrid',

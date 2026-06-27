@@ -1,739 +1,373 @@
 # NatureGap System Architecture
 
-## 1. End-To-End Overview
+This document describes the current NatureGap architecture and the intended
+implementation contract. The system is an existing production-style Next.js,
+TypeScript, Supabase, R, PostGIS, PMTiles, and MapLibre application. Extend it
+incrementally; do not redesign the stack.
+
+## 1. Architecture Boundary
+
+NatureGap has three separated systems:
+
+```text
+Analytical system:
+  R pipeline
+    -> reads raw spatial, biodiversity, and approved observation inputs
+    -> computes all ecological and spatial metrics
+    -> exports PMTiles, PostGIS import artefacts, and UI JSON
+
+Persistence system:
+  PostgreSQL/PostGIS
+    -> stores users, roles, observations, surveys, moderation, suggestions
+    -> stores R-computed cell outputs
+    -> assigns live records to the canonical 20 m hex grid
+    -> does not recompute ecological metrics
+
+Presentation system:
+  Next.js + MapLibre
+    -> streams PMTiles
+    -> renders live citizen-science points
+    -> applies styling, filtering, interaction, and detail lookup
+    -> does not compute ecological metrics
+```
+
+PMTiles are rendering products only. PostgreSQL/PostGIS is the authoritative
+store for full cell-detail values after the R pipeline writes or imports them.
+MapLibre displays values already computed by R.
+
+## 2. End-To-End Data Flow
+
+The intended production flow is:
+
+```text
+Raw spatial and biodiversity data
+  -> R pipeline
+  -> hexgrid.pmtiles + cell_attributes import + UI JSON
+  -> Supabase Storage + PostgreSQL/PostGIS
+  -> MapLibre PMTiles rendering
+  -> User map interaction
+  -> Supabase cell_attributes lookup
+  -> Detail panel
+```
+
+Citizen-science writes use a separate transactional flow:
 
 ```text
 User
   -> Next.js UI
   -> Supabase Auth session
-  -> Supabase Edge Function or Supabase client query
-  -> Postgres/PostGIS tables
-  -> R pipeline reads external biodiversity/environment data separately
-  -> R computes 20m hex outputs
-  -> Outputs go to:
-       - Postgres: cell_attributes
-       - Supabase Storage: pipeline-export/<CITY_ID>/*
-       - public fallback assets: public/pipeline/<CITY_ID>/*
-  -> Frontend loads Storage/public GeoJSON + JSON
-  -> MapLibre renders hex layers, survey layers, sightings, and points
+  -> Supabase Edge Function
+  -> PostgreSQL/PostGIS observation tables
+  -> PostGIS assigns nearest canonical 20 m cell_id
+  -> approved records become input to a later R pipeline run
 ```
 
-### Main Flow
+No ecological metric should bypass the R pipeline. The allowed exception is
+PostGIS cell assignment for live records, because it is spatial attribution,
+not ecological analysis.
 
-1. Users open the Next.js App Router frontend.
-2. Static ecological layers are loaded from Supabase Storage bucket `pipeline-export`, with fallback to `public/pipeline/yokohama-honmoku`.
-3. Users authenticate through Supabase Auth via `/login`.
-4. Authenticated users interact with citizen-science UI.
-5. Citizen-science writes go through Supabase Edge Functions:
-   - `submit-quick-sighting`
-   - `start-structured-survey`
-   - `submit-structured-survey`
-   - `add-survey-record`
-   - `submit-suggestion`
-   - `flag-record`
-6. Edge Functions validate input, check roles, and write to Postgres/PostGIS.
-7. Postgres triggers assign observations to the nearest canonical 20m hex cell using `cell_attributes`.
-8. R pipeline independently ingests iNaturalist, GBIF, OSM, WorldCover, EMC-BUILT, Sentinel-2, Landsat.
-9. R produces processed grid datasets and frontend export artefacts.
-10. Frontend renders:
-    - precomputed 20m hex grid and metrics from Storage/public files
-    - live citizen-science points from Supabase tables
+## 3. Current Repository Components
 
-## 2. Database Layer
+Frontend:
+
+- `src/app/page.tsx`: main map, layer controls, detail panel, citizen-science panel
+- `src/components/map/MapView.tsx`: MapLibre map and PMTiles vector rendering
+- `src/lib/pmtiles-storage.ts`: Supabase Storage PMTiles URL construction
+- `src/lib/layer-styles.ts`: MapLibre paint expressions for already-computed properties
+- `src/lib/cell-detail.ts`: click-time `cell_attributes` lookup and display fallback
+- `src/lib/citizen-science.ts`: live survey/sighting fetches and Edge Function calls
+- `src/lib/storage-fetch.ts`: Supabase Storage JSON loader for pipeline JSON artefacts
+- `src/lib/green-spaces.ts`: `parks.geojson` loader for park click zones
+- `src/lib/data.ts`: live business-data reads for tables not yet covered by current migrations
+
+R pipeline:
+
+- `pipeline/config.R`: city, CRS, bbox, cell size, paths, constants
+- `pipeline/01_ingest/ingest.R`: raw environmental and biodiversity ingest
+- `pipeline/02_habitat/habitat_model.R`: habitat, stressor, and path-density features
+- `pipeline/03_observations/observation_layer.R`: observation standardisation and effort correction
+- `pipeline/04_connectivity/connectivity.R`: graph connectivity metrics
+- `pipeline/05_residuals/residuals.R`: expected richness, residuals, intervention ranking
+- `pipeline/06_export/export.R`: PMTiles, PostGIS import, and UI JSON exports
+
+Supabase:
+
+- `supabase/migrations/*`: schema, RLS, audit, spatial assignment, cell detail columns
+- `supabase/functions/*`: authenticated write/review APIs
+
+Obsolete architecture references to `src/lib/park-data.ts`, `src/lib/hex-grid.ts`,
+`hexgrid.geojson` rendering, or `cells.json` enrichment are not current.
+
+## 4. Database Layer
 
 ### `user_roles`
 
-Purpose: application role mapping for Supabase Auth users.
-
-Relationships:
+Application role mapping for Supabase Auth users.
 
 - `user_id -> auth.users.id`
 - `granted_by -> auth.users.id`
-
-Spatial role: none.
-
-Analysis/UI use:
-
-- Used by RLS helper functions: `is_admin`, `is_surveyor`, `is_taxonomist`, `is_contributor`
-- Used by frontend to decide available citizen-science UI
-- Used by Edge Functions for backend role checks
-
-Profiles:
-
-- No `profiles` table exists in current migrations.
-- Role state lives in `user_roles`.
+- Used by RLS helpers, Edge Functions, and frontend advisory UI
+- No `profiles` table exists in current migrations
 
 ### `species_reference`
 
-Purpose: taxonomic authority/reference table.
-
-Relationships:
+Taxonomic reference table.
 
 - Referenced by `quick_sightings.species_id`
 - Referenced by `survey_records.species_id`
-
-Spatial role:
-
-- No geometry.
-- Contains `region_plausibility` JSONB for range/season plausibility checks.
-
-Analysis/UI use:
-
-- UI uses it for species selection.
-- Edge Functions use it to validate taxon group and first-photo rules.
-- Taxonomists/admins can edit it.
+- Stores `region_plausibility` JSONB for range and season checks
+- Stores `requires_photo_on_first_record`
 
 ### `survey_points`
 
-Purpose: approved/pending/rejected locations where structured surveys can happen.
+Approved, pending, or rejected locations for structured surveys.
 
-Relationships:
-
+- `geometry geometry(Point, 4326)`
 - `suggested_by -> auth.users.id`
 - `approved_by -> auth.users.id`
 - Referenced by `structured_surveys.survey_point_id`
-
-Spatial role:
-
-- `geometry geometry(Point, 4326)`
-- Used to assign structured surveys to nearest 20m hex cell.
-
-Analysis/UI use:
-
-- UI displays approved survey points on the map.
-- Structured surveys can only start at approved points.
+- Structured surveys can only start at approved points
 
 ### `quick_sightings`
 
-Purpose: opportunistic citizen observations, presence-only, lower analytical weight.
+Opportunistic, presence-only observations.
 
-Relationships:
-
-- `user_id -> auth.users.id`
-- `species_id -> species_reference.id`
+- Raw point geometry is preserved
+- `gps_accuracy_m` is stored and used in quality flags
 - `cell_id -> cell_attributes.cell_id`
-
-Spatial role:
-
-- Raw GPS point stored in `geometry geometry(Point, 4326)`
-- `cell_id` stores nearest canonical 20m hex.
-
-Analysis/UI use:
-
-- UI displays quick sightings.
-- Analysis views exclude rejected/flagged records.
-- Backend flags low GPS accuracy and plausibility problems.
+- Duplicate sightings within 30 minutes are flagged for review
+- First record of a species, when required by `species_reference`, requires a photo
 
 ### `structured_surveys`
 
-Purpose: protocol-based surveys with timing and habitat indicators.
-
-Relationships:
+Protocol-based surveys with timing and habitat indicators.
 
 - `survey_point_id -> survey_points.id`
 - `user_id -> auth.users.id`
 - `cell_id -> cell_attributes.cell_id`
+- Location is inherited from the survey point
+- Habitat indicators are stored as JSONB
+- Structured surveys are intended to have higher R pipeline weight than quick sightings
 
-Spatial role:
-
-- No direct geometry column.
-- Spatial location inherited from `survey_points.geometry`.
-- Trigger assigns nearest 20m hex cell.
-
-Analysis/UI use:
-
-- UI starts/stops timer and submits habitat indicators.
-- Higher statistical weight concept exists in pipeline design; current external R observation pipeline uses GBIF/iNat files and has fields for structured survey weighting.
+The current R pipeline contains a structured-survey weighting field, but the
+approved Supabase observation export into R is not yet fully implemented. That
+import contract is part of the pipeline contract below.
 
 ### `survey_records`
 
-Purpose: species/count records inside structured surveys.
-
-Relationships:
+Species/count records inside structured surveys.
 
 - `survey_id -> structured_surveys.id`
 - `species_id -> species_reference.id`
-
-Spatial role:
-
-- No direct geometry.
-- Spatial context inherited through parent survey.
-
-Analysis/UI use:
-
-- Multiple records per survey.
-- Used by Edge Functions for duplicate/plausibility flags.
+- Spatial context comes through the parent survey
 
 ### `cell_attributes`
 
-Purpose: canonical 20m hex grid attributes and model outputs.
-
-Relationships:
-
-- Referenced by `quick_sightings.cell_id`
-- Referenced by `structured_surveys.cell_id`
-
-Spatial role:
+Canonical 20 m hex grid and R-computed cell outputs.
 
 - `geometry geometry(Polygon, 4326)`
-- Canonical persisted spatial key for the app.
+- Referenced by live observations and structured surveys
+- Stores expected richness, effort-corrected richness, ecological residual,
+  stressors, connectivity, ranking, detail-panel JSON fields, and timestamps
+- Required before live observation assignment works
 
-Analysis/UI use:
+Versioning model:
 
-- Stores per-cell metrics:
-  - expected richness
-  - effort-corrected richness
-  - residual
-  - stressors
-  - connectivity
-  - ranking
-- Required before observation ingestion works, because triggers find nearest cells from this table.
+- Historical R outputs are stored in `pipeline_cell_attributes` using
+  `(city_id, dataset_id, cell_id)`.
+- The app-compatible active projection remains `cell_attributes`.
+- Active datasets are promoted through `promote_pipeline_dataset(...)`.
+- Composite indexes cover city/dataset and city/rank lookups.
 
 ### `conservation_actions`
 
-Purpose: reference table for action types.
+Reference table for admin-managed action types.
 
-Relationships: none.
+Current conflict:
 
-Spatial role: none.
+- The frontend `take-action` page reads `recommended_actions`.
+- Current migrations define `conservation_actions`.
 
-Analysis/UI use:
+Smallest correction:
 
-- Current frontend `take-action` page uses `recommended_actions`, not this table.
-- `conservation_actions` exists as domain/reference data for admin-managed actions.
-
-### `flags`
-
-Purpose: auditable moderation/quality-control flags.
-
-Relationships:
-
-- `flagged_by -> auth.users.id`
-- `reviewed_by -> auth.users.id`
-- `record_type` + `record_id` validated by trigger against target tables.
-
-Spatial role: none directly.
-
-Analysis/UI use:
-
-- Analysis views exclude records with pending/confirmed flags.
-- Admins/taxonomists can review flags.
+- Either migrate the frontend to `conservation_actions`, or add and document
+  `recommended_actions` as a separate content table. Do not keep both as
+  overlapping sources of truth.
 
 ### `suggestions`
 
-Purpose: unified suggestion queue.
-
-Relationships:
+Unified suggestion queue.
 
 - `submitted_by -> auth.users.id`
 - `reviewed_by -> auth.users.id`
+- Uses status flags; records are not hard deleted
+- Can represent survey point, species, action, local note, and habitat-photo suggestions
 
-Spatial role:
+### `flags`
 
-- Can represent survey point suggestions via JSON payload, but table itself has no geometry.
+Auditable moderation and quality-control records.
 
-Analysis/UI use:
+- `record_type` + `record_id` target records validated by trigger
+- `flagged_by -> auth.users.id`
+- `reviewed_by -> auth.users.id`
+- Analysis views exclude rejected records and pending/confirmed flags
 
-- Backend queue for suggested species/actions/survey points/local notes/habitat photos.
-- Admin reviews lifecycle.
+### `audit_log`
 
-## 3. Spatial System
+Append-only audit table populated by triggers.
 
-### Canonical Grid
+- Tracks inserts and updates on domain tables
+- Hard deletes are blocked by trigger
+
+## 5. Spatial System
+
+The canonical spatial unit is the 20 m hex cell.
 
 ```text
-R pipeline:
+R:
   sf::st_make_grid(area, cellsize = 20, square = FALSE)
-      -> 20m hex polygons
-      -> cell_id
-      -> model metrics
-      -> cell_attributes / hexgrid.geojson / cells.json
+    -> local metre CRS during processing
+    -> cell_id
+    -> R-computed metrics
+    -> EPSG:4326 export for web and PostGIS
+
+PostGIS:
+  cell_attributes.geometry
+    -> nearest-cell assignment for live records
+    -> spatial integrity and lookup
+
+PMTiles:
+  hexgrid.pmtiles
+    -> render-only vector tiles
+    -> lightweight feature properties
 ```
 
 Current grid facts:
 
-- Resolution: 20m
+- Resolution: 20 m
 - Shape: hexagons
-- R CRS during processing: `EPSG:6674`
-- Export/PostGIS display CRS: `EPSG:4326`
-- Database geometry: `cell_attributes.geometry geometry(Polygon, 4326)`
+- Default city: `yokohama-honmoku`
+- R local CRS for Yokohama: `EPSG:6674`
+- Web/PostGIS CRS: `EPSG:4326`
+- Frontend source-layer: `hexgrid`
 
-### Observation Assignment
+PostGIS cell assignment functions use `cell_attributes` and centroids to assign
+live observations and structured surveys to the nearest canonical cell. This is
+an allowed database responsibility. It must not become ecological metric
+calculation.
 
-Database assignment:
+## 6. R Pipeline Contract
 
-- `find_cell_id_for_point(lng, lat)`:
-  - builds WGS84 point
-  - compares it to `st_centroid(cell_attributes.geometry)`
-  - transforms both to EPSG:3857 for distance ordering
-  - returns nearest `cell_id`
+The R pipeline is the only source of truth for scientific values.
 
-- `find_cell_id_for_survey_point(point_id)`:
-  - reads `survey_points.geometry`
-  - finds nearest `cell_attributes` centroid
-  - returns nearest `cell_id`
+### Inputs
 
-Triggers:
+External and environmental inputs:
 
-- `quick_sightings_assign_cell_id`
-- `structured_surveys_assign_cell_id`
-
-R assignment:
-
-- External iNat/GBIF observations are snapped to nearest 20m hex centroid in `pipeline/03_observations/observation_layer.R`.
-- Raw observation geometry is preserved in source GPKGs.
-
-### Raster To Vector
-
-R uses:
-
-- `terra::rast`
-- `terra::extract`
-- `terra::project`
-- `terra::crop`
-- `sf::st_make_grid`
-- `sf::st_intersection`
-- `sf::st_join`
-
-Raster sources are projected/extracted into the 20m hex grid:
-
-- WorldCover -> class fractions per cell
-- EMC-BUILT -> impervious fraction
-- Sentinel-2 NDVI -> mean NDVI per cell
-- Landsat LST -> heat rank per cell
-- Habitat raster output -> `habitat_quality.tif`
-
-### Connectivity Graph
-
-In `pipeline/04_connectivity/connectivity.R`:
-
-```text
-20m hex centroids
-  -> neighbours within CELL_SIZE * 1.15
-  -> igraph graph
-  -> edge weights from habitat resistance
-  -> betweenness centrality
-  -> corridor_importance
-  -> fragmentation_index
-  -> connectivity_score
-```
-
-Packages used:
-
-- `sf`
-- `terra`
-- `igraph`
-- `landscapemetrics`
-- optional `gdistance` check exists, but graph computation is currently igraph-based.
-
-## 4. R Pipeline
-
-### Configuration
-
-File: `pipeline/config.R`
-
-Defines:
-
-- `CITY_ID = yokohama-honmoku`
-- BBOX
-- CRS
-- `CELL_SIZE = 20`
-- input raster paths
-- raw/processed/export paths
-- output filenames
-
-### Stage 01: Ingestion
-
-File: `pipeline/01_ingest/ingest.R`
-
-Inputs:
-
-- iNaturalist API
-- GBIF API
-- OSM Overpass
-- WorldCover raster
-- EMC-BUILT raster
+- iNaturalist observations
+- GBIF observations
+- OSM green spaces, paths, roads, rail, lighting, amenities, water
+- WorldCover
+- EMC-BUILT impervious surface
 - Sentinel-2 NDVI
 - Landsat LST
 
-Outputs:
+Application observation inputs:
 
-- `raw/inat_observations.gpkg`
-- `raw/gbif_observations.gpkg`
-- `raw/osm_green_spaces.gpkg`
-- `raw/osm_paths.gpkg`
-- `raw/osm_roads.gpkg`
-- `raw/osm_rail.gpkg`
-- `raw/osm_street_lamps.gpkg`
-- `raw/osm_lit_roads.gpkg`
-- `raw/osm_amenities.gpkg`
-- `raw/osm_water.gpkg`
-- `raw/landcover.tif`
-- `raw/impervious.tif`
-- `raw/ndvi.tif`
-- `raw/lst.tif`
+- Approved/non-rejected quick sightings
+- Approved structured surveys and survey records
+- Record flags and review state
+- GPS accuracy
+- Structured-survey effort metadata and habitat indicators
 
-Dependencies:
+Current gap:
 
-- `sf`
-- `terra`
-- `rgbif`
-- `osmdata`
-- `jsonlite`
-- `tidyverse`
+- The current R pipeline reads iNaturalist and GBIF files.
+- The Supabase-to-R approved observation export is not yet implemented.
 
-### Stage 02: Habitat / Stressors
-
-File: `pipeline/02_habitat/habitat_model.R`
-
-Inputs:
-
-- raw rasters
-- OSM layers
-
-Main computations:
-
-- WorldCover fractions
-- impervious fraction
-- OSM green fraction
-- pedestrian path length
-- NDVI mean
-- LST rank / heat exposure
-- road/rail noise proxy
-- light pollution proxy
-- disturbance index
-- water proximity
-- habitat quality
-
-Outputs:
-
-- `processed/grid_habitat.gpkg`
-- `processed/habitat_quality.tif`
-
-### Stage 03: Observation Layer
-
-File: `pipeline/03_observations/observation_layer.R`
-
-Inputs:
-
-- `raw/inat_observations.gpkg`
-- `raw/gbif_observations.gpkg`
-- `processed/grid_habitat.gpkg`
-
-Main computations:
-
-- standardise observations
-- snap observations to nearest 20m hex centroid
-- species richness per cell
-- observation effort summaries
-- weekend-only temporal bias flag
-- Shannon diversity
-- taxon group counts
-- `effort_corrected_richness = raw_species_count / log(1 + path_km)`
-- cells with `path_km <= 0` marked unsampled
-
-Outputs:
-
-- `processed/grid_observations.gpkg`
-- `processed/cell_taxa.json`
-
-### Stage 04: Connectivity
-
-File: `pipeline/04_connectivity/connectivity.R`
-
-Inputs:
-
-- `processed/grid_habitat.gpkg`
-
-Main computations:
-
-- habitat cell threshold
-- hex adjacency graph
-- edge resistance from habitat quality
-- patch IDs
-- edge density
-- patch isolation
-- patch size distribution
-- betweenness centrality
-- corridor importance
-- fragmentation index
-- node importance
-- connectivity score
-
-Output:
-
-- `processed/grid_connectivity.gpkg`
-
-### Stage 05: Residuals / Ranking
-
-File: `pipeline/05_residuals/residuals.R`
-
-Inputs:
-
-- `grid_habitat.gpkg`
-- `grid_observations.gpkg`
-- `grid_connectivity.gpkg`
-
-Main computations:
-
-- expected richness
-- ecological residual
-- impact score
-- intervention score
-- intervention rank
-- top 20 counterfactual connectivity gain
-- primary intervention action
-
-Outputs:
-
-- `processed/grid_residuals.gpkg`
-- `processed/cell_attributes.gpkg`
-- `processed/top_interventions.csv`
-
-### Stage 06: Export
-
-File: `pipeline/06_export/export.R`
-
-Inputs:
-
-- `grid_residuals.gpkg`
-- `cell_attributes.gpkg`
-- `top_interventions.csv`
-- `cell_taxa.json`
-- OSM green spaces
-
-Outputs:
-
-- `export/hexgrid.geojson`
-- `export/cell_attributes.geojson`
-- `export/parks.geojson`
-- `export/cells.json`
-- `export/cells.manifest.json`
-- chunked `cells-part-*.json` when needed
-- `export/park-stats.json`
-- `export/top_interventions.json`
-
-Purpose:
-
-- Convert modelling outputs into frontend-ready JSON/GeoJSON.
-- Chunk large files around Supabase Storage size limits.
-
-## 5. Frontend Architecture
-
-### App Router
-
-Main pages:
-
-- `src/app/page.tsx`: main map + citizen science UI
-- `src/app/login/page.tsx`: Supabase email/password auth
-- `src/app/take-action/page.tsx`
-- `src/app/community/page.tsx`
-- `src/app/about/page.tsx`
-
-Shared layout:
-
-- `src/app/layout.tsx`
-- `src/components/layout/Navbar.tsx`
-
-### Supabase Client
-
-File: `src/lib/supabase.ts`
-
-- Creates browser Supabase client if env vars exist.
-- Returns `null` fallback when env is absent.
-
-Env vars:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- optional `NEXT_PUBLIC_CITIZEN_PHOTO_BUCKET`
-
-### Map Rendering
-
-File: `src/components/map/MapView.tsx`
-
-Uses:
-
-- `maplibre-gl`
-- GeoJSON sources:
-  - `hexgrid`
-  - `parks`
-  - `survey-points`
-  - `quick-sightings`
-  - `structured-surveys`
-  - `ward-labels`
-
-Hex overlays are multiple MapLibre fill layers over one GeoJSON source.
-
-Layer styles live in:
-
-- `src/lib/layer-styles.ts`
-
-Rendered overlays include:
-
-- impact
-- expected richness
-- ecological residual
-- intervention rank
-- habitat quality
-- tree cover
-- observed biodiversity
-- connectivity
-- heat exposure
-- land use
-- cell grid
-- survey points
-- quick sightings
-- structured surveys
-
-### Frontend Data Loading
-
-Pipeline files:
-
-- `src/lib/storage-fetch.ts` loads from Supabase Storage bucket `pipeline-export`.
-- Fallback is `/public/pipeline/<CITY_ID>/`.
-- Manifest/chunk support exists.
-
-Cell stats:
-
-- `src/lib/park-data.ts`
-- Loads `cells.json`, `cells.manifest.json`, `park-stats.json`.
-
-Hex grid:
-
-- `src/lib/hex-grid.ts`
-- Loads `hexgrid.geojson`.
-- Clips/filters to park polygons.
-- Enriches features with `cells.json` stats.
-
-Park polygons:
-
-- `src/lib/green-spaces.ts`
-- Loads `parks.geojson`.
-
-Citizen science:
-
-- `src/lib/citizen-science.ts`
-- Fetches:
-  - current role
-  - species reference
-  - survey points
-  - quick sightings
-  - structured surveys
-- Invokes Edge Functions for writes.
-
-## 6. Data Storage Strategy
-
-### PostgreSQL/PostGIS
-
-Stores transactional and canonical spatial data:
-
-- users/roles
-- observations
-- structured surveys
-- survey records
-- species reference
-- survey points
-- suggestions
-- flags
-- conservation actions
-- `cell_attributes`
-
-Why Postgres:
-
-- RLS
-- auditability
-- relational integrity
-- PostGIS spatial functions
-- Edge Function writes
-
-### Supabase Storage
-
-Bucket: `pipeline-export`
-
-Stores frontend-ready static model artefacts:
+Required import contract:
 
 ```text
-pipeline-export/yokohama-honmoku/
-  hexgrid.geojson
-  parks.geojson
-  park-stats.json
-  cells.json
-  cells.manifest.json
-  cells-part-*.json
-  cell_attributes.geojson
-  top_interventions.json
-  PMTiles artefacts if produced/uploaded
+approved_observations.gpkg or approved_observations.csv
+  observation_id
+  observation_source: inat | gbif | quick_sighting | structured_survey
+  taxon_name
+  taxon_group
+  observed_on
+  geometry or lng/lat
+  gps_accuracy_m
+  cell_id, if already assigned
+  survey_id, nullable
+  survey_duration_seconds, nullable
+  structured_effort_weight, nullable
+  habitat_indicators, nullable JSON
+  review_status
+  has_pending_or_confirmed_flag
 ```
 
-Bucket: `citizen-photos`
+Only records eligible for analysis should enter the R calculations. Rejected
+records and records with pending or confirmed quality flags are excluded.
 
-Stores user-uploaded photos:
+### Stage Responsibilities
 
-- quick sighting photos
-- invasive species habitat photos
+`pipeline/01_ingest/ingest.R`
 
-### Public Fallback Assets
+- Downloads or reads raw external datasets
+- Writes raw GPKG/raster inputs
+- Does not compute final ecological metrics
 
-Folder:
+`pipeline/02_habitat/habitat_model.R`
 
-```text
-public/pipeline/yokohama-honmoku/
-```
+- Builds the 20 m grid
+- Computes habitat features, stressor features, path length, and habitat quality
+- Writes `grid_habitat.gpkg` and `habitat_quality.tif`
 
-Used when Supabase Storage fetch fails or Supabase is not configured.
+`pipeline/03_observations/observation_layer.R`
 
-### PMTiles
+- Standardises observations
+- Assigns observations to canonical cells
+- Computes raw richness, effort summaries, taxonomic summaries, temporal bias,
+  and `effort_corrected_richness`
+- Marks pathless cells as unsampled instead of zero-valued
+- Applies higher structured-survey weight once the Supabase import exists
 
-README and project context reference PMTiles as manually uploaded artefacts. Current inspected MapLibre implementation renders hex layers from GeoJSON + JSON stats rather than directly loading PMTiles in `MapView.tsx`.
+`pipeline/04_connectivity/connectivity.R`
 
-So the current system has two display concepts:
+- Builds the hex adjacency graph
+- Computes corridor importance, fragmentation, node importance, and connectivity score
 
-```text
-Current frontend implementation:
-  GeoJSON hexgrid + cells.json -> MapLibre GeoJSON source/layers
+`pipeline/05_residuals/residuals.R`
 
-Documented/manual artefact workflow:
-  PMTiles -> Supabase Storage -> map display, if wired/used externally
-```
+- Computes expected richness
+- Computes ecological residual
+- Computes impact score
+- Computes intervention score, rank, and counterfactual connectivity estimate
 
-## 7. Derived Calculations
+`pipeline/06_export/export.R`
+
+- Generates `hexgrid.pmtiles`
+- Generates `cell_attributes.geojson` for PostGIS import
+- Generates `parks.geojson`, `park-stats.json`, and `top_interventions.json`
+- Prints the Supabase Storage upload target
+
+## 7. Derived Metrics
+
+Every derived metric has one source of truth: the R pipeline.
 
 ### `effort_corrected_richness`
 
-File: `pipeline/03_observations/observation_layer.R`
-
-Concept:
+Source: `pipeline/03_observations/observation_layer.R`
 
 ```text
-raw_species_count / log(1 + path_km)
+species_richness / log(1 + path_km)
 ```
 
-Depends on:
-
-- distinct species count per cell
-- pedestrian path length from OSM
-- unsampled cells where path length is zero
-
-Stored in:
-
-- `grid_observations.gpkg`
-- `grid_residuals.gpkg`
-- `cell_attributes.gpkg`
-- `cell_attributes.geojson`
-- `cells.json`
-
-Used by:
-
-- residual calculation
-- detail panel values
-- pressure text
+Cells with `path_km <= 0` are `is_unsampled = true` and have `NA` corrected
+richness for residual inference.
 
 ### `expected_richness`
 
-File: `pipeline/05_residuals/residuals.R`
-
-Formula structure:
+Source: `pipeline/05_residuals/residuals.R`
 
 ```text
 MAX_EXPECTED_RICHNESS * (
@@ -743,351 +377,304 @@ MAX_EXPECTED_RICHNESS * (
 )
 ```
 
-Depends on:
-
-- habitat quality
-- corridor importance
-- path accessibility
-
-Stored in:
-
-- `grid_residuals.gpkg`
-- `cell_attributes`
-- frontend JSON exports
-
-Used by:
-
-- residual layer
-- expected richness layer
-- detail panels
-
 ### `ecological_residual`
 
-File: `pipeline/05_residuals/residuals.R`
-
-Formula:
+Source: `pipeline/05_residuals/residuals.R`
 
 ```text
 expected_richness - effort_corrected_richness
 ```
 
-Positive means observed richness is below expectation.
+- Positive residual: below expectation, habitat pressure
+- Negative residual: above expectation, potential refuge
+- Unsampled cells: `NA`
 
-Stored in:
+### `impact_score`
 
-- `grid_residuals.gpkg`
-- `cell_attributes`
-- `cells.json`
+Source: `pipeline/05_residuals/residuals.R`
 
-Used by:
-
-- impact score
-- residual layer
-- intervention score
-- pressure explanations
-
-### `heat_exposure`
-
-File: `pipeline/02_habitat/habitat_model.R`
-
-Derived from:
-
-- Landsat LST raster
-- per-cell mean LST
-- percentile/rank style scaling
-
-Stored in:
-
-- `grid_habitat.gpkg`
-- downstream processed GPKGs
-- `cell_attributes`
-- frontend layer property `heatExposure`
-
-### `noise` / Noise Index
-
-File: `pipeline/02_habitat/habitat_model.R`
-
-Derived from:
-
-- OSM road density
-- road class weighting
-- rail density/proximity components
-
-Stored as:
-
-- `noise` in pipeline outputs
-- `noise` in `cell_attributes`
-
-Frontend naming:
-
-- Database/pipeline uses `noise`
-- User-facing concept is noise index.
-
-### `light_pollution`
-
-File: `pipeline/02_habitat/habitat_model.R`
-
-Derived from:
-
-- OSM `highway=street_lamp`
-- `lit=yes` road segments
-- point/line density and distance weighting
-
-Stored in:
-
-- `grid_habitat.gpkg`
-- `cell_attributes`
-
-### `disturbance_index`
-
-File: `pipeline/02_habitat/habitat_model.R`
-
-Derived from:
-
-- pedestrian path density
-- OSM amenity proximity/density
-
-Stored in:
-
-- `grid_habitat.gpkg`
-- `cell_attributes`
-
-### `fragmentation_index`
-
-File: `pipeline/04_connectivity/connectivity.R`
-
-Derived from:
-
-- habitat neighbour count
-- edge density
-- patch isolation
-- patch size distribution
-
-Stored in:
-
-- `grid_connectivity.gpkg`
-- `grid_residuals.gpkg`
-- `cell_attributes`
-- `cells.json` as `fragmentationIndex`
-
-### `connectivity_score`
-
-File: `pipeline/04_connectivity/connectivity.R`
-
-Formula structure:
+Current implementation scales and inverts ecological residual:
 
 ```text
-0.60 * corridor_importance
-+ 0.25 * node_importance
-+ 0.15 * (1 - fragmentation_index)
+impact_score = round(-ecological_residual / max_abs_residual * 50)
 ```
 
-Stored in:
+- Negative impact score: worse than expected
+- Positive impact score: better than expected
 
-- `grid_connectivity.gpkg`
-- `cell_attributes`
+Do not treat `impact_score` and `ecological_residual` as the same sign.
 
 ### `intervention_score`
 
-File: `pipeline/05_residuals/residuals.R`
+Source: `pipeline/05_residuals/residuals.R`
 
-Formula:
+Current implementation:
 
 ```text
 (ecological_residual * 0.5) * (corridor_importance * 0.5)
 ```
 
-Stored in:
+This replaces the older weighted-sum formula. Documentation and UI copy should
+refer to this implementation until the model is intentionally changed.
 
-- `grid_residuals.gpkg`
-- `cell_attributes.gpkg`
-- `top_interventions.csv`
+### Detail-panel fields
 
-Used by:
+Fields such as `habitat_potential`, `observer_effort_score`, `taxonomic_diversity`,
+`pressures`, `species`, and `interventions` are exported by
+`pipeline/06_export/export.R` into `cell_attributes.geojson` and imported into
+PostgreSQL. Frontend derivations in `src/lib/cell-detail.ts` are local/demo
+fallbacks only and are not authoritative science.
 
-- intervention ranking
-- top 20 counterfactual simulation
-- exported intervention descriptions
+## 8. PMTiles Workflow
 
-## 8. Roles And Permissions
+PMTiles are the canonical map-rendering artefact for the 20 m hex grid.
 
-### Roles
+### Generation
 
-```text
-contributor
-  -> quick sightings
-  -> flags
+`pipeline/06_export/export.R` generates `hexgrid.pmtiles` from the R residual
+grid using `tippecanoe`.
 
-surveyor
-  -> structured surveys
-  -> survey records
-  -> suggestions
-  -> survey points
-
-taxonomist
-  -> species reference
-  -> species corrections
-  -> flag review in backend support migration
-
-admin
-  -> full control via RLS/helpers
-```
-
-### Database Enforcement
-
-RLS helpers:
-
-- `current_app_role()`
-- `has_app_role(role)`
-- `is_admin()`
-- `is_taxonomist()`
-- `is_surveyor()`
-- `is_contributor()`
-
-RLS examples:
-
-- contributors can insert quick sightings
-- surveyors can insert structured surveys and survey records
-- taxonomists/admins can edit species reference
-- admins control approvals
-- audit log visible only to admins
-- cell attributes readable to authenticated users, writable by admins
-
-### Backend Enforcement
-
-Edge Functions call:
-
-- `requireAuth(req)`
-- `assertRole(role, allowedRoles)`
-
-Examples:
-
-- `submit-quick-sighting`: contributor
-- `start-structured-survey`: surveyor
-- `submit-structured-survey`: surveyor
-- `add-survey-record`: surveyor
-- `upsert-species-reference`: taxonomist
-- `review-suggestion`: admin
-- `review-flag`: admin/taxonomist
-
-### Frontend Enforcement
-
-The citizen-science panel checks role for UI availability:
-
-- contributor/admin: quick sightings
-- surveyor/admin: structured surveys
-- unauthenticated users see sign-in prompt
-
-Frontend role is advisory. Actual permission enforcement is RLS + Edge Functions.
-
-## 9. Critical Dependencies And Hidden Coupling
-
-### R Pipeline To Postgres Coupling
-
-`cell_attributes.cell_id` is the core coupling point.
-
-```text
-R pipeline cell_id
-  -> exported cell_attributes
-  -> Postgres cell_attributes.cell_id
-  -> quick_sightings.cell_id
-  -> structured_surveys.cell_id
-  -> frontend cells.json cellId
-  -> MapLibre hexgrid feature properties
-```
-
-If cell IDs differ between R exports, Postgres imports, and frontend JSON, observation attribution and map enrichment diverge.
-
-### R Pipeline To Frontend Coupling
-
-Frontend expects specific JSON property names:
+Required properties:
 
 - `cellId`
 - `parkId`
-- `score`
-- `color`
-- `habitatQuality`
+- `parkName`
+- `impactScore`
 - `expectedRichness`
 - `ecologicalResidual`
+- `habitatQuality`
 - `observedRichness`
 - `corridorImportance`
 - `treeCover`
 - `heatExposure`
 - `landUseGreen`
+- `interventionRank`
 
-These are produced in `pipeline/06_export/export.R` and consumed by:
-
-- `src/lib/hex-grid.ts`
-- `src/lib/park-data.ts`
-- `src/lib/layer-styles.ts`
-
-### Duplicated Logic
-
-Color/score thresholds exist in both systems:
-
-- R export: `score_color()` in `pipeline/06_export/export.R`
-- frontend config/styles:
-  - `src/lib/config.ts`
-  - `src/lib/layer-styles.ts`
-  - utility color logic
-
-Role logic exists in:
-
-- SQL RLS helpers
-- Edge Function `assertRole`
-- frontend conditional UI
-
-Spatial cell assignment exists in:
-
-- Postgres functions for live observations
-- R nearest-centroid assignment for external biodiversity observations
-
-### Fallback Systems
-
-Frontend data loading has fallbacks:
+Required vector tile source-layer:
 
 ```text
-Supabase Storage pipeline-export
-  -> public/pipeline/<CITY_ID>
-  -> bundled src/data/park-stats.json for park stats only
+hexgrid
 ```
 
-Supabase client also has a fallback:
+PMTiles must remain lightweight. Do not include large detail-panel JSON,
+species lists, pressure arrays, or intervention descriptions. Those belong in
+PostgreSQL `cell_attributes`.
 
-- if env vars are missing, `supabase` is `null`
-- UI/data loaders return empty/local fallback values
+### Storage
 
-### Current Inconsistencies
-
-- Migrations define `conservation_actions`, but frontend `take-action` reads `recommended_actions`.
-- Frontend `data.ts` reads `global_stats`, `wards`, `community_events`, `recommended_actions`; these tables are not in the inspected migrations.
-- README mentions PMTiles/COG/PostGIS upload, while current map implementation primarily uses GeoJSON/JSON files from Storage/public fallback.
-- No `profiles` table exists; user identity beyond Auth is represented by `user_roles`.
-- The R pipeline has alternate config files (`config_yokohama.R`, `config_yokohama_2.R`), but active pipeline scripts load `config.R`.
-
-## 10. Mental Model Summary
+Current implemented path:
 
 ```text
-Transactional system:
-  Supabase Auth
-    -> user_roles
-    -> Edge Functions
-    -> Postgres/PostGIS observation tables
-    -> RLS + audit + moderation
-
-Analytical system:
-  R pipeline
-    -> external biodiversity/environment data
-    -> 20m hex grid
-    -> habitat + effort + residual + stressor + connectivity metrics
-    -> cell_attributes + frontend export files
-
-Presentation system:
-  Next.js
-    -> Supabase Storage/public JSON+GeoJSON
-    -> Supabase live citizen-science queries
-    -> MapLibre layers
-    -> detail panels and citizen-science forms
+pipeline-export/<CITY_ID>/hexgrid.pmtiles
 ```
 
-The central architectural idea is that **20m hex cells are the shared spatial contract**. The database uses them for live observation attribution, the R pipeline uses them for all modelling, and the frontend uses them for rendering and interaction.
+Recommended scalable path:
+
+```text
+pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
+pipeline-export/<CITY_ID>/<DATA_VERSION>/parks.geojson
+pipeline-export/<CITY_ID>/<DATA_VERSION>/park-stats.json
+pipeline-export/<CITY_ID>/<DATA_VERSION>/cell_attributes.geojson
+pipeline-export/<CITY_ID>/<DATA_VERSION>/top_interventions.json
+pipeline-export/<CITY_ID>/current.json
+```
+
+`current.json` should identify the active immutable version:
+
+```json
+{
+  "cityId": "yokohama-honmoku",
+  "dataVersion": "20260627T120000Z",
+  "hexgrid": "20260627T120000Z/hexgrid.pmtiles",
+  "sourceLayer": "hexgrid",
+  "generatedAt": "2026-06-27T12:00:00Z"
+}
+```
+
+The current frontend uses configured dataset IDs in `src/lib/config.ts` and
+constructs public Storage URLs in `src/lib/pmtiles-storage.ts`. Moving to
+`current.json` is the smallest scalable discovery improvement.
+
+### MapLibre Discovery And Rendering
+
+Current rendering:
+
+- `MapView` registers the PMTiles protocol
+- `listHexPmtilesDatasets()` builds public Storage URLs
+- MapLibre adds vector sources with `pmtiles://<public-url>`
+- Hex fill layers use source-layer `hexgrid`
+
+MapLibre may style, filter, show popups, and pass `cellId` to the detail
+lookup. It must not calculate ecological metrics.
+
+### Update Workflow
+
+1. Run the R pipeline for a city.
+2. Validate `hexgrid.pmtiles` exists, is non-empty, and contains source-layer `hexgrid`.
+3. Import or upsert `cell_attributes.geojson` into PostgreSQL.
+4. Upload `hexgrid.pmtiles`, `parks.geojson`, `park-stats.json`, and supporting JSON to Supabase Storage.
+5. Validate PMTiles and PostgreSQL have matching `cellId` values for sampled cells.
+6. Promote the version by updating the active manifest or configured dataset path.
+7. Smoke test MapLibre rendering and click-time `cell_attributes` lookup.
+
+## 9. Frontend Contract
+
+The frontend is a presentation and interaction layer.
+
+Allowed:
+
+- PMTiles streaming
+- MapLibre style expressions over precomputed properties
+- Visibility toggles
+- Selection and hover state
+- Supabase lookup by `cell_id`
+- Local demo fallbacks when Supabase is not configured
+
+Not allowed:
+
+- Computing expected richness
+- Computing effort correction
+- Computing ecological residual
+- Computing intervention ranking
+- Treating PMTiles properties as the full analytical record
+
+Current live point overlays are fetched from Supabase tables and rendered as
+GeoJSON sources. This is acceptable because those overlays are transactional
+records, not ecological model outputs.
+
+## 10. Supabase Storage And Fallbacks
+
+Current Storage bucket:
+
+```text
+pipeline-export
+```
+
+Current photo bucket:
+
+```text
+citizen-photos
+```
+
+Current code supports Supabase Storage JSON loading and PMTiles URL construction.
+The previous public fallback path `public/pipeline/<CITY_ID>` is no longer a
+complete production contract. Public assets may remain as local/demo fixtures,
+but they are not the canonical production flow.
+
+## 10.1 Complete Data Pipeline Contract
+
+Canonical production flow:
+
+```text
+Raw spatial data + approved Supabase observations
+↓
+R pipeline
+↓
+Versioned pipeline products
+↓
+PostgreSQL import and active dataset promotion
+↓
+Supabase Storage upload
+↓
+Frontend manifest discovery
+↓
+MapLibre rendering + backend detail lookup
+```
+
+The R pipeline is the only producer of ecological outputs. PostgreSQL validates
+and stores those outputs, PMTiles remain rendering-only, and MapLibre performs
+presentation, filtering, and interaction only.
+
+## 11. Scalability Requirements
+
+The architecture should support multiple cities, countries, millions of
+observations, and repeated yearly or seasonal updates.
+
+Implemented scale controls:
+
+- Add explicit `city_id`, `dataset_id`, and `generated_at` to pipeline outputs
+  and database imports.
+- Keep immutable Storage versions and promote an active version through a
+  manifest or database setting.
+- Add current-run indexes for `cell_attributes`.
+- Add observation indexes for `(cell_id, timestamp)`, `(user_id, timestamp)`,
+  and duplicate-detection lookups.
+- Keep PMTiles as viewport-streamed rendering products.
+- Keep detail payloads in PostgreSQL, not PMTiles.
+
+Do not introduce another analytical grid. Do not add frontend or SQL ecological
+recalculation to solve scale problems.
+
+## 12. Known Current Gaps
+
+- Supabase approved observations are exported to R through
+  `pipeline_observations_export` and
+  `pipeline/01_ingest/export_supabase_observations.R`.
+- Structured-survey weighting is connected to live Supabase exports through the
+  R observation source contract.
+- PMTiles generation and Storage discovery use versioned `manifest.json` and
+  stable `current.json` pointers.
+- `conservation_actions` and frontend `recommended_actions` are inconsistent.
+- `global_stats`, `wards`, `community_events`, and `recommended_actions` are
+  queried by frontend code but are not present in the inspected migrations.
+- `cell_attributes` has city/version metadata; historical versions live in
+  `pipeline_cell_attributes`.
+- Numeric constraints on detail fields are weaker than the model contract.
+
+## 13. Implementation Roadmap
+
+1. Documentation alignment
+   - Purpose: remove obsolete GeoJSON/cells render contract and document current PMTiles/PostGIS flow
+   - Affected files: `docs/system-architecture.md`, `docs/data-contract.md`, `docs/methodology.md`
+   - Dependencies: none
+   - Difficulty: small
+   - Breaking: no
+
+2. PMTiles manifest
+   - Purpose: replace hardcoded dataset discovery with active version discovery
+   - Affected files: `pipeline/06_export/export.R`, `src/lib/pmtiles-storage.ts`, `src/lib/config.ts`
+   - Dependencies: documentation alignment
+   - Difficulty: medium
+   - Breaking: no, if current paths remain as fallback
+
+3. R-to-Postgres import contract
+   - Purpose: make `cell_attributes` import repeatable and auditable
+   - Affected files: pipeline export scripts, Supabase migration/import scripts
+   - Dependencies: PMTiles manifest optional
+   - Difficulty: medium
+   - Breaking: no, if additive
+
+4. Approved observation export for R
+   - Purpose: include quick sightings and structured surveys in the analytical pipeline
+   - Affected files: SQL view/export script, `pipeline/03_observations/observation_layer.R`
+   - Dependencies: analysis eligibility rules
+   - Difficulty: medium to large
+   - Breaking: no
+
+5. Multi-city and versioned cell attributes
+   - Purpose: scale beyond one active city/run
+   - Affected files: Supabase migrations, R export/import, `src/lib/cell-detail.ts`
+   - Dependencies: import contract
+   - Difficulty: medium
+   - Breaking: potentially, unless introduced with defaults and compatibility views
+
+6. Action table reconciliation
+   - Purpose: remove duplicate action concepts
+   - Affected files: migration or frontend action reads
+   - Dependencies: product choice between `conservation_actions` and `recommended_actions`
+   - Difficulty: medium
+   - Breaking: no, if fallback remains
+
+7. Constraints and indexes
+   - Purpose: improve data integrity and query performance
+   - Affected files: Supabase migrations
+   - Dependencies: city/version model
+   - Difficulty: medium
+   - Breaking: no, after data precheck
+
+8. Validation scripts
+   - Purpose: verify PMTiles source-layer/properties and `cell_attributes` parity
+   - Affected files: pipeline validation scripts or tests
+   - Dependencies: PMTiles and import contracts
+   - Difficulty: medium
+   - Breaking: no

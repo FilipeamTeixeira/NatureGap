@@ -29,8 +29,23 @@ export const LAYER_DRAW_ORDER = [
 
 export type HexLayerId = (typeof LAYER_DRAW_ORDER)[number];
 
+export const HEX_OVERLAY_LAYER_IDS = [
+  'expected',
+  'residual',
+  'intervention',
+  'habitat',
+  'treecover',
+  'connectivity',
+  'heat',
+  'landuse',
+] as const satisfies readonly HexLayerId[];
+
+export function hasHexOverlay(layerId: HexLayerId): boolean {
+  return (HEX_OVERLAY_LAYER_IDS as readonly HexLayerId[]).includes(layerId);
+}
+
 /** Saturated ramps — even low values stay visible on the light basemap. */
-const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact'>, [number, string][]> = {
+const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'landuse'>, [number, string][]> = {
   expected:     [[0, '#deebf7'], [25, '#9ecae1'], [50, '#4292c6'], [75, '#08519c'], [100, '#08306b']],
   residual:     [[-50, '#2E6F40'], [-20, '#73A56D'], [0, '#B8C9AE'], [20, '#E8A44C'], [50, '#C95B4B']],
   intervention: [[1, '#4a148c'], [5, '#6a1b9a'], [10, '#8e24aa'], [20, '#ab47bc'], [50, '#d8a7df']],
@@ -39,7 +54,6 @@ const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact'>, [number, string][]> = {
   biodiversity: [[0, '#42a5f5'], [5, '#1e88e5'], [15, '#1565c0'], [30, '#0d47a1'], [50, '#002171']],
   connectivity: [[0, '#ab47bc'], [25, '#8e24aa'], [50, '#7b1fa2'], [75, '#6a1b9a'], [100, '#4a148c']],
   heat:         [[0, '#4575b4'], [25, '#74add1'], [50, '#fdae61'], [75, '#f46d43'], [100, '#a50026']],
-  landuse:      [[0, '#9ccc65'], [25, '#7cb342'], [50, '#689f38'], [75, '#558b2f'], [100, '#33691e']],
 };
 
 export function hexFillLayerId(layerId: HexLayerId): string {
@@ -58,13 +72,21 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
 /** Build MapLibre fill-color expression for a data layer. */
 export function hexFillColorExpression(layerId: HexLayerId): ExpressionSpecification {
   if (layerId === 'impact') {
+    return ['literal', '#000000'] as ExpressionSpecification;
+  }
+
+  if (layerId === 'landuse') {
     return [
-      'case',
-      ['<', ['coalesce', ['get', 'impactScore'], 0], -20], '#C95B4B',
-      ['<', ['coalesce', ['get', 'impactScore'], 0], -10], '#E8A44C',
-      ['<', ['coalesce', ['get', 'impactScore'], 0], 5], '#B8C9AE',
-      ['<', ['coalesce', ['get', 'impactScore'], 0], 15], '#73A56D',
-      '#2E6F40',
+      'match',
+      ['coalesce', ['get', 'landUseClass'], 'unknown'],
+      'tree', '#1b5e20',
+      'shrub', '#4f8a3d',
+      'grass', '#9ccc65',
+      'water', '#4575b4',
+      'built', '#b87f4f',
+      'bare', '#d8c7a3',
+      'mixed', '#8e7cc3',
+      '#c9c9c9',
     ] as ExpressionSpecification;
   }
 
@@ -190,13 +212,14 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   landuse: {
     title: 'Land Use',
-    property: 'landUseGreen',
     legend: [
-      { color: '#33691e', label: 'Mostly vegetated' },
-      { color: '#558b2f', label: 'Green' },
-      { color: '#689f38', label: 'Mixed' },
-      { color: '#7cb342', label: 'Sparse' },
-      { color: '#9ccc65', label: 'Built / bare' },
+      { color: '#1b5e20', label: 'Tree canopy' },
+      { color: '#4f8a3d', label: 'Shrub' },
+      { color: '#9ccc65', label: 'Grass' },
+      { color: '#4575b4', label: 'Water' },
+      { color: '#b87f4f', label: 'Built' },
+      { color: '#d8c7a3', label: 'Bare' },
+      { color: '#8e7cc3', label: 'Mixed' },
     ],
   },
 };

@@ -21,6 +21,97 @@ PIPELINE_ROOT <- local({
   stop("Cannot locate pipeline directory (expected 01_ingest/)")
 })
 
+REPO_ROOT <- if (basename(PIPELINE_ROOT) == "pipeline") dirname(PIPELINE_ROOT) else PIPELINE_ROOT
+
+load_env_file <- function(path) {
+  if (!file.exists(path)) return(invisible(FALSE))
+  lines <- readLines(path, warn = FALSE)
+  lines <- trimws(lines)
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+  for (line in lines) {
+    line <- sub("^export[[:space:]]+", "", line)
+    key <- sub("=.*$", "", line)
+    value <- sub("^[^=]*=", "", line)
+    key <- trimws(key)
+    value <- trimws(value)
+    value <- sub("^['\"]", "", value)
+    value <- sub("['\"]$", "", value)
+    if (nzchar(key) && !nzchar(Sys.getenv(key, unset = ""))) {
+      do.call(Sys.setenv, stats::setNames(list(value), key))
+    }
+  }
+  invisible(TRUE)
+}
+
+database_url <- function() {
+  value <- Sys.getenv("DATABASE_URL", unset = "")
+  if (!nzchar(value)) value <- Sys.getenv("database_URL", unset = "")
+  trimws(value)
+}
+
+describe_database_url <- function(value = database_url()) {
+  if (!nzchar(value)) return("<not set>")
+  redacted <- sub("://([^:/@]+):([^@]+)@", "://\\1:***@", value)
+  if (nchar(redacted) > 90) {
+    paste0(substr(redacted, 1, 87), "...")
+  } else {
+    redacted
+  }
+}
+
+parse_database_url <- function(value = database_url()) {
+  if (!nzchar(value)) stop("DATABASE_URL is not set", call. = FALSE)
+  match <- regexec("^postgres(?:ql)?://([^:]+):([^@]+)@([^:/?]+)(?::([0-9]+))?/([^?]+)(?:\\?(.*))?$", value)
+  parts <- regmatches(value, match)[[1]]
+  if (length(parts) == 0L) {
+    stop("DATABASE_URL must look like postgresql://user:password@host:port/database?sslmode=require", call. = FALSE)
+  }
+
+  query <- if (length(parts) >= 7L) parts[[7L]] else ""
+  params <- list()
+  if (nzchar(query)) {
+    for (item in strsplit(query, "&", fixed = TRUE)[[1]]) {
+      kv <- strsplit(item, "=", fixed = TRUE)[[1]]
+      if (length(kv) == 2L) params[[kv[[1L]]]] <- kv[[2L]]
+    }
+  }
+
+  list(
+    user = utils::URLdecode(parts[[2L]]),
+    password = utils::URLdecode(parts[[3L]]),
+    host = parts[[4L]],
+    port = if (nzchar(parts[[5L]])) as.integer(parts[[5L]]) else 5432L,
+    dbname = parts[[6L]],
+    sslmode = if (!is.null(params$sslmode) && nzchar(params$sslmode)) params$sslmode else "require"
+  )
+}
+
+connect_database <- function(value = database_url()) {
+  if (!requireNamespace("DBI", quietly = TRUE) || !requireNamespace("RPostgres", quietly = TRUE)) {
+    stop("Packages 'DBI' and 'RPostgres' are required for PostgreSQL access.", call. = FALSE)
+  }
+
+  cfg <- parse_database_url(value)
+  DBI::dbConnect(
+    RPostgres::Postgres(),
+    dbname = cfg$dbname,
+    host = cfg$host,
+    port = cfg$port,
+    user = cfg$user,
+    password = cfg$password,
+    sslmode = cfg$sslmode
+  )
+}
+
+for (env_file in c(
+  file.path(REPO_ROOT, ".env.local"),
+  file.path(REPO_ROOT, ".env"),
+  file.path(PIPELINE_ROOT, ".env.local"),
+  file.path(PIPELINE_ROOT, ".env")
+)) {
+  load_env_file(env_file)
+}
+
 DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 
 # ── City identity ─────────────────────────────────────────────────────────────
@@ -28,32 +119,32 @@ DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 # Supabase and as the folder name in Storage (pipeline-export/<CITY_ID>/).
 # Changing it later means migrating existing database rows.
 
-CITY_ID      <- "yokohama-honmoku"
-CITY_NAME    <- "Honmoku, Yokohama"
-CITY_COUNTRY <- "Japan"
+# CITY_ID      <- "yokohama-honmoku"
+# CITY_NAME    <- "Honmoku, Yokohama"
+# CITY_COUNTRY <- "Japan"
 
-# CITY_ID      <- "amsterdam-schimmelstraat"
-# CITY_NAME    <- "Amsterdam"
-# CITY_COUNTRY <- "The Netherlands"
+CITY_ID      <- "amsterdam-schimmelstraat"
+CITY_NAME    <- "Amsterdam"
+CITY_COUNTRY <- "The Netherlands"
 
 # ── Spatial extent (WGS84) ────────────────────────────────────────────────────
 # BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
 # BBOX_FETCH — the window for iNaturalist / GBIF API calls.
 #              Can be wider than BBOX_CITY to capture edge observations.
 
-BBOX_CITY <- c(
-  xmin = 139.640415,
-  ymin = 35.415460,
-  xmax = 139.672859,
-  ymax = 35.430148
-)
-
 # BBOX_CITY <- c(
-#   xmin = 4.854712,
-#   ymin = 52.366756,
-#   xmax = 4.870934,
-#   ymax = 52.372259
+#   xmin = 139.640415,
+#   ymin = 35.415460,
+#   xmax = 139.672859,
+#   ymax = 35.430148
 # )
+
+BBOX_CITY <- c(
+  xmin = 4.854712,
+  ymin = 52.366756,
+  xmax = 4.870934,
+  ymax = 52.372259
+)
 
 
 BBOX_FETCH <- c(
@@ -158,6 +249,16 @@ LST_BAND_PATTERN  <- "(^[Ll][Ss][Tt]_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
+CANOPY_HEIGHT_FILE <- file.path(
+  DATA_IMPORT, "lidar",
+  paste0("canopy_height_", CITY_ID, ".tif")
+)
+
+LIDAR_VARIANCE_FILE <- file.path(
+  DATA_IMPORT, "lidar",
+  paste0("lidar_variance_", CITY_ID, ".tif")
+)
+
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
 # data/raw/ is shared for source rasters; city-specific outputs live under
@@ -177,9 +278,13 @@ RAW_LANDCOVER  <- file.path(DATA_RAW, "landcover.tif")
 RAW_IMPERVIOUS <- file.path(DATA_RAW, "impervious.tif")
 RAW_NDVI       <- file.path(DATA_RAW, "ndvi.tif")
 RAW_LST        <- file.path(DATA_RAW, "lst.tif")
+RAW_CANOPY_HEIGHT <- file.path(DATA_RAW, "canopy_height.tif")
+RAW_LIDAR_VARIANCE <- file.path(DATA_RAW, "lidar_variance.tif")
 RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
+RAW_SUPABASE_OBS <- file.path(DATA_RAW, "supabase_observations.gpkg")
 RAW_OSM_GREEN  <- file.path(DATA_RAW, "osm_green_spaces.gpkg")
+RAW_NATIONAL_GREEN <- file.path(DATA_RAW, "national_green_spaces.gpkg")
 RAW_OSM_PATHS  <- file.path(DATA_RAW, "osm_paths.gpkg")
 RAW_OSM_ROADS  <- file.path(DATA_RAW, "osm_roads.gpkg")
 RAW_OSM_RAIL   <- file.path(DATA_RAW, "osm_rail.gpkg")
@@ -189,9 +294,14 @@ RAW_OSM_AMENITIES <- file.path(DATA_RAW, "osm_amenities.gpkg")
 RAW_OSM_WATER  <- file.path(DATA_RAW, "osm_water.gpkg")
 
 # Processed pipeline outputs
+PROC_HEX_CELLS <- file.path(DATA_PROC, "hex_cells.gpkg")
+PROC_HEX_CELLS_DISPLAY <- file.path(DATA_PROC, "hex_cells_display.gpkg")
+PROC_GREEN_SPACES <- file.path(DATA_PROC, "green_spaces.gpkg")
 PROC_GRID_HABITAT <- file.path(DATA_PROC, "grid_habitat.gpkg")
 PROC_GRID_OBS     <- file.path(DATA_PROC, "grid_observations.gpkg")
 PROC_GRID_CONN    <- file.path(DATA_PROC, "grid_connectivity.gpkg")
+PROC_CONNECTIVITY_GRAPH <- file.path(DATA_PROC, "connectivity_graph.rds")
+PROC_GREEN_SPACES_AGG <- file.path(DATA_PROC, "green_spaces.gpkg")
 PROC_GRID_RESID   <- file.path(DATA_PROC, "grid_residuals.gpkg")
 PROC_CELL_ATTR    <- file.path(DATA_PROC, "cell_attributes.gpkg")
 PROC_TOP_INTER    <- file.path(DATA_PROC, "top_interventions.csv")

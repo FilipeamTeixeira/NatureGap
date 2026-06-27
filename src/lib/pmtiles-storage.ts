@@ -1,35 +1,44 @@
 import { STORAGE } from './config';
+import { listActivePipelineDatasets } from './pipeline-manifest';
 import { supabase } from './supabase';
 
 export type HexPmtilesDataset = {
   datasetId: string;
+  cityId: string;
+  dataVersion: string;
   storagePath: string;
   publicUrl: string;
   sourceId: string;
-  sourceLayer: typeof STORAGE.HEXGRID_SOURCE_LAYER;
+  sourceLayer: string;
 };
 
 function sourceId(datasetId: string): string {
   return `hexgrid-${datasetId.replace(/[^a-z0-9_-]/gi, '-')}`;
 }
 
-export function listHexPmtilesDatasets(): HexPmtilesDataset[] {
+export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
   if (!supabase) return [];
-
   const client = supabase;
-  return STORAGE.DATASET_IDS.map((datasetId) => {
-    const path = `${datasetId}/${STORAGE.HEXGRID_PMTILES_KEY}`;
 
+  const datasets = await listActivePipelineDatasets();
+  if (datasets.length === 0) {
+    console.warn('[pmtiles-storage] No active or legacy PMTiles datasets found.');
+  }
+  return datasets.map((dataset) => {
     const { data } = client.storage
       .from(STORAGE.PIPELINE_BUCKET)
-      .getPublicUrl(path);
+      .getPublicUrl(dataset.hexgridPath);
+
+    const datasetId = `${dataset.cityId}-${dataset.dataVersion}`;
 
     return {
       datasetId,
-      storagePath: `${STORAGE.PIPELINE_BUCKET}/${path}`,
+      cityId: dataset.cityId,
+      dataVersion: dataset.dataVersion,
+      storagePath: `${STORAGE.PIPELINE_BUCKET}/${dataset.hexgridPath}`,
       publicUrl: data.publicUrl,
       sourceId: sourceId(datasetId),
-      sourceLayer: STORAGE.HEXGRID_SOURCE_LAYER,
+      sourceLayer: dataset.sourceLayer,
     };
   });
 }

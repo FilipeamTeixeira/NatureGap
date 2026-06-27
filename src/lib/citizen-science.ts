@@ -4,6 +4,7 @@ const PHOTO_BUCKET = process.env.NEXT_PUBLIC_CITIZEN_PHOTO_BUCKET ?? 'citizen-ph
 
 export type AppRole = 'contributor' | 'surveyor' | 'taxonomist' | 'admin';
 export type TaxonGroup = 'bird' | 'insect' | 'plant' | 'amphibian' | 'other';
+export type SuggestionType = 'species' | 'action' | 'survey_point' | 'habitat_photo' | 'local_note';
 export type HabitatChoice =
   | 'uniform mown'
   | 'mixed'
@@ -53,6 +54,15 @@ export interface StructuredSurveyFeature {
   coordinates: [number, number];
 }
 
+export interface ObservationHistoryItem {
+  id: string;
+  kind: 'quick_sighting' | 'structured_survey';
+  label: string;
+  status: string;
+  created_at: string;
+  detail: string;
+}
+
 export interface QuickSightingInput {
   taxon_group: TaxonGroup;
   species_id?: string | null;
@@ -80,6 +90,11 @@ export interface SurveyRecordInput {
   species_id?: string | null;
   count: number;
   notes?: string | null;
+}
+
+export interface SuggestionInput {
+  type: SuggestionType;
+  payload: Record<string, unknown>;
 }
 
 function parsePoint(value: unknown): [number, number] | null {
@@ -187,6 +202,50 @@ export async function fetchStructuredSurveys(
   }) as StructuredSurveyFeature[];
 }
 
+export async function fetchObservationHistory(): Promise<ObservationHistoryItem[]> {
+  if (!supabase) return [];
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) return [];
+
+  const [quickResult, surveyResult] = await Promise.all([
+    supabase
+      .from('quick_sightings')
+      .select('id, taxon_group, status, gps_accuracy_m, timestamp, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('structured_surveys')
+      .select('id, status, duration_seconds, started_at, submitted_at, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ]);
+
+  const quick = (quickResult.data ?? []).map((row) => ({
+    id: row.id,
+    kind: 'quick_sighting' as const,
+    label: `${row.taxon_group} sighting`,
+    status: row.status,
+    created_at: row.created_at ?? row.timestamp,
+    detail: `GPS ${Math.round(Number(row.gps_accuracy_m))}m`,
+  }));
+
+  const surveys = (surveyResult.data ?? []).map((row) => ({
+    id: row.id,
+    kind: 'structured_survey' as const,
+    label: 'Structured survey',
+    status: row.status,
+    created_at: row.created_at ?? row.started_at,
+    detail: row.submitted_at ? `${Math.round(Number(row.duration_seconds) / 60)} min` : 'In progress',
+  }));
+
+  return [...quick, ...surveys]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .slice(0, 20);
+}
+
 export async function submitQuickSighting(input: QuickSightingInput) {
   return invokeFunction<{ quick_sighting: { id: string; status: string; cell_id: string | null } }>(
     'submit-quick-sighting',
@@ -219,15 +278,26 @@ export async function startStructuredSurvey(surveyPointId: string) {
   }>('start-structured-survey', { survey_point_id: surveyPointId });
 }
 
-export async function submitStructuredSurvey(surveyId: string, habitatIndicators: HabitatIndicators) {
+export async function submitStructuredSurvey(
+  surveyId: string,
+  habitatIndicators: HabitatIndicators,
+  observerMetadata: Record<string, unknown> = {},
+) {
   return invokeFunction<{ structured_survey: { id: string; duration_seconds: number; status: string } }>(
     'submit-structured-survey',
-    { survey_id: surveyId, habitat_indicators: habitatIndicators },
+    { survey_id: surveyId, habitat_indicators: habitatIndicators, observer_metadata: observerMetadata },
   );
 }
 
 export async function addSurveyRecord(input: SurveyRecordInput) {
   return invokeFunction<{ survey_record: { id: string } }>('add-survey-record', { ...input });
+}
+
+export async function submitSuggestion(input: SuggestionInput) {
+  return invokeFunction<{ suggestion: { id: string; type: SuggestionType; status: string } }>(
+    'submit-suggestion',
+    { type: input.type, payload: input.payload },
+  );
 }
 
 export function surveyPointsGeoJSON(points: SurveyPointFeature[]): GeoJSON.FeatureCollection {

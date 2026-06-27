@@ -8,6 +8,7 @@ const HABITAT_POTENTIALS = ['low', 'moderate', 'high'] satisfies HabitatPotentia
 const SPECIES_TYPES = ['plant', 'bird', 'insect', 'mammal', 'fungi'];
 const INTERVENTION_IMPACTS = ['high', 'medium', 'low'];
 const INTERVENTION_CATEGORIES = ['canopy', 'corridor', 'pollinator', 'water', 'ground'];
+const LAND_USE_CLASSES = ['tree', 'shrub', 'grass', 'water', 'built', 'bare', 'mixed', 'unknown'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -94,6 +95,12 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     isNumber(value.taxonomicDiversity) &&
     isNumber(value.corridorImportance) &&
     isNumber(value.fragmentationIndex) &&
+    (value.treeCover === undefined || isNumber(value.treeCover)) &&
+    (value.heatExposure === undefined || isNumber(value.heatExposure)) &&
+    (value.landUseGreen === undefined || isNumber(value.landUseGreen)) &&
+    (value.landUseClass === undefined ||
+      (typeof value.landUseClass === 'string' && LAND_USE_CLASSES.includes(value.landUseClass))) &&
+    (value.interventionRank === undefined || isNumber(value.interventionRank)) &&
     Array.isArray(value.species) &&
     value.species.every(isSpecies) &&
     isStringArray(value.pressures) &&

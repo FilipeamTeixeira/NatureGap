@@ -1,8 +1,8 @@
 import { handleOptions, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { assertRole, requireAuth } from '../_shared/auth.ts';
-import { readJson, requiredObject, requiredUuid, validateHabitatIndicators } from '../_shared/validation.ts';
+import { optionalObject, readJson, requiredObject, requiredUuid, validateHabitatIndicators } from '../_shared/validation.ts';
 
-const MINIMUM_DURATION_SECONDS = 12 * 60;
+const MINIMUM_DURATION_SECONDS = 15 * 60;
 const NOMINAL_DURATION_SECONDS = 15 * 60;
 
 Deno.serve(async (req) => {
@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
     const body = await readJson(req);
     const surveyId = requiredUuid(body, 'survey_id');
     const habitatIndicators = validateHabitatIndicators(requiredObject(body, 'habitat_indicators'));
+    const observerMetadata = optionalObject(body, 'observer_metadata');
 
     const { data: survey, error: surveyError } = await auth.serviceClient
       .from('structured_surveys')
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
 
     if (durationSeconds < MINIMUM_DURATION_SECONDS) {
       throw Object.assign(
-        new Error('Survey submission blocked before 12 minutes'),
+        new Error('Survey submission blocked before 15 minutes'),
         { status: 400, minimum_duration_seconds: MINIMUM_DURATION_SECONDS, duration_seconds: durationSeconds },
       );
     }
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
         submitted_at: submittedAt.toISOString(),
         duration_seconds: durationSeconds,
         habitat_indicators: habitatIndicators,
+        observer_metadata: observerMetadata,
         status,
       })
       .eq('id', surveyId)

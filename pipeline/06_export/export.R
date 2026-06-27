@@ -7,10 +7,52 @@
 
 library(sf)
 library(tidyverse)
+library(jsonlite)
+library(igraph)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
+
+REPO_ROOT <- if (basename(PIPELINE_ROOT) == "pipeline") dirname(PIPELINE_ROOT) else PIPELINE_ROOT
+DATA_VERSION <- Sys.getenv("NATUREGAP_DATA_VERSION", unset = "")
+if (!nzchar(DATA_VERSION)) {
+  DATA_VERSION <- format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
+}
+GENERATED_AT <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+
+STORAGE_EXPORT_ROOT <- file.path(REPO_ROOT, "pipeline-export")
+VERSIONED_EXPORT_DIR <- file.path(STORAGE_EXPORT_ROOT, CITY_ID, DATA_VERSION)
+CURRENT_POINTER_PATH <- file.path(STORAGE_EXPORT_ROOT, CITY_ID, "current.json")
+
+PMTILES_SOURCE_LAYER <- "hexgrid"
+PMTILES_REQUIRED_FIELDS <- c(
+  "cellId",
+  "parkId",
+  "parkName",
+  "impactScore",
+  "expectedRichness",
+  "ecologicalResidual",
+  "habitatQuality",
+  "observedRichness",
+  "corridorImportance",
+  "treeCover",
+  "heatExposure",
+  "landUseGreen",
+  "landUseClass",
+  "interventionRank"
+)
+
+validate_render_fields <- function(value) {
+  missing <- setdiff(PMTILES_REQUIRED_FIELDS, names(value))
+  if (length(missing) > 0L) {
+    stop(sprintf(
+      "PMTiles render data is missing required fields: %s",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
 
 write_geojson <- function(value, output_path) {
   if (file.exists(output_path)) unlink(output_path)
@@ -131,11 +173,49 @@ write_geojson_chunked <- function(value, output_path) {
   ))
 }
 
+validate_pmtiles_contract <- function(output_path) {
+  node <- Sys.getenv("NODE_BIN", unset = "")
+  if (!nzchar(node)) node <- Sys.which("node")
+  if (node == "") {
+    stop("node is required to validate hexgrid.pmtiles metadata. Set NODE_BIN if node is not on PATH.", call. = FALSE)
+  }
+
+  validator <- file.path(PIPELINE_ROOT, "06_export", "validate_pmtiles.mjs")
+  if (!file.exists(validator)) {
+    stop(sprintf("PMTiles validator not found: %s", validator), call. = FALSE)
+  }
+
+  args <- shQuote(c(
+    normalizePath(validator, winslash = "/", mustWork = TRUE),
+    normalizePath(output_path, winslash = "/", mustWork = TRUE),
+    PMTILES_SOURCE_LAYER,
+    PMTILES_REQUIRED_FIELDS
+  ))
+  result <- system2(node, args = args, stdout = TRUE, stderr = TRUE)
+  status <- attr(result, "status")
+  if (!is.null(status) && status != 0) {
+    stop(sprintf(
+      "PMTiles validation failed for %s:\n%s",
+      output_path,
+      paste(result, collapse = "\n")
+    ), call. = FALSE)
+  }
+
+  cat(sprintf(
+    "Validated: %s (source-layer: %s; fields: %s)\n",
+    output_path,
+    PMTILES_SOURCE_LAYER,
+    paste(PMTILES_REQUIRED_FIELDS, collapse = ", ")
+  ))
+  jsonlite::fromJSON(paste(result, collapse = "\n"))
+}
+
 write_hexgrid_pmtiles <- function(value, output_path) {
   tippecanoe <- Sys.which("tippecanoe")
   if (tippecanoe == "") {
     stop("tippecanoe is required to generate hexgrid.pmtiles. Install tippecanoe and rerun the export step.")
   }
+  validate_render_fields(value)
 
   tmp <- tempfile(fileext = ".geojson")
   on.exit(unlink(tmp), add = TRUE)
@@ -147,10 +227,10 @@ write_hexgrid_pmtiles <- function(value, output_path) {
 
   # Internal vector tile source-layer is exactly "hexgrid".
   # Frontend URL format:
-  # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/hexgrid.pmtiles
+  # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
   args <- c(
     "--output", tmp_pmtiles,
-    "--layer", "hexgrid",
+    "--layer", PMTILES_SOURCE_LAYER,
     "--force",
     "--no-feature-limit",
     "--no-tile-size-limit",
@@ -172,19 +252,119 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   if (!file.copy(tmp_pmtiles, output_path, overwrite = TRUE)) {
     stop(sprintf("Failed to copy generated PMTiles to %s", output_path))
   }
+  validate_pmtiles_contract(output_path)
 }
 
-export_upload_files <- function() {
+export_upload_files <- function(export_dir = DATA_EXPORT) {
   files <- c(
     "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
-    "cell_attributes.manifest.json"
+    "cell_attributes.manifest.json", "corridor-links.geojson",
+    "corridor-links.manifest.json", "top_interventions.json"
   )
-  for (base in c("cell_attributes")) {
-    parts <- list.files(DATA_EXPORT, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
+  for (base in c("cell_attributes", "corridor-links")) {
+    parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
     files <- c(files, parts)
   }
-  unique(files[sapply(file.path(DATA_EXPORT, files), file.exists)])
+  unique(files[sapply(file.path(export_dir, files), file.exists)])
+}
+
+stage_versioned_exports <- function(validation, cell_count, park_count) {
+  dir.create(VERSIONED_EXPORT_DIR, recursive = TRUE, showWarnings = FALSE)
+
+  files <- export_upload_files(DATA_EXPORT)
+  for (file_name in files) {
+    source_path <- file.path(DATA_EXPORT, file_name)
+    target_path <- file.path(VERSIONED_EXPORT_DIR, file_name)
+    if (!file.copy(source_path, target_path, overwrite = TRUE)) {
+      stop(sprintf("Failed to stage %s to %s", source_path, target_path), call. = FALSE)
+    }
+  }
+
+  file_entries <- lapply(files, function(file_name) {
+    path <- file.path(VERSIONED_EXPORT_DIR, file_name)
+    list(
+      path = file_name,
+      bytes = unname(file.info(path)$size)
+    )
+  })
+  names(file_entries) <- files
+
+  manifest <- list(
+    schemaVersion = 1L,
+    cityId = CITY_ID,
+    cityName = if (exists("CITY_NAME")) CITY_NAME else CITY_ID,
+    cityCountry = if (exists("CITY_COUNTRY")) CITY_COUNTRY else NA_character_,
+    datasetId = DATA_VERSION,
+    dataVersion = DATA_VERSION,
+    generatedAt = GENERATED_AT,
+    cellSizeM = CELL_SIZE,
+    crsLocal = CRS_LOCAL,
+    sourceLayer = PMTILES_SOURCE_LAYER,
+    requiredRenderFields = as.list(PMTILES_REQUIRED_FIELDS),
+    database = list(
+      datasetTable = "pipeline_datasets",
+      immutableCellTable = "pipeline_cell_attributes",
+      immutableGreenSpaceTable = "pipeline_green_spaces",
+      activeCellProjection = "cell_attributes",
+      activeGreenSpaceProjection = "green_spaces",
+      importFunction = "import_pipeline_dataset"
+    ),
+    products = list(
+      pmtiles = list(path = "hexgrid.pmtiles", purpose = "MapLibre rendering only"),
+      parks = list(path = "parks.geojson", purpose = "Green-space polygons for Storage and PostgreSQL import"),
+      cellAttributes = list(path = "cell_attributes.geojson", purpose = "Authoritative ecological cell outputs for PostgreSQL import"),
+      corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
+      parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
+      topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
+      chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed")
+    ),
+    counts = list(
+      renderCells = as.integer(cell_count),
+      parks = as.integer(park_count)
+    ),
+    pmtiles = list(
+      path = "hexgrid.pmtiles",
+      sourceLayer = PMTILES_SOURCE_LAYER,
+      minZoom = validation$minZoom,
+      maxZoom = validation$maxZoom,
+      bounds = as.list(validation$bounds)
+    ),
+    files = file_entries
+  )
+
+  manifest_path <- file.path(VERSIONED_EXPORT_DIR, "manifest.json")
+  jsonlite::write_json(
+    manifest,
+    manifest_path,
+    pretty = TRUE,
+    auto_unbox = TRUE,
+    null = "null",
+    na = "null"
+  )
+
+  current <- list(
+    schemaVersion = 1L,
+    cityId = CITY_ID,
+    datasetId = DATA_VERSION,
+    dataVersion = DATA_VERSION,
+    generatedAt = manifest$generatedAt,
+    manifest = paste0(DATA_VERSION, "/manifest.json"),
+    sourceLayer = PMTILES_SOURCE_LAYER,
+    hexgrid = paste0(DATA_VERSION, "/hexgrid.pmtiles")
+  )
+
+  dir.create(dirname(CURRENT_POINTER_PATH), recursive = TRUE, showWarnings = FALSE)
+  jsonlite::write_json(
+    current,
+    CURRENT_POINTER_PATH,
+    pretty = TRUE,
+    auto_unbox = TRUE
+  )
+
+  cat(sprintf("Written: %s\n", manifest_path))
+  cat(sprintf("Written: %s\n", CURRENT_POINTER_PATH))
+  invisible(list(manifest = manifest_path, current = CURRENT_POINTER_PATH, files = files))
 }
 
 # Colour scale — must stay in sync with SCORE_COLORS in src/lib/config.ts
@@ -231,6 +411,28 @@ habitat_potential <- function(hq_index) {
 
 pct_index <- function(value) {
   as.integer(round(pmin(100, pmax(0, replace_na(value, 0) * 100))))
+}
+
+land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real_, bare = NA_real_) {
+  tree_v <- replace_na(tree, -Inf)
+  shrub_v <- replace_na(shrub, -Inf)
+  grass_v <- replace_na(grass, -Inf)
+  water_v <- replace_na(water, -Inf)
+  built_v <- replace_na(built, -Inf)
+  bare_v <- replace_na(bare, -Inf)
+  max_v <- pmax(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
+
+  case_when(
+    !is.finite(max_v) ~ "unknown",
+    max_v <= 0 ~ "unknown",
+    tree_v == max_v ~ "tree",
+    shrub_v == max_v ~ "shrub",
+    grass_v == max_v ~ "grass",
+    water_v == max_v ~ "water",
+    built_v == max_v ~ "built",
+    bare_v == max_v ~ "bare",
+    TRUE ~ "mixed"
+  )
 }
 
 derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
@@ -394,6 +596,11 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     treeCover          = pct_index(row$tree_fraction),
     heatExposure       = pct_index(row$lst_rank),
     landUseGreen       = pct_index(row$green_fraction_wc),
+    landUseClass       = unbox(land_use_class(
+      row$tree_fraction, row$shrub_fraction, row$grass_fraction,
+      row$water_fraction, row$built_fraction_wc, row$bare_fraction
+    )),
+    interventionRank   = as.integer(replace_na(row$intervention_rank, 50L)),
     pressures          = as.list(derive_pressures(
       row$n_obs, row$n_survey_dates, row$richness_corrected,
       row$expected_richness, row$ecological_residual,
@@ -437,6 +644,18 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list()) 
     ),
     corridorImportance = pct_index(mean(replace_na(rows$corridor_importance, 0), na.rm = TRUE)),
     fragmentationIndex = pct_index(mean(replace_na(rows$fragmentation_index, 0), na.rm = TRUE)),
+    treeCover          = pct_index(mean(rows$tree_fraction, na.rm = TRUE)),
+    heatExposure       = pct_index(mean(rows$lst_rank, na.rm = TRUE)),
+    landUseGreen       = pct_index(mean(rows$green_fraction_wc, na.rm = TRUE)),
+    landUseClass       = unbox(land_use_class(
+      mean(rows$tree_fraction, na.rm = TRUE),
+      mean(rows$shrub_fraction, na.rm = TRUE),
+      mean(rows$grass_fraction, na.rm = TRUE),
+      mean(rows$water_fraction, na.rm = TRUE),
+      mean(rows$built_fraction_wc, na.rm = TRUE),
+      mean(rows$bare_fraction, na.rm = TRUE)
+    )),
+    interventionRank   = as.integer(min(replace_na(rows$intervention_rank, 50L), na.rm = TRUE)),
     pressures = unique(unlist(lapply(seq_len(nrow(rows)), function(i) {
       derive_pressures(
         rows$n_obs[i], rows$n_survey_dates[i], rows$richness_corrected[i],
@@ -506,12 +725,20 @@ if (!"taxonomic_shannon" %in% names(grid_raw) && "species_shannon" %in% names(gr
 for (col in c("plant", "bird", "insect", "mammal", "fungi", "n_survey_dates", "path_km")) {
   if (!col %in% names(grid_raw)) grid_raw[[col]] <- 0
 }
+for (col in c(
+  "tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction",
+  "built_fraction_wc", "bare_fraction", "impervious_fraction",
+  "green_fraction_wc", "lst_rank"
+)) {
+  if (!col %in% names(grid_raw)) grid_raw[[col]] <- NA_real_
+}
 
 grid <- grid_raw |>
   select(
     cell_id, habitat_quality, impact_score, composite, intervention_rank, is_habitat,
     any_of(c("tree_fraction", "shrub_fraction", "grass_fraction",
              "built_fraction_wc", "green_fraction_wc",
+             "water_fraction", "bare_fraction",
              "impervious_fraction", "osm_green_fraction")),
     any_of(c("ndvi_mean", "lst_rank", "heat_exposure", "noise",
              "light_pollution", "disturbance_index", "water_proximity")),
@@ -642,12 +869,60 @@ hexgrid_tiles <- hexgrid_render |>
     treeCover          = pct_index(tree_fraction),
     heatExposure       = pct_index(lst_rank),
     landUseGreen       = pct_index(green_fraction_wc),
+    landUseClass       = land_use_class(
+      tree_fraction, shrub_fraction, grass_fraction,
+      water_fraction, built_fraction_wc, bare_fraction
+    ),
     interventionRank   = as.integer(replace_na(intervention_rank, 50L))
   )
 
 hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
-write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
-cat(sprintf("Written: %s (source-layer: hexgrid)\n", hexgrid_pmtiles_path))
+pmtiles_validation <- write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
+cat(sprintf("Written: %s (source-layer: %s)\n", hexgrid_pmtiles_path, PMTILES_SOURCE_LAYER))
+
+if (exists("PROC_CONNECTIVITY_GRAPH") && file.exists(PROC_CONNECTIVITY_GRAPH)) {
+  connectivity_graph <- readRDS(PROC_CONNECTIVITY_GRAPH)
+  graph_edges <- igraph::as_data_frame(connectivity_graph, what = "edges")
+  graph_vertices <- igraph::as_data_frame(connectivity_graph, what = "vertices") |>
+    select(name, x, y)
+
+  if (nrow(graph_edges) > 0L && all(c("from", "to", "weight") %in% names(graph_edges))) {
+    edge_coords <- graph_edges |>
+      left_join(graph_vertices |> rename(from = name, x_from = x, y_from = y), by = "from") |>
+      left_join(graph_vertices |> rename(to = name, x_to = x, y_to = y), by = "to") |>
+      filter(
+        is.finite(x_from), is.finite(y_from),
+        is.finite(x_to), is.finite(y_to)
+      )
+
+    corridor_links <- st_sf(
+      linkId = paste(edge_coords$from, edge_coords$to, sep = "--"),
+      fromCellId = as.character(edge_coords$from),
+      toCellId = as.character(edge_coords$to),
+      weight = edge_coords$weight,
+      geometry = st_sfc(
+        lapply(seq_len(nrow(edge_coords)), function(i) {
+          st_linestring(matrix(
+            c(
+              edge_coords$x_from[i], edge_coords$y_from[i],
+              edge_coords$x_to[i], edge_coords$y_to[i]
+            ),
+            ncol = 2,
+            byrow = TRUE
+          ))
+        }),
+        crs = CRS_LOCAL
+      )
+    ) |>
+      st_transform(4326)
+
+    corridor_links_path <- file.path(DATA_EXPORT, "corridor-links.geojson")
+    write_geojson_chunked(corridor_links, corridor_links_path)
+    cat(sprintf("Written: corridor-links.geojson (%d graph edges)\n", nrow(corridor_links)))
+  }
+} else {
+  message(sprintf("Skipping corridor-links.geojson — %s not found", PROC_CONNECTIVITY_GRAPH))
+}
 
 if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
   cell_attr_base <- st_read(PROC_CELL_ATTR, quiet = TRUE) |>
@@ -735,7 +1010,12 @@ cell_detail_attrs <- grid |>
   )
 
 cell_attr <- cell_attr_base |>
-  left_join(cell_detail_attrs, by = "cell_id")
+  left_join(cell_detail_attrs, by = "cell_id") |>
+  mutate(
+    city_id = CITY_ID,
+    dataset_id = DATA_VERSION,
+    generated_at = GENERATED_AT
+  )
 
 cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
 write_geojson_chunked(cell_attr, cell_attr_path)
@@ -768,11 +1048,19 @@ cat("Written: top_interventions.json\n")
 
 # ── 5. Summary ────────────────────────────────────────────────────────────────
 
-storage_folder <- paste0("pipeline-export/", CITY_ID, "/")
+staged <- stage_versioned_exports(
+  pmtiles_validation,
+  cell_count = nrow(hexgrid_tiles),
+  park_count = length(park_stats_out)
+)
+
+storage_folder <- paste0("pipeline-export/", CITY_ID, "/", DATA_VERSION, "/")
 cat(sprintf("\nExport complete for city: %s\n", CITY_ID))
+cat(sprintf("Data version: %s\n", DATA_VERSION))
 cat(sprintf("Upload these files to Supabase Storage folder '%s':\n", storage_folder))
-for (f in export_upload_files()) {
-  p <- file.path(DATA_EXPORT, f)
+for (f in staged$files) {
+  p <- file.path(VERSIONED_EXPORT_DIR, f)
   sz <- file.info(p)$size / 1024^2
   cat(sprintf("  ✓ %s (%.1f MB)\n", f, sz))
 }
+cat(sprintf("Also upload/update stable pointer: pipeline-export/%s/current.json\n", CITY_ID))

@@ -46,12 +46,14 @@ if (nrow(inat_raw) == 0L) {
       observed_on = as.Date(character()),
       common_label = character(),
       observation_source = character(),
-      observation_weight = numeric()
+      observation_weight = numeric(),
+      observer_id = character()
     ) |>
     select(taxon_name, iconic_taxon_name, observed_on, common_label,
-           observation_source, observation_weight)
+           observation_source, observation_weight, observer_id)
 } else {
   if (!"common_name" %in% names(inat_raw)) inat_raw$common_name <- NA_character_
+  if (!"user.login" %in% names(inat_raw)) inat_raw[["user.login"]] <- NA_character_
   inat_std <- inat_raw |>
     st_transform(st_crs(grid)) |>
     mutate(
@@ -59,10 +61,11 @@ if (nrow(inat_raw) == 0L) {
       observed_on  = as_date(observed_on),
       common_label = as.character(common_name),
       observation_source = "inat",
-      observation_weight = 1
+      observation_weight = 1,
+      observer_id = as.character(.data[["user.login"]])
     ) |>
     select(taxon_name, iconic_taxon_name, observed_on, common_label,
-           observation_source, observation_weight)
+           observation_source, observation_weight, observer_id)
 }
 
 st_geometry(inat_std) <- "geometry"
@@ -76,13 +79,15 @@ if (nrow(gbif_raw) == 0L) {
       observed_on = as.Date(character()),
       common_label = character(),
       observation_source = character(),
-      observation_weight = numeric()
+      observation_weight = numeric(),
+      observer_id = character()
     ) |>
     select(taxon_name, iconic_taxon_name, observed_on, common_label,
-           observation_source, observation_weight)
+           observation_source, observation_weight, observer_id)
 } else {
   if (!"vernacularName" %in% names(gbif_raw)) gbif_raw$vernacularName <- NA_character_
   if (!"class" %in% names(gbif_raw)) gbif_raw$class <- NA_character_
+  if (!"recordedBy" %in% names(gbif_raw)) gbif_raw$recordedBy <- NA_character_
   gbif_std <- gbif_raw |>
     st_transform(st_crs(grid)) |>
     mutate(
@@ -95,15 +100,72 @@ if (nrow(gbif_raw) == 0L) {
       ),
       common_label      = as.character(vernacularName),
       observation_source = "gbif",
-      observation_weight = 1
+      observation_weight = 1,
+      observer_id = as.character(recordedBy)
     ) |>
     select(taxon_name, iconic_taxon_name, observed_on, common_label,
-           observation_source, observation_weight)
+           observation_source, observation_weight, observer_id)
 }
 
 st_geometry(gbif_std) <- "geometry"
 
-obs_all <- rbind(inat_std, gbif_std) |>
+if (exists("RAW_SUPABASE_OBS") && file.exists(RAW_SUPABASE_OBS)) {
+  supabase_raw <- st_read(RAW_SUPABASE_OBS, quiet = TRUE)
+} else {
+  supabase_raw <- st_sf(
+    taxon_name = character(),
+    iconic_taxon_name = character(),
+    observed_on = as.Date(character()),
+    common_label = character(),
+    observation_source = character(),
+    observation_weight = numeric(),
+    observer_id = character(),
+    geometry = st_sfc(crs = st_crs(grid))
+  )
+}
+
+if (!"observer_id" %in% names(supabase_raw)) {
+  supabase_raw$observer_id <- rep(NA_character_, nrow(supabase_raw))
+}
+
+if (nrow(supabase_raw) == 0L) {
+  supabase_std <- supabase_raw |>
+    st_transform(st_crs(grid)) |>
+    mutate(
+      taxon_name = character(),
+      iconic_taxon_name = character(),
+      observed_on = as.Date(character()),
+      common_label = character(),
+      observation_source = character(),
+      observation_weight = numeric(),
+      observer_id = character()
+    ) |>
+    select(taxon_name, iconic_taxon_name, observed_on, common_label,
+           observation_source, observation_weight, observer_id)
+} else {
+  supabase_std <- supabase_raw |>
+    st_transform(st_crs(grid)) |>
+    mutate(
+      taxon_name = as.character(taxon_name),
+      iconic_taxon_name = as.character(iconic_taxon_name),
+      observed_on = as_date(observed_on),
+      common_label = as.character(common_label),
+      observation_source = as.character(observation_source),
+      observation_weight = case_when(
+        observation_source == "structured_survey" ~ 3,
+        observation_source == "quick_sighting" ~ 0,
+        is.na(observation_weight) ~ 1,
+        TRUE ~ as.numeric(observation_weight)
+      ),
+      observer_id = as.character(observer_id)
+    ) |>
+    select(taxon_name, iconic_taxon_name, observed_on, common_label,
+           observation_source, observation_weight, observer_id)
+}
+
+st_geometry(supabase_std) <- "geometry"
+
+obs_all <- rbind(inat_std, gbif_std, supabase_std) |>
   filter(!is.na(taxon_name)) |>
   mutate(
     observation_weight = replace_na(observation_weight, 1),
@@ -116,7 +178,7 @@ cat(sprintf("Total observations loaded: %d\n", nrow(obs_all)))
 # Raw observation geometry is preserved; only cell attribution is snapped.
 
 if (nrow(obs_all) > 0L && nrow(grid) > 0L) {
-  grid_centroids <- st_centroid(grid)
+  grid_centroids <- suppressWarnings(st_centroid(grid))
   nearest_idx <- st_nearest_feature(obs_all, grid_centroids)
   nearest_cells <- grid |>
     st_drop_geometry() |>
@@ -141,11 +203,24 @@ cat(sprintf("Observations snapped to 20 m hex cells: %d\n", nrow(obs_joined)))
 richness <- obs_joined |>
   st_drop_geometry() |>
   mutate(is_weekend = !is.na(observed_on) & wday(observed_on) %in% c(1L, 7L)) |>
+  group_by(cell_id, taxon_name) |>
+  mutate(taxon_weight = max(observation_weight, na.rm = TRUE)) |>
+  ungroup() |>
   group_by(cell_id) |>
   summarise(
     n_obs            = n(),
-    species_richness = n_distinct(taxon_name),
+    raw_species_count = n_distinct(taxon_name[!is.na(taxon_name)]),
+    species_richness = sum(taxon_weight[!duplicated(taxon_name)], na.rm = TRUE),
     n_survey_dates   = n_distinct(observed_on[!is.na(observed_on)]),
+    n_observers      = n_distinct(observer_id[!is.na(observer_id) & nzchar(observer_id)]),
+    observed_dates_json = as.character(jsonlite::toJSON(
+      sort(unique(as.character(observed_on[!is.na(observed_on)]))),
+      auto_unbox = TRUE
+    )),
+    observer_ids_json = as.character(jsonlite::toJSON(
+      sort(unique(as.character(observer_id[!is.na(observer_id) & nzchar(observer_id)]))),
+      auto_unbox = TRUE
+    )),
     weighted_observation_effort = sum(observation_weight, na.rm = TRUE),
     has_structured_survey = any(is_structured_survey, na.rm = TRUE),
     weekend_obs = sum(is_weekend, na.rm = TRUE),
@@ -293,7 +368,8 @@ grid_obs <- grid |>
   mutate(
     is_unsampled        = replace_na(path_km <= 0, TRUE),
     n_obs              = replace_na(n_obs, 0L),
-    species_richness   = if_else(is_unsampled, NA_integer_, replace_na(species_richness, 0L)),
+    raw_species_count  = if_else(is_unsampled, NA_real_, replace_na(raw_species_count, 0)),
+    species_richness   = if_else(is_unsampled, NA_real_, replace_na(species_richness, 0)),
     effort_corrected_richness = if_else(
       is_unsampled,
       NA_real_,
@@ -301,6 +377,9 @@ grid_obs <- grid |>
     ),
     richness_corrected = effort_corrected_richness,
     n_survey_dates     = replace_na(n_survey_dates, 0L),
+    n_observers        = replace_na(n_observers, 0L),
+    observed_dates_json = replace_na(observed_dates_json, "[]"),
+    observer_ids_json = replace_na(observer_ids_json, "[]"),
     weighted_observation_effort = replace_na(weighted_observation_effort, 0),
     has_structured_survey = replace_na(has_structured_survey, FALSE),
     weekend_obs = replace_na(weekend_obs, 0L),

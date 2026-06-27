@@ -1,45 +1,52 @@
-# NatureGap — Step 04: Ecological Function Layer
-# Computes landscape connectivity on the canonical 20 m hex grid.
+# NatureGap — Step 04: Full Ecological Connectivity Graph
+# Builds the full-urban-extent connectivity network on the canonical 20 m hex grid.
 #
-# Method:
-#   1. Use the configured 20 m hex cells directly; no regridding.
-#   2. Include every cell in the graph (urban + green + water + built-up).
-#   3. Encode resistance per cell from habitat quality.
-#   4. Compute betweenness centrality → corridor importance score.
-#   5. Compute fragmentation from neighbouring 20 m hex context.
+# Nodes:
+#   all hexes, green and non-green
+#
+# Edges:
+#   queen adjacency of hex cells
+#
+# Edge weight:
+#   mean(1 - habitat_quality of both cells)
 #
 # Outputs:
+#   data/processed/connectivity_graph.rds
 #   data/processed/grid_connectivity.gpkg
 
 library(sf)
-library(terra)
 library(tidyverse)
 library(igraph)
-library(landscapemetrics)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
-HAB_THRESHOLD <- 0.40
-HAS_GDISTANCE <- requireNamespace("gdistance", quietly = TRUE)
-
-# ── 1. Load canonical 20 m habitat grid ──────────────────────────────────────
+# ── 1. Load full 20 m hex grid ───────────────────────────────────────────────
 
 grid <- st_read(PROC_GRID_HABITAT, quiet = TRUE) |>
-  mutate(is_habitat = habitat_quality >= HAB_THRESHOLD)
+  st_transform(CRS_LOCAL)
 
-cat(sprintf("Habitat cells: %d / %d\n", sum(grid$is_habitat), nrow(grid)))
+if (!"habitat_quality" %in% names(grid)) {
+  stop("grid_habitat.gpkg must contain habitat_quality before connectivity.", call. = FALSE)
+}
 
-# ── 2. 20 m hex adjacency graph ──────────────────────────────────────────────
+if (any(is.na(grid$habitat_quality))) {
+  stop(
+    "habitat_quality contains NA values; exact connectivity weights cannot be computed.",
+    call. = FALSE
+  )
+}
 
-cell_pts <- st_centroid(grid)
 cell_ids <- grid$cell_id
-qualities <- pmin(1, pmax(0, replace_na(grid$habitat_quality, 0)))
+qualities <- grid$habitat_quality
 
-adj_threshold <- CELL_SIZE * 1.15
-within <- st_is_within_distance(cell_pts, cell_pts, dist = adj_threshold, sparse = TRUE)
+cat(sprintf("Connectivity nodes: %d full-extent hex cells\n", nrow(grid)))
 
-edges_df <- bind_rows(lapply(seq_along(within), function(i) {
-  neighbors <- within[[i]]
+# ── 2. Queen adjacency on full graph ─────────────────────────────────────────
+
+touches <- st_touches(grid, sparse = TRUE)
+
+edges_df <- bind_rows(lapply(seq_along(touches), function(i) {
+  neighbors <- touches[[i]]
   neighbors <- neighbors[neighbors > i]
   if (length(neighbors) == 0L) return(NULL)
   tibble(
@@ -51,164 +58,76 @@ edges_df <- bind_rows(lapply(seq_along(within), function(i) {
 }))
 
 if (nrow(edges_df) == 0L) {
-  stop("Connectivity graph has no edges. Check CELL_SIZE and grid geometry.", call. = FALSE)
+  stop("Connectivity graph has no queen-adjacent edges.", call. = FALSE)
 }
 
-edge_resistance <- (
-  (1 - qualities[edges_df$from_idx]) + (1 - qualities[edges_df$to_idx])
-) / 2
+edges_df <- edges_df |>
+  mutate(
+    weight = ((1 - qualities[from_idx]) + (1 - qualities[to_idx])) / 2
+  )
 
-eps <- min(edge_resistance[edge_resistance > 0], na.rm = TRUE) * 0.001
-if (!is.finite(eps) || eps <= 0) eps <- 1e-6
+centroids <- suppressWarnings(st_centroid(grid))
+coords <- st_coordinates(centroids)
 
-edges_df$weight <- pmax(edge_resistance, eps)
+vertices_df <- tibble(
+  name = as.character(cell_ids),
+  cell_id = cell_ids,
+  green_space_id = if ("green_space_id" %in% names(grid)) grid$green_space_id else NA_character_,
+  x = coords[, "X"],
+  y = coords[, "Y"]
+)
 
 g <- graph_from_data_frame(
-  edges_df |> select(from, to, weight),
+  edges_df |> transmute(from = as.character(from), to = as.character(to), weight),
   directed = FALSE,
-  vertices = tibble(name = cell_ids)
+  vertices = vertices_df
 )
 
-cat(sprintf("Graph: %d nodes, %d edges\n", vcount(g), ecount(g)))
+cat(sprintf("Connectivity graph: %d nodes, %d queen-adjacent edges\n", vcount(g), ecount(g)))
 
-if (ecount(g) > vcount(g) * 8L) {
-  warning(sprintf(
-    "Graph has %d edges (expected roughly 6 per 20 m hex cell). Check CELL_SIZE.",
-    ecount(g)
-  ), call. = FALSE)
-}
+# ── 3. Betweenness centrality on full graph only ─────────────────────────────
 
-# ── 3. Habitat patch context on the same 20 m graph ──────────────────────────
-
-habitat_vertex_names <- as.character(grid$cell_id[grid$is_habitat])
-patch_id <- rep(NA_integer_, nrow(grid))
-
-if (length(habitat_vertex_names) > 0L) {
-  habitat_subgraph <- induced_subgraph(g, vids = habitat_vertex_names)
-  habitat_components <- components(habitat_subgraph)$membership
-  patch_lookup <- tibble(
-    cell_id = as.integer(names(habitat_components)),
-    patch_id = as.integer(habitat_components)
-  )
-  patch_id <- left_join(
-    tibble(cell_id = grid$cell_id),
-    patch_lookup,
-    by = "cell_id"
-  )$patch_id
-}
-
-patch_area <- tibble(
-  patch_id = patch_id,
-  cell_area_m2 = as.numeric(st_area(grid))
-) |>
-  filter(!is.na(patch_id)) |>
-  group_by(patch_id) |>
-  summarise(patch_area_ha = sum(cell_area_m2) / 10000, .groups = "drop")
-
-grid <- grid |>
-  mutate(patch_id = patch_id) |>
-  select(-any_of("patch_area_ha")) |>
-  left_join(patch_area, by = "patch_id") |>
-  mutate(patch_area_ha = replace_na(patch_area_ha, 0))
-
-# ── 3b. landscapemetrics fragmentation components at 20 m ───────────────────
-
-hab_rast <- rasterize(
-  vect(grid),
-  rast(ext(vect(grid)), res = CELL_SIZE, crs = CRS_LOCAL),
-  field = "is_habitat"
-)
-
-edge_density <- tryCatch({
-  calculate_lsm(hab_rast, what = "lsm_l_ed") |>
-    filter(metric == "ed") |>
-    summarise(value = mean(value, na.rm = TRUE)) |>
-    pull(value)
-}, error = function(e) NA_real_)
-
-rescale01 <- function(x) {
-  rng <- range(x, na.rm = TRUE)
-  if (!all(is.finite(rng)) || diff(rng) == 0) return(rep(0, length(x)))
-  pmin(1, pmax(0, (x - rng[1]) / diff(rng)))
-}
-
-habitat_patch_centroids <- grid |>
-  filter(!is.na(patch_id)) |>
-  group_by(patch_id) |>
-  summarise(.groups = "drop") |>
-  st_centroid()
-
-patch_isolation <- rep(1, nrow(grid))
-if (nrow(habitat_patch_centroids) > 1L) {
-  d <- st_distance(st_centroid(grid), habitat_patch_centroids)
-  patch_isolation <- apply(as.matrix(d), 1, function(row) {
-    finite <- row[is.finite(row) & row > 0]
-    if (length(finite) == 0L) return(0)
-    min(finite)
-  })
-  patch_isolation <- rescale01(patch_isolation)
-}
-
-grid <- grid |>
-  mutate(
-    edge_density = replace_na(edge_density, 0),
-    patch_isolation = patch_isolation,
-    patch_size_distribution = if_else(
-      patch_area_ha <= 0,
-      1,
-      1 - rescale01(patch_area_ha)
-    ),
-    edge_density_index = pmin(1, pmax(0, replace_na(edge_density, 0) / 100))
-  )
-
-# ── 4. Betweenness centrality → corridor importance ──────────────────────────
-
-cat("Computing betweenness centrality...\n")
+cat("Computing full-graph betweenness centrality...\n")
 bc <- betweenness(g, weights = E(g)$weight, normalized = TRUE)
 
 bc_df <- tibble(
-  cell_id = as.integer(V(g)$name),
-  corridor_importance = as.numeric(bc)
+  cell_id = cell_ids,
+  betweenness_centrality = as.numeric(bc[as.character(cell_ids)])
 )
 
-# ── 5. Fragmentation index ───────────────────────────────────────────────────
-
-adj_matrix <- as_adjacency_matrix(g, sparse = TRUE)
-neighbor_count <- rowSums(adj_matrix)
-habitat_neighbor_count <- as.numeric(adj_matrix %*% as.integer(grid$is_habitat))
-
-fragmentation_df <- tibble(
-  cell_id = as.integer(V(g)$name),
-  connected_nb_count = as.integer(neighbor_count),
-  habitat_nb_count = as.integer(habitat_neighbor_count)
-) |>
-  mutate(fragmentation_index = if_else(
-    connected_nb_count == 0L,
-    1,
-    1 - habitat_nb_count / connected_nb_count
-  ))
-
-# ── 6. Merge back to canonical grid ──────────────────────────────────────────
+# ── 4. Persist graph and per-hex metric ──────────────────────────────────────
 
 grid_conn <- grid |>
   left_join(bc_df, by = "cell_id") |>
-  left_join(fragmentation_df, by = "cell_id") |>
   mutate(
-    corridor_importance = replace_na(corridor_importance, 0),
-    neighbor_fragmentation = replace_na(fragmentation_index, 1),
-    fragmentation_index = pmin(1, pmax(0,
-      0.35 * neighbor_fragmentation +
-        0.25 * edge_density_index +
-        0.20 * patch_isolation +
-        0.20 * patch_size_distribution
-    )),
-    node_importance = pmin(1, pmax(0, habitat_quality * (1 - fragmentation_index))),
-    connectivity_score = pmin(1, pmax(0,
-      0.60 * corridor_importance +
-        0.25 * node_importance +
-        0.15 * (1 - fragmentation_index)
-    ))
+    corridor_importance = betweenness_centrality,
+    connectivity_score = betweenness_centrality,
+    node_importance = NA_real_,
+    fragmentation_index = NA_real_,
+    neighbor_fragmentation = NA_real_,
+    edge_density = NA_real_,
+    patch_isolation = NA_real_,
+    patch_size_distribution = NA_real_,
+    patch_area_ha = NA_real_
   )
 
+hex_cells <- grid_conn |>
+  select(-any_of(c(
+    "corridor_importance",
+    "connectivity_score",
+    "node_importance",
+    "fragmentation_index",
+    "neighbor_fragmentation",
+    "edge_density",
+    "patch_isolation",
+    "patch_size_distribution",
+    "patch_area_ha"
+  )))
+
+saveRDS(g, PROC_CONNECTIVITY_GRAPH)
+st_write(hex_cells, PROC_HEX_CELLS, delete_dsn = TRUE)
 st_write(grid_conn, PROC_GRID_CONN, delete_dsn = TRUE)
-cat("Written: grid_connectivity.gpkg\n")
+
+cat(sprintf("Written: %s\n", PROC_CONNECTIVITY_GRAPH))
+cat(sprintf("Written: %s\n", PROC_HEX_CELLS))
+cat(sprintf("Written: %s\n", PROC_GRID_CONN))

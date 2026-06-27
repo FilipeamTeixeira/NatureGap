@@ -1,130 +1,398 @@
 # Methodology Notes
 
-This document describes the analytical decisions behind NatureGap's indices, their inputs, assumptions, and limitations. Every index is documented here to support reproducibility and honest communication with users.
+This document describes NatureGap's analytical methods, assumptions, and known
+limitations. All ecological and spatial calculations originate in the R pipeline.
+PostgreSQL/PostGIS stores R outputs and performs live record-to-cell assignment.
+PMTiles and MapLibre are presentation layers.
 
----
+## 1. Source Of Truth
 
-## 1. Spatial grid
+The R pipeline is the only authoritative source for:
 
-**Resolution:** 20 m hexagons generated with `sf::st_make_grid(area, cellsize = 20, square = FALSE)`. This is the only analytical, storage, and display grid.  
-**CRS:** JGD2011 / Japan Plane Rectangular CS VI (EPSG:6674) for local processing; reprojected to WGS84 (EPSG:4326) for web serving.  
-**Coverage:** configured city analysis extent. Display and analysis use the same 20 m hex cells.
+- habitat quality
+- observer effort correction
+- expected richness
+- ecological residual
+- impact score
+- connectivity metrics
+- intervention score and ranking
+- pressure strings and detail-panel scientific summaries
 
----
+Frontend fallbacks in `src/lib/cell-detail.ts` are local/demo safeguards only.
+They must not be treated as scientific outputs.
 
-## 2. Habitat quality index
+## 2. Spatial Grid
 
-**Formula:**
+Resolution:
 
-```
-habitat_quality = 0.35 × ndvi_idx + 0.30 × green_idx + 0.20 × lst_idx + 0.15 × (1 − path_idx)
-```
-
-| Sub-index | Source | Transformation | Weight | Rationale |
-|---|---|---|---|---|
-| `ndvi_idx` | Sentinel-2 B4/B8 | Rescaled from [−0.2, 1.0] to [0, 1] | 0.35 | Proxy for photosynthetically active vegetation |
-| `green_idx` | OSM leisure polygons | Fraction of cell area covered | 0.30 | Direct measure of accessible green space |
-| `lst_idx` | Landsat ST_B10 | Inverted percentile rank | 0.20 | Cooler = less heat stress = more hospitable |
-| `path_idx` | OSM highway paths | km of path per cell, capped at 2 km | 0.15 | High path density proxies for disturbance/urbanisation |
-
-**Limitations:**  
-- Weights are expert-assigned, not empirically calibrated.  
-- NDVI does not distinguish native vegetation from ornamental or invasive cover.  
-- OSM green space completeness varies; unmapped parks are treated as non-green.  
-- LST is a single-date snapshot; multi-date composites would be more robust.
-
----
-
-## 3. Observer effort correction
-
-**Problem:** iNaturalist and GBIF records concentrate where people walk, not where biodiversity is highest. A cell near a popular trail will appear to have more species simply because more people visited it.
-
-**Approach:** We normalise observed richness by a proxy for observer effort:
-
-```
-corrected_richness_i = raw_species_count_i / log(1 + path_km_i)
+```text
+20 m hexagons
 ```
 
-Where `path_km_i` is the total length of OSM footways, paths, and tracks within cell *i*.
-If `path_km_i = 0`, the cell is marked unsampled and excluded from richness residual inference rather than treated as zero richness.
+Generated with:
 
-**Rationale for log:** `log(1 + path_km)` dampens very high accessibility while preserving the critical distinction between sampled and unsampled cells.
-
-**Limitations:**  
-- Effort proxy assumes observers walk on mapped paths. Unmarked paths and private land crossings are missed.  
-- Does not account for observer skill (expert vs. casual recorder).  
-- Temporal uneven sampling (more summer observations) is partially addressed by `n_survey_dates` but not fully corrected.
-
----
-
-## 4. Expected richness
-
-**Formula:**
-
-```
-expected_richness_i = MAX_EXPECTED × (0.65 × habitat_i + 0.20 × connectivity_i + 0.15 × accessibility_i)
+```r
+sf::st_make_grid(area, cellsize = 20, square = FALSE)
 ```
 
-Where `MAX_EXPECTED = 350` (provisional upper bound based on literature values for temperate urban biodiversity in Japan).
+CRS:
 
-**This is an index, not a prediction.** It provides a relative ranking of cells by expected biodiversity, not an absolute species count.
+- Local processing for Yokohama: JGD2011 / Japan Plane Rectangular CS VI, `EPSG:6674`
+- Web/PostGIS export: WGS84, `EPSG:4326`
 
-**Limitations:**  
-- Linear relationship between habitat quality and expected richness is a simplification. Real species-area relationships are typically power-law.  
-- `MAX_EXPECTED` is not calibrated to Yokohama specifically. Future work should fit this parameter against independent plot-level surveys.  
-- Does not account for species pool limitations (e.g., a cell cannot have species that don't exist in the regional pool).
+Contract:
 
----
+- The 20 m hex grid is the only analytical grid.
+- The same cell IDs connect R outputs, PMTiles features, PostgreSQL
+  `cell_attributes`, quick sightings, structured surveys, and detail lookup.
+- Do not introduce a secondary analytical grid.
+- Unsampled cells are excluded from residual inference, not treated as zero.
 
-## 5. Ecological residual
+## 3. Input Streams
 
+External observations:
+
+- iNaturalist
+- GBIF
+
+Application observations:
+
+- `quick_sightings`: opportunistic, presence-only, zero weight in
+  effort-corrected richness
+- `structured_surveys` + `survey_records`: protocol-based, time-bounded,
+  higher analytical weight, effort metadata, habitat indicators
+
+Current implementation note:
+
+- The current R pipeline reads iNaturalist and GBIF raw files.
+- The Supabase export of approved quick sightings and structured surveys into R
+  is still a required implementation step.
+- Until that export exists, app observations are transactional records and map
+  overlays, not model inputs.
+
+Eligibility rules for app observations before R import:
+
+- Exclude rejected records.
+- Exclude records with pending or confirmed quality flags.
+- Preserve raw geometry.
+- Preserve GPS accuracy.
+- Preserve structured-survey effort and habitat indicators.
+- Preserve the assigned 20 m `cell_id` when available.
+
+## 4. Habitat Quality Index
+
+Habitat quality is computed in `pipeline/02_habitat/habitat_model.R`.
+
+Current conceptual formula:
+
+```text
+habitat_quality =
+  0.35 * ndvi_idx
+  + 0.30 * green_idx
+  + 0.20 * lst_idx
+  + 0.15 * (1 - path_idx)
 ```
-ecological_residual_i = expected_richness_i − corrected_richness_i
+
+Sub-indexes:
+
+| Sub-index | Source | Transformation | Rationale |
+| --- | --- | --- | --- |
+| `ndvi_idx` | Sentinel-2 B4/B8 | Rescaled NDVI | Photosynthetically active vegetation |
+| `green_idx` | OSM green space and landcover fractions | Cell-area fraction | Accessible or mapped green cover |
+| `lst_idx` | Landsat ST_B10 | Inverted heat rank | Cooler cells are less heat-stressed |
+| `path_idx` | OSM footways, paths, tracks | Path density | High path density proxies disturbance/accessibility |
+
+Related stressor features may include impervious fraction, road/rail noise
+proxy, light pollution proxy, water proximity, and disturbance index.
+
+Limitations:
+
+- Weights are expert-assigned and not yet empirically calibrated.
+- NDVI does not distinguish native vegetation from ornamental or invasive cover.
+- OSM completeness varies by city.
+- LST is date-sensitive; multi-date composites would be more robust.
+
+## 5. Observer Effort Correction
+
+Effort correction is computed in `pipeline/03_observations/observation_layer.R`.
+
+Problem:
+
+Citizen-science observations cluster where people walk. Raw richness therefore
+confounds biodiversity with observer effort.
+
+Current formula:
+
+```text
+effort_corrected_richness_i =
+  species_richness_i / log(1 + path_km_i)
 ```
 
-- **Positive residual** → high habitat pressure. Priority for restoration.
-- **Negative residual** → potential refuge worth protecting.
-- **Near zero** → nature is performing as expected.
+Where:
 
----
+- `species_richness_i` is the distinct species count in cell `i`.
+- `path_km_i` is OSM pedestrian path length in cell `i`.
 
-## 6. Connectivity analysis
+Unsampled rule:
 
-**Graph construction:**  
-- Nodes = all 20 m hex cells, including urban, green, water, and built-up cells.  
-- Edges = neighbouring 20 m hex centroids.  
-- Edge weight = mean resistance = mean(1 − habitat_quality) of both connected cells.
-
-**Corridor importance:**  
-Normalised betweenness centrality computed with `igraph::betweenness()`. A cell with high betweenness lies on many shortest paths between habitat patches — removing it would disconnect the network.
-
-**Fragmentation index:**  
-Proportion of neighbouring 20 m hexes that are NOT classified as habitat.
-
-**Limitations:**  
-- The resistance surface uses habitat quality as a proxy for permeability. Species-specific permeability (e.g., for a focal species like a butterfly or small mammal) would require species distribution models.  
-- Betweenness centrality favours cells on the shortest paths, not necessarily the most ecologically important corridors for all species.  
-- The 0.40 habitat threshold is arbitrary; sensitivity analysis across thresholds is recommended.
-
----
-
-## 7. Intervention ranking
-
-```
-composite_score_i = 0.55 × normalised_underperformance_i + 0.45 × corridor_importance_i
+```text
+if path_km_i <= 0:
+  is_unsampled_i = true
+  effort_corrected_richness_i = NA
 ```
 
-Cells are ranked by composite score. Higher score = higher restoration priority.
+Unsampled cells are excluded from residual inference. They are not zero-richness
+cells.
 
-**Counterfactual connectivity estimate** (top 20 cells only):  
-Each top cell is reclassified as habitat (quality = 1.0) and the connectivity graph is rerun. The change in mean betweenness of adjacent cells is reported as the estimated connectivity gain. This is computationally expensive and approximate.
+Structured-survey rule:
 
----
+- Structured surveys receive analytical weight; quick sightings remain
+  presence-only and do not affect effort-corrected richness.
+- Live Supabase survey import is wired through `pipeline_observations_export`
+  and `raw/supabase_observations.gpkg`.
+- Structured-survey effort metadata affects effort summaries and weighting in R,
+  not SQL or frontend code.
 
-## Known biases and caveats
+Limitations:
 
-1. **Urban bias in citizen science:** Records cluster near dense residential areas and popular parks. The effort correction partially addresses this but cannot fully compensate.
-2. **Taxonomic bias:** iNaturalist records skew toward charismatic fauna (birds, butterflies, large plants). Soil fauna, fungi, and aquatic invertebrates are severely underrepresented.
-3. **Temporal mismatch:** Satellite imagery and field records rarely coincide in time. Seasonal variation in NDVI and phenology creates noise.
-4. **Data sparsity:** Unsampled cells are excluded from residual inference rather than treated as zero biodiversity.
-5. **Single-city calibration:** All parameters are tuned for Yokohama. Transferability to a second city requires re-validation.
+- Path length is a proxy for observer effort, not direct effort.
+- It does not fully account for observer skill, seasonal effort, private access,
+  or unmapped paths.
+- GPS accuracy is stored and should be used in weighting/quality decisions, but
+  final weighting details should remain in R.
+
+## 6. Expected Richness
+
+Expected richness is computed in `pipeline/05_residuals/residuals.R`.
+
+Current formula:
+
+```text
+expected_richness_i =
+  MAX_EXPECTED_RICHNESS * (
+    0.65 * habitat_quality_i
+    + 0.20 * corridor_importance_i
+    + 0.15 * accessibility_component_i
+  )
+```
+
+Where:
+
+- `MAX_EXPECTED_RICHNESS = 350`
+- `accessibility_component_i = log1p(path_km_i) / log1p(max_path_km)`
+  clamped to `[0, 1]`
+
+Expected richness is an index-like estimate for relative comparison. It is not
+a calibrated species distribution model.
+
+Limitations:
+
+- The relationship is linear and provisional.
+- `MAX_EXPECTED_RICHNESS` is not calibrated per city.
+- Regional species-pool constraints are not yet modelled.
+
+## 7. Ecological Residual
+
+Ecological residual is computed in `pipeline/05_residuals/residuals.R`.
+
+Formula:
+
+```text
+ecological_residual_i =
+  expected_richness_i - effort_corrected_richness_i
+```
+
+Interpretation:
+
+- Positive residual: below expectation, habitat pressure, restoration priority
+- Negative residual: above expectation, potential refuge
+- Near zero: observed richness aligns with expectation
+- Unsampled: `NA`
+
+Do not invert this sign in documentation. If a user-facing score uses the
+opposite direction, it must be documented as a separate score.
+
+## 8. Impact Score
+
+Impact score is computed in `pipeline/05_residuals/residuals.R`.
+
+Current implementation:
+
+```text
+impact_score_i =
+  round(-ecological_residual_i / max(abs(ecological_residual)) * 50)
+```
+
+Interpretation:
+
+- Negative impact score: worse than expected
+- Positive impact score: better than expected
+- Zero: near expected or no finite residual range
+
+This is intentionally separate from `ecological_residual`. PMTiles expose
+`impactScore` for user-facing styling, while detail panels can also show
+`ecologicalResidual`.
+
+Current color/status thresholds:
+
+| Impact score range | Status |
+| --- | --- |
+| `< -20` | `much-worse` |
+| `< -10` | `worse` |
+| `< 5` | `as-expected` |
+| `< 15` | `better` |
+| `>= 15` | `much-better` |
+
+## 9. Connectivity Analysis
+
+Connectivity is computed in `pipeline/04_connectivity/connectivity.R`.
+
+Graph construction:
+
+- Nodes: 20 m hex centroids
+- Edges: neighbouring 20 m hexes within the configured adjacency distance
+- Edge weight: habitat resistance derived from `1 - habitat_quality`
+- Graph engine: `igraph`
+
+Metrics:
+
+- `corridor_importance`: normalised betweenness centrality
+- `fragmentation_index`: neighbourhood habitat fragmentation
+- `node_importance`: graph node importance
+- `connectivity_score`: combined connectivity indicator
+
+Conceptual connectivity score:
+
+```text
+0.60 * corridor_importance
++ 0.25 * node_importance
++ 0.15 * (1 - fragmentation_index)
+```
+
+Limitations:
+
+- Habitat quality is a generic permeability proxy.
+- Species-specific movement is not modelled.
+- Betweenness favours shortest paths and may not capture all ecological corridors.
+- Habitat thresholds should be sensitivity-tested.
+
+## 10. Intervention Ranking
+
+Intervention ranking is computed in `pipeline/05_residuals/residuals.R`.
+
+Current implementation:
+
+```text
+intervention_score_i =
+  (ecological_residual_i * 0.5) * (corridor_importance_i * 0.5)
+```
+
+Cells are ranked descending by `intervention_score`.
+
+Interpretation:
+
+- Higher score: stronger combination of underperformance and corridor relevance
+- Only positive-scoring cells are candidates for top intervention exports
+
+This replaces the older weighted-sum formula:
+
+```text
+0.55 * normalised_underperformance + 0.45 * corridor_importance
+```
+
+Do not use the older formula unless the R implementation is intentionally
+changed at the same time.
+
+Counterfactual connectivity estimate:
+
+- Computed for the top cells only.
+- The target cell is locally upgraded to habitat quality `1.0`.
+- A local connectivity graph is rerun.
+- Reported as approximate percentage connectivity gain.
+
+Limitations:
+
+- The counterfactual is local and approximate.
+- It is not a full restoration simulation.
+- It is computationally expensive at large scale.
+
+## 11. PMTiles And Presentation
+
+PMTiles do not define methodology. They carry lightweight, precomputed values
+from R for viewport-based rendering.
+
+`hexgrid.pmtiles` may include:
+
+- `cellId`
+- `impactScore`
+- `expectedRichness`
+- `ecologicalResidual`
+- `habitatQuality`
+- `observedRichness`
+- `corridorImportance`
+- `treeCover`
+- `heatExposure`
+- `landUseGreen`
+- `interventionRank`
+
+PMTiles must not include:
+
+- raw observations
+- species arrays
+- pressure arrays
+- full intervention descriptions
+- formulas
+- recomputed metrics
+
+MapLibre may style and filter PMTiles properties. It must not compute ecological
+metrics.
+
+## 12. Database Responsibilities
+
+PostgreSQL/PostGIS may:
+
+- store transactional records
+- store R-computed cell outputs
+- enforce relationships, roles, RLS, and auditability
+- assign live observations to the nearest canonical 20 m hex cell
+- expose detail rows to the frontend
+
+PostgreSQL/PostGIS must not:
+
+- compute expected richness
+- compute effort correction
+- compute ecological residual
+- compute intervention ranking
+- replace R as the scientific source of truth
+
+## 13. Known Biases And Caveats
+
+1. Urban bias: records cluster near dense residential areas and popular parks.
+2. Taxonomic bias: iNaturalist and GBIF skew toward visible and charismatic taxa.
+3. Temporal mismatch: satellite imagery and field records rarely align exactly.
+4. Data sparsity: unsampled cells are excluded, not treated as zero biodiversity.
+5. Single-city calibration: Yokohama defaults require re-validation for new cities.
+6. OSM dependency: path, green-space, lighting, and road completeness vary by region.
+7. Structured-survey dependence: live app surveys enter through the
+   `pipeline_observations_export` view and must be exported before Step 03 for
+   the latest approved records to affect the run.
+
+## 14. Reproducibility Requirements
+
+Every pipeline run should record:
+
+- `CITY_ID`
+- processing date/time
+- CRS
+- bbox
+- `CELL_SIZE`
+- `MAX_EXPECTED_RICHNESS`
+- source data dates or versions
+- PMTiles source-layer name
+- exported `cell_id` count
+- active `dataset_id`
+- `generated_at`
+- PostgreSQL import result counts
+
+These values should be auditable alongside the imported `cell_attributes` and
+the Storage artefacts used by the frontend.

@@ -1,16 +1,11 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/layout/Navbar';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CalendarDays, ClipboardList, Settings, User, Binoculars } from 'lucide-react';
-
-const PLACEHOLDERS = [
-  { title: 'Activity history', body: 'Recent account activity will appear here.', icon: CalendarDays },
-  { title: 'Observations submitted', body: 'Quick sightings and reviewed observations will appear here.', icon: Binoculars },
-  { title: 'Survey participation', body: 'Structured survey sessions and assigned points will appear here.', icon: ClipboardList },
-  { title: 'Settings', body: 'Notification and account settings will appear here.', icon: Settings },
-];
+import { fetchObservationHistory, type ObservationHistoryItem } from '@/lib/citizen-science';
 
 function formatMetadata(metadata: Record<string, unknown>) {
   return Object.entries(metadata)
@@ -21,6 +16,29 @@ function formatMetadata(metadata: Record<string, unknown>) {
 export default function ProfilePage() {
   const { profile, user, loading } = useAuth();
   const metadata = formatMetadata(profile?.metadata ?? user?.user_metadata ?? {});
+  const [history, setHistory] = useState<ObservationHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const quickCount = useMemo(() => history.filter((item) => item.kind === 'quick_sighting').length, [history]);
+  const surveyCount = useMemo(() => history.filter((item) => item.kind === 'structured_survey').length, [history]);
+
+  useEffect(() => {
+    if (!user) {
+      setHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetchObservationHistory()
+      .then((items) => {
+        if (!cancelled) setHistory(items);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   return (
     <div className="h-full flex flex-col">
@@ -92,19 +110,68 @@ export default function ProfilePage() {
                 </div>
               </section>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PLACEHOLDERS.map(({ title, body, icon: Icon }) => (
-                  <section key={title} className="bg-white border border-[#E4E7E1] rounded-lg p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
-                        <Icon size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
-                      </div>
-                      <h2 className="text-[13px] font-semibold text-[#1F2A1F]">{title}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
+                      <Binoculars size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
                     </div>
-                    <p className="text-[12px] leading-relaxed text-[#667066]">{body}</p>
-                  </section>
-                ))}
+                    <h2 className="text-[13px] font-semibold text-[#1F2A1F]">Quick sightings</h2>
+                  </div>
+                  <p className="text-[24px] font-semibold text-[#1F2A1F]">{quickCount}</p>
+                </section>
+
+                <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
+                      <ClipboardList size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
+                    </div>
+                    <h2 className="text-[13px] font-semibold text-[#1F2A1F]">Surveys</h2>
+                  </div>
+                  <p className="text-[24px] font-semibold text-[#1F2A1F]">{surveyCount}</p>
+                </section>
+
+                <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
+                      <Settings size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
+                    </div>
+                    <h2 className="text-[13px] font-semibold text-[#1F2A1F]">Role</h2>
+                  </div>
+                  <p className="text-[13px] font-semibold text-[#1F2A1F] capitalize">{profile?.role ?? 'contributor'}</p>
+                </section>
               </div>
+
+              <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
+                    <CalendarDays size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
+                  </div>
+                  <h2 className="text-[13px] font-semibold text-[#1F2A1F]">Observation history</h2>
+                </div>
+
+                {historyLoading ? (
+                  <p className="text-[12px] text-[#667066]">Loading observations...</p>
+                ) : history.length === 0 ? (
+                  <p className="text-[12px] text-[#667066]">No submitted observations yet.</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-[#E4E7E1]">
+                    {history.map((item) => (
+                      <div key={`${item.kind}-${item.id}`} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-[#1F2A1F] truncate">{item.label}</p>
+                          <p className="text-[11px] text-[#667066] mt-1">
+                            {new Date(item.created_at).toLocaleString()} · {item.detail}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[#F0F2EE] px-2.5 py-1 text-[11px] font-semibold text-[#667066] whitespace-nowrap">
+                          {item.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           )}
         </div>

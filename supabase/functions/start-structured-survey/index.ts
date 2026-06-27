@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       structured_survey: data,
-      minimum_duration_seconds: 720,
+      minimum_duration_seconds: 900,
       nominal_duration_seconds: 900,
     });
   } catch (error) {
