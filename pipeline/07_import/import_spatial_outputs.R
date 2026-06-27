@@ -81,10 +81,35 @@ run_spatial_outputs_import <- function() {
   }
 
   metric_cols <- c(
-    "habitat_quality", "path_km", "is_unsampled", "betweenness_centrality"
+    "habitat_quality", "ndvi_idx", "canopy_height_idx", "lst_idx",
+    "disturbance_idx", "betweenness_centrality", "intervention_rank",
+    "ecological_residual", "nature_gap_score"
   )
   for (col in metric_cols) {
     if (!col %in% names(hex_cells)) hex_cells[[col]] <- NA
+  }
+  for (col in c("tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction", "built_fraction_wc", "bare_fraction")) {
+    if (!col %in% names(hex_cells)) hex_cells[[col]] <- NA_real_
+  }
+  land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real_, bare = NA_real_) {
+    tree_v <- replace_na(tree, -Inf)
+    shrub_v <- replace_na(shrub, -Inf)
+    grass_v <- replace_na(grass, -Inf)
+    water_v <- replace_na(water, -Inf)
+    built_v <- replace_na(built, -Inf)
+    bare_v <- replace_na(bare, -Inf)
+    max_v <- pmax(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
+    case_when(
+      !is.finite(max_v) ~ "unknown",
+      max_v <= 0 ~ "unknown",
+      tree_v == max_v ~ "tree",
+      shrub_v == max_v ~ "shrub",
+      grass_v == max_v ~ "grass",
+      water_v == max_v ~ "water",
+      built_v == max_v ~ "built",
+      bare_v == max_v ~ "bare",
+      TRUE ~ "mixed"
+    )
   }
 
   vertices <- igraph::as_data_frame(graph, what = "vertices")
@@ -116,13 +141,19 @@ run_spatial_outputs_import <- function() {
   corridor_links <- st_sf(
     city_id = CITY_ID,
     dataset_id = data_version,
-    from_cell_id = edges$from_cell_id,
-    to_cell_id = edges$to_cell_id,
-    weight = edges$weight,
-    properties = "{}",
+    link_id = paste(edges$from_cell_id, edges$to_cell_id, sep = "--"),
+    resistance = edges$weight,
+    importance = if_else(is.finite(edges$weight), 1 / (1 + edges$weight), NA_real_),
     geometry = st_sfc(link_geometries, crs = 4326)
   ) |>
     filter(!st_is_empty(geometry))
+
+  for (col in c(
+    "habitat_quality_index", "effort_corrected_richness", "expected_richness",
+    "ecological_residual", "nature_gap_score", "corridor_importance", "intervention_rank"
+  )) {
+    if (!col %in% names(green_spaces)) green_spaces[[col]] <- NA_real_
+  }
 
   green_import <- green_spaces |>
     mutate(
@@ -131,10 +162,13 @@ run_spatial_outputs_import <- function() {
       generated_at = generated_at,
       name = if ("name" %in% names(green_spaces)) as.character(name) else NA_character_,
       name_ja = if ("nameJa" %in% names(green_spaces)) as.character(nameJa) else NA_character_,
-      ward_id = if ("wardId" %in% names(green_spaces)) as.character(wardId) else NA_character_,
-      properties = "{}"
+      ward_id = if ("wardId" %in% names(green_spaces)) as.character(wardId) else NA_character_
     ) |>
-    select(city_id, dataset_id, green_space_id, generated_at, name, name_ja, ward_id, properties)
+    select(
+      city_id, dataset_id, green_space_id, generated_at, name, name_ja, ward_id,
+      habitat_quality_index, effort_corrected_richness, expected_richness,
+      ecological_residual, nature_gap_score, corridor_importance, intervention_rank
+    )
 
   hex_import <- hex_cells |>
     mutate(
@@ -142,12 +176,16 @@ run_spatial_outputs_import <- function() {
       dataset_id = data_version,
       cell_id = as.character(cell_id),
       green_space_id = as.character(green_space_id),
-      properties = "{}"
+      land_use_class = land_use_class(
+        tree_fraction, shrub_fraction, grass_fraction,
+        water_fraction, built_fraction_wc, bare_fraction
+      )
     ) |>
     select(
       city_id, dataset_id, cell_id, green_space_id,
-      habitat_quality, path_km, is_unsampled, betweenness_centrality,
-      properties
+      habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
+      disturbance_idx, land_use_class, betweenness_centrality,
+      intervention_rank, ecological_residual, nature_gap_score
     )
 
   temp_suffix <- paste0("_", as.integer(runif(1, 1e6, 9e6)))
@@ -174,11 +212,14 @@ run_spatial_outputs_import <- function() {
       "
       insert into public.green_spaces (
         city_id, dataset_id, green_space_id, generated_at, name, name_ja,
-        ward_id, geometry, properties, is_active
+        ward_id, geometry, habitat_quality_index, effort_corrected_richness,
+        expected_richness, ecological_residual, nature_gap_score, corridor_importance,
+        intervention_rank, is_active
       )
       select city_id, dataset_id, green_space_id, generated_at, name, name_ja,
              ward_id, extensions.st_multi(geom)::geometry(MultiPolygon, 4326),
-             properties::jsonb, true
+             habitat_quality_index, effort_corrected_richness, expected_richness,
+             ecological_residual, nature_gap_score, corridor_importance, intervention_rank, true
       from %s
       on conflict (city_id, green_space_id) do update set
         dataset_id = excluded.dataset_id,
@@ -187,7 +228,13 @@ run_spatial_outputs_import <- function() {
         name_ja = excluded.name_ja,
         ward_id = excluded.ward_id,
         geometry = excluded.geometry,
-        properties = excluded.properties,
+        habitat_quality_index = excluded.habitat_quality_index,
+        effort_corrected_richness = excluded.effort_corrected_richness,
+        expected_richness = excluded.expected_richness,
+        ecological_residual = excluded.ecological_residual,
+        nature_gap_score = excluded.nature_gap_score,
+        corridor_importance = excluded.corridor_importance,
+        intervention_rank = excluded.intervention_rank,
         is_active = true
       ",
       q_green
@@ -197,22 +244,29 @@ run_spatial_outputs_import <- function() {
       "
       insert into public.hex_cells (
         city_id, dataset_id, cell_id, green_space_id, geometry,
-        habitat_quality, path_km, is_unsampled, betweenness_centrality,
-        properties
+        habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
+        disturbance_idx, land_use_class, betweenness_centrality,
+        intervention_rank, ecological_residual, nature_gap_score
       )
       select city_id, dataset_id, cell_id, nullif(green_space_id, ''),
              geom::geometry(Polygon, 4326),
-             habitat_quality, path_km, is_unsampled, betweenness_centrality,
-             properties::jsonb
+             habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
+             disturbance_idx, land_use_class, betweenness_centrality,
+             intervention_rank, ecological_residual, nature_gap_score
       from %s
       on conflict (city_id, dataset_id, cell_id) do update set
         green_space_id = excluded.green_space_id,
         geometry = excluded.geometry,
         habitat_quality = excluded.habitat_quality,
-        path_km = excluded.path_km,
-        is_unsampled = excluded.is_unsampled,
+        ndvi_idx = excluded.ndvi_idx,
+        canopy_height_idx = excluded.canopy_height_idx,
+        lst_idx = excluded.lst_idx,
+        disturbance_idx = excluded.disturbance_idx,
+        land_use_class = excluded.land_use_class,
         betweenness_centrality = excluded.betweenness_centrality,
-        properties = excluded.properties
+        intervention_rank = excluded.intervention_rank,
+        ecological_residual = excluded.ecological_residual,
+        nature_gap_score = excluded.nature_gap_score
       ",
       q_hex
     ))
@@ -220,15 +274,15 @@ run_spatial_outputs_import <- function() {
     DBI::dbExecute(con, sprintf(
       "
       insert into public.corridor_links (
-        city_id, dataset_id, from_cell_id, to_cell_id, weight, geometry, properties
+        city_id, dataset_id, link_id, geometry, resistance, importance
       )
-      select city_id, dataset_id, from_cell_id, to_cell_id, weight,
-             geom::geometry(LineString, 4326), properties::jsonb
+      select city_id, dataset_id, link_id,
+             geom::geometry(LineString, 4326), resistance, importance
       from %s
-      on conflict (city_id, dataset_id, from_cell_id, to_cell_id) do update set
-        weight = excluded.weight,
+      on conflict (city_id, dataset_id, link_id) do update set
         geometry = excluded.geometry,
-        properties = excluded.properties
+        resistance = excluded.resistance,
+        importance = excluded.importance
       ",
       q_links
     ))

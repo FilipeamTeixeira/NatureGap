@@ -31,6 +31,7 @@ PMTILES_REQUIRED_FIELDS <- c(
   "parkId",
   "parkName",
   "impactScore",
+  "natureGapScore",
   "expectedRichness",
   "ecologicalResidual",
   "habitatQuality",
@@ -413,6 +414,41 @@ pct_index <- function(value) {
   as.integer(round(pmin(100, pmax(0, replace_na(value, 0) * 100))))
 }
 
+finite_median <- function(value) {
+  value <- as.numeric(value)
+  value <- value[is.finite(value)]
+  if (length(value) == 0L) return(NA_real_)
+  stats::median(value)
+}
+
+finite_mean <- function(value) {
+  value <- as.numeric(value)
+  value <- value[is.finite(value)]
+  if (length(value) == 0L) return(NA_real_)
+  mean(value)
+}
+
+finite_max <- function(value) {
+  value <- as.numeric(value)
+  value <- value[is.finite(value)]
+  if (length(value) == 0L) return(NA_real_)
+  max(value)
+}
+
+finite_min <- function(value) {
+  value <- as.numeric(value)
+  value <- value[is.finite(value)]
+  if (length(value) == 0L) return(NA_real_)
+  min(value)
+}
+
+finite_first <- function(value) {
+  value <- as.numeric(value)
+  value <- value[is.finite(value)]
+  if (length(value) == 0L) return(NA_real_)
+  value[[1L]]
+}
+
 land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real_, bare = NA_real_) {
   tree_v <- replace_na(tree, -Inf)
   shrub_v <- replace_na(shrub, -Inf)
@@ -452,7 +488,7 @@ derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
   if (replace_na(n_survey_dates, 0L) < 2L && replace_na(n_obs, 0L) > 0L) {
     pressures <- c(pressures, "Low survey effort — fewer than 2 distinct survey dates")
   }
-  if (!is.na(ecological_residual) && ecological_residual > 20) {
+  if (!is.na(ecological_residual) && ecological_residual < -20) {
     pressures <- c(
       pressures,
       sprintf(
@@ -565,9 +601,11 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
   hq <- replace_na(row$habitat_quality, 0)
   local_id <- sub(paste0("^", CITY_ID, "-"), "", row$cell_id)
   taxa <- normalize_cell_taxa(cell_taxa_lookup[[local_id]])
+  nature_gap <- if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$nature_gap_score, 0), 1)
   list(
     parkId               = row$park_id,
-    impactScore          = as.integer(round(replace_na(row$impact_score, 0))),
+    impactScore          = as.integer(round(replace_na(nature_gap, 0))),
+    natureGapScore       = nature_gap,
     habitatQuality       = pct_index(hq),
     habitatQualityIndex  = round(hq, 4),
     speciesRichnessRaw   = as.integer(replace_na(row$species_richness, 0L)),
@@ -581,7 +619,7 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     pathKm               = round(replace_na(row$path_km, 0), 4),
     nObs                 = as.integer(replace_na(row$n_obs, 0L)),
     nSurveyDates         = as.integer(replace_na(row$n_survey_dates, 0L)),
-    status               = unbox(score_status(row$impact_score)),
+    status               = unbox(score_status(nature_gap)),
     habitatPotential     = unbox(habitat_potential(hq)),
     observerEffortScore  = round(
       replace_na(row$n_obs, 0) / pmax(replace_na(row$path_km, 0), 0.01),
@@ -611,29 +649,45 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
   )
 }
 
-aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list()) {
+aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), patch_metrics = NULL) {
   if (nrow(rows) == 0) return(NULL)
-  hq_mean <- mean(replace_na(rows$habitat_quality, 0))
+  sampled <- !rows$is_unsampled
+  hq_mean <- finite_mean(rows$habitat_quality)
+  patch_habitat_quality <- finite_first(patch_metrics$habitat_quality_index)
+  patch_effort_corrected <- finite_first(patch_metrics$effort_corrected_richness)
+  patch_expected <- finite_first(patch_metrics$expected_richness)
+  patch_residual <- finite_first(patch_metrics$ecological_residual)
+  patch_nature_gap <- finite_first(patch_metrics$nature_gap_score)
+  aggregate_nature_gap <- if (is.finite(patch_nature_gap)) {
+    round(patch_nature_gap, 1)
+  } else if (any(sampled)) {
+    round(replace_na(finite_mean(rows$nature_gap_score[sampled]), 0), 1)
+  } else {
+    NA_real_
+  }
+  patch_corridor <- finite_first(patch_metrics$corridor_importance)
+  patch_rank <- finite_first(patch_metrics$intervention_rank)
   park_taxa <- merge_park_taxa(rows$cell_id, cell_taxa_lookup)
   list(
-    impactScore          = as.integer(round(stats::median(rows$impact_score, na.rm = TRUE))),
-    habitatQuality       = pct_index(hq_mean),
-    habitatQualityIndex  = round(hq_mean, 4),
+    impactScore          = as.integer(round(replace_na(aggregate_nature_gap, 0))),
+    natureGapScore       = aggregate_nature_gap,
+    habitatQuality       = pct_index(coalesce(patch_habitat_quality, hq_mean)),
+    habitatQualityIndex  = round(replace_na(coalesce(patch_habitat_quality, hq_mean), 0), 4),
     speciesRichnessRaw   = as.integer(sum(replace_na(rows$species_richness, 0L))),
-    observedRichness     = round(sum(replace_na(rows$richness_corrected[!rows$is_unsampled], 0)), 1),
-    effortCorrectedRichness = round(sum(replace_na(rows$effort_corrected_richness[!rows$is_unsampled], 0)), 1),
-    expectedRichness     = round(mean(replace_na(rows$expected_richness, 0)), 1),
+    observedRichness     = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 1) else if (any(sampled)) round(sum(replace_na(rows$effort_corrected_richness[sampled], 0)), 1) else NA_real_,
+    effortCorrectedRichness = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 1) else if (any(sampled)) round(sum(replace_na(rows$effort_corrected_richness[sampled], 0)), 1) else NA_real_,
+    expectedRichness     = if (is.finite(patch_expected)) round(patch_expected, 1) else round(replace_na(finite_mean(rows$expected_richness), 0), 1),
     maxExpectedRichness  = as.integer(max_expected),
-    ecologicalResidual   = round(sum(replace_na(rows$ecological_residual[!rows$is_unsampled], 0)), 1),
+    ecologicalResidual   = if (is.finite(patch_residual)) round(patch_residual, 1) else if (any(sampled)) round(sum(replace_na(rows$ecological_residual[sampled], 0)), 1) else NA_real_,
     nObs                 = as.integer(sum(replace_na(rows$n_obs, 0L))),
     nSurveyDates         = as.integer(max(replace_na(rows$n_survey_dates, 0L))),
-    status               = unbox(score_status(stats::median(rows$impact_score, na.rm = TRUE))),
+    status               = unbox(score_status(aggregate_nature_gap)),
     habitatPotential     = unbox(habitat_potential(hq_mean)),
     observerEffortScore  = round(
-      mean(replace_na(rows$n_obs, 0) / pmax(replace_na(rows$path_km, 0), 0.01), na.rm = TRUE),
+      replace_na(finite_mean(replace_na(rows$n_obs, 0) / pmax(replace_na(rows$path_km, 0), 0.01)), 0),
       1
     ),
-    taxonomicDiversity = round(mean(replace_na(rows$taxonomic_shannon, 0), na.rm = TRUE), 1),
+    taxonomicDiversity = round(replace_na(finite_mean(rows$taxonomic_shannon), 0), 1),
     species = species_list(
       sum(replace_na(rows$plant, 0L)),
       sum(replace_na(rows$bird, 0L)),
@@ -642,20 +696,20 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list()) 
       sum(replace_na(rows$fungi, 0L)),
       taxa = park_taxa
     ),
-    corridorImportance = pct_index(mean(replace_na(rows$corridor_importance, 0), na.rm = TRUE)),
-    fragmentationIndex = pct_index(mean(replace_na(rows$fragmentation_index, 0), na.rm = TRUE)),
-    treeCover          = pct_index(mean(rows$tree_fraction, na.rm = TRUE)),
-    heatExposure       = pct_index(mean(rows$lst_rank, na.rm = TRUE)),
-    landUseGreen       = pct_index(mean(rows$green_fraction_wc, na.rm = TRUE)),
+    corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
+    fragmentationIndex = pct_index(finite_mean(rows$fragmentation_index)),
+    treeCover          = pct_index(finite_mean(rows$tree_fraction)),
+    heatExposure       = pct_index(finite_mean(rows$lst_rank)),
+    landUseGreen       = pct_index(finite_mean(rows$green_fraction_wc)),
     landUseClass       = unbox(land_use_class(
-      mean(rows$tree_fraction, na.rm = TRUE),
-      mean(rows$shrub_fraction, na.rm = TRUE),
-      mean(rows$grass_fraction, na.rm = TRUE),
-      mean(rows$water_fraction, na.rm = TRUE),
-      mean(rows$built_fraction_wc, na.rm = TRUE),
-      mean(rows$bare_fraction, na.rm = TRUE)
+      finite_mean(rows$tree_fraction),
+      finite_mean(rows$shrub_fraction),
+      finite_mean(rows$grass_fraction),
+      finite_mean(rows$water_fraction),
+      finite_mean(rows$built_fraction_wc),
+      finite_mean(rows$bare_fraction)
     )),
-    interventionRank   = as.integer(min(replace_na(rows$intervention_rank, 50L), na.rm = TRUE)),
+    interventionRank   = as.integer(if (is.finite(patch_rank)) patch_rank else finite_min(rows$intervention_rank)),
     pressures = unique(unlist(lapply(seq_len(nrow(rows)), function(i) {
       derive_pressures(
         rows$n_obs[i], rows$n_survey_dates[i], rows$richness_corrected[i],
@@ -670,34 +724,79 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list()) 
 
 # ── 1. Park polygons → GeoJSON ───────────────────────────────────────────────
 
-green_path <- RAW_OSM_GREEN
-if (file.exists(green_path)) {
-  green_raw <- st_read(green_path, quiet = TRUE) |>
-    st_transform(4326) |>
-    st_collection_extract("POLYGON")
+park_lookup <- tibble(park_id = character(), park_name = character())
+green_metrics <- tibble(
+  park_id = character(),
+  habitat_quality_index = numeric(),
+  effort_corrected_richness = numeric(),
+  expected_richness = numeric(),
+  ecological_residual = numeric(),
+  nature_gap_score = numeric(),
+  corridor_importance = numeric(),
+  intervention_rank = numeric()
+)
+green <- NULL
+green_path <- if (file.exists(PROC_GREEN_SPACES)) PROC_GREEN_SPACES else RAW_OSM_GREEN
 
+if (file.exists(green_path)) {
+  green_raw <- suppressWarnings(
+    st_read(green_path, quiet = TRUE) |>
+      st_transform(4326) |>
+      st_collection_extract("POLYGON", warn = FALSE)
+  )
+
+  if (!"green_space_id" %in% names(green_raw)) green_raw$green_space_id <- NA_character_
   if (!"osm_id" %in% names(green_raw)) green_raw$osm_id <- seq_len(nrow(green_raw))
+  if (!"source_feature_id" %in% names(green_raw)) green_raw$source_feature_id <- NA_character_
   if (!"name" %in% names(green_raw)) green_raw$name <- NA_character_
   if (!"name:ja" %in% names(green_raw)) green_raw[["name:ja"]] <- NA_character_
+  if (!"nameJa" %in% names(green_raw)) green_raw$nameJa <- NA_character_
+  if (!"wardId" %in% names(green_raw)) green_raw$wardId <- NA_character_
+  for (col in c(
+    "habitat_quality_index", "effort_corrected_richness", "expected_richness",
+    "ecological_residual", "nature_gap_score", "corridor_importance", "intervention_rank"
+  )) {
+    if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
+  }
 
   green <- green_raw |>
     mutate(
-      source_id = coalesce(as.character(osm_id), as.character(row_number())),
+      source_id = coalesce(as.character(source_feature_id), as.character(osm_id), as.character(row_number())),
       name = coalesce(as.character(name), paste("Green space", source_id)),
-      nameJa = coalesce(as.character(.data[["name:ja"]]), name),
-      # make_slug() returns '' for non-ASCII-only names (e.g. Japanese);
-      # fall back to "park-{osm_id}" so every park gets a stable, non-empty id.
-      id = {
-        slug <- make_slug(coalesce(name, source_id))
-        dplyr::if_else(nchar(slug) > 0L, slug, paste0("park-", source_id))
-      },
-      wardId = NA_character_
+      nameJa = coalesce(as.character(nameJa), as.character(.data[["name:ja"]]), name),
+      id = if_else(
+        !is.na(green_space_id) & nzchar(green_space_id),
+        green_space_id,
+        {
+          slug <- make_slug(coalesce(name, source_id))
+          dplyr::if_else(nchar(slug) > 0L, slug, paste0("park-", source_id))
+        }
+      ),
+      wardId = coalesce(as.character(wardId), NA_character_)
     ) |>
-    select(id, name, nameJa, wardId)
+    select(
+      id, name, nameJa, wardId,
+      habitat_quality_index, effort_corrected_richness, expected_richness,
+      ecological_residual, nature_gap_score, corridor_importance, intervention_rank
+    )
 
-  parks_path <- file.path(DATA_EXPORT, "parks.geojson")
-  write_geojson(green, parks_path)
-  cat(sprintf("Written: %s\n", parks_path))
+  park_lookup <- green |>
+    st_drop_geometry() |>
+    transmute(park_id = id, park_name = name)
+
+  green_metrics <- green |>
+    st_drop_geometry() |>
+    transmute(
+      park_id = id,
+      habitat_quality_index,
+      effort_corrected_richness,
+      expected_richness,
+      ecological_residual,
+      nature_gap_score,
+      corridor_importance,
+      intervention_rank
+    )
+
 } else {
   message(sprintf("Skipping parks.geojson — %s not found", green_path))
 }
@@ -717,6 +816,7 @@ if (!"effort_corrected_richness" %in% names(grid_raw)) {
 }
 if (!"species_richness" %in% names(grid_raw)) grid_raw$species_richness <- grid_raw$richness_corrected
 if (!"path_km" %in% names(grid_raw)) grid_raw$path_km <- 0
+if (!"nature_gap_score" %in% names(grid_raw)) grid_raw$nature_gap_score <- NA_real_
 if (!"is_unsampled" %in% names(grid_raw)) grid_raw$is_unsampled <- replace_na(grid_raw$path_km, 0) <= 0
 if (!"temporal_bias_flag" %in% names(grid_raw)) grid_raw$temporal_bias_flag <- FALSE
 if (!"taxonomic_shannon" %in% names(grid_raw) && "species_shannon" %in% names(grid_raw)) {
@@ -735,7 +835,7 @@ for (col in c(
 
 grid <- grid_raw |>
   select(
-    cell_id, habitat_quality, impact_score, composite, intervention_rank, is_habitat,
+    cell_id, any_of("green_space_id"), habitat_quality, impact_score, nature_gap_score, composite, intervention_rank, is_habitat,
     any_of(c("tree_fraction", "shrub_fraction", "grass_fraction",
              "built_fraction_wc", "green_fraction_wc",
              "water_fraction", "bare_fraction",
@@ -749,23 +849,34 @@ grid <- grid_raw |>
     n_survey_dates, path_km,
     plant, bird, insect, mammal, fungi,
     expected_richness, ecological_residual
-  ) |>
-  filter(habitat_quality > 0)
+  )
 
 n_total  <- nrow(grid_raw)
-n_green  <- nrow(grid)
+n_green  <- sum(replace_na(grid$habitat_quality, 0) > 0)
 cat(sprintf("  → %d / %d cells retained (habitat_quality > 0)\n", n_green, n_total))
 
-grid <- grid |> mutate(cell_id = paste0(CITY_ID, "-", cell_id))
+grid_all <- grid |> mutate(cell_id = paste0(CITY_ID, "-", cell_id))
+grid <- grid_all |> filter(habitat_quality > 0)
 
-# ── Assign each cell to its containing OSM park ──────────────────────────────
+# ── Assign each cell to its canonical green-space patch ─────────────────────
 
 osm_parks_path <- RAW_OSM_GREEN
 
-if (file.exists(osm_parks_path)) {
-  osm_parks_4326 <- st_read(osm_parks_path, quiet = TRUE) |>
-    st_transform(4326) |>
-    st_collection_extract("POLYGON") |>
+if ("green_space_id" %in% names(grid) && nrow(park_lookup) > 0L) {
+  grid <- grid |>
+    left_join(park_lookup, by = c("green_space_id" = "park_id")) |>
+    mutate(
+      park_id = green_space_id,
+      park_name = coalesce(park_name, green_space_id, "Green area")
+    )
+  cat(sprintf("  → Park attribution: %d cells linked by canonical green_space_id\n",
+              sum(!is.na(grid$park_id), na.rm = TRUE)))
+} else if (file.exists(osm_parks_path)) {
+  osm_parks_4326 <- suppressWarnings(
+    st_read(osm_parks_path, quiet = TRUE) |>
+      st_transform(4326) |>
+      st_collection_extract("POLYGON", warn = FALSE)
+  ) |>
     transmute(
       park_id = {
         slug <- make_slug(coalesce(as.character(name), paste0("park-", row_number())))
@@ -775,7 +886,7 @@ if (file.exists(osm_parks_path)) {
     )
 
   park_assignment <- grid |>
-    st_centroid() |>
+    (\(x) suppressWarnings(st_centroid(x)))() |>
     st_join(osm_parks_4326, join = st_within, left = TRUE) |>
     st_drop_geometry() |>
     select(cell_id, park_id, park_name) |>
@@ -850,6 +961,16 @@ park_intervention_lookup <- setNames(park_interventions$interventions, park_inte
 hexgrid_render <- grid |>
   filter(!is.na(park_id), park_id != "city-green")
 
+if (!is.null(green)) {
+  metric_park_ids <- unique(hexgrid_render$park_id)
+  green_export <- green |>
+    filter(id %in% metric_park_ids)
+
+  parks_path <- file.path(DATA_EXPORT, "parks.geojson")
+  write_geojson(green_export, parks_path)
+  cat(sprintf("Written: %s (%d metric-backed parks)\n", parks_path, nrow(green_export)))
+}
+
 cat(sprintf(
   "  → PMTiles render grid: %d / %d cells inside named green spaces\n",
   nrow(hexgrid_render), nrow(grid)
@@ -860,7 +981,8 @@ hexgrid_tiles <- hexgrid_render |>
     cellId             = cell_id,
     parkId             = park_id,
     parkName           = park_name,
-    impactScore        = as.integer(round(replace_na(impact_score, 0))),
+    impactScore        = as.integer(round(replace_na(nature_gap_score, 0))),
+    natureGapScore     = if_else(is_unsampled, 0, round(replace_na(nature_gap_score, 0), 1)),
     expectedRichness   = round(replace_na(expected_richness, 0), 1),
     ecologicalResidual = if_else(is_unsampled, 0, round(replace_na(ecological_residual, 0), 1)),
     habitatQuality     = pct_index(habitat_quality),
@@ -926,7 +1048,8 @@ if (exists("PROC_CONNECTIVITY_GRAPH") && file.exists(PROC_CONNECTIVITY_GRAPH)) {
 
 if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
   cell_attr_base <- st_read(PROC_CELL_ATTR, quiet = TRUE) |>
-    st_transform(4326)
+    st_transform(4326) |>
+    select(-any_of("nature_gap_score"))
 } else {
   cell_attr_base <- grid |>
     transmute(
@@ -934,6 +1057,7 @@ if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
       expected_richness,
       effort_corrected_richness,
       ecological_residual,
+      nature_gap_score,
       corridor_importance,
       intervention_rank,
       heat_exposure = lst_rank,
@@ -952,7 +1076,7 @@ if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
     )
 }
 
-cell_detail_attrs <- grid |>
+cell_detail_attrs <- grid_all |>
   rowwise() |>
   mutate(
     species = list(species_list(plant, bird, insect, mammal, fungi, taxa = normalize_cell_taxa(
@@ -973,15 +1097,13 @@ cell_detail_attrs <- grid |>
   st_drop_geometry() |>
   transmute(
     cell_id,
-    impact_score = as.integer(round(replace_na(impact_score, 0))),
+    impact_score = as.integer(round(replace_na(nature_gap_score, 0))),
+    nature_gap_score = if_else(is_unsampled, NA_real_, round(replace_na(nature_gap_score, 0), 1)),
     habitat_quality = pct_index(habitat_quality),
     habitat_quality_index = round(replace_na(habitat_quality, 0), 4),
     species_richness_raw = as.integer(replace_na(species_richness, 0L)),
     observed_richness = if_else(is_unsampled, NA_real_, round(replace_na(richness_corrected, 0), 1)),
     max_expected_richness = as.integer(MAX_EXPECTED_RICHNESS),
-    is_unsampled,
-    temporal_bias_flag,
-    path_km = round(replace_na(path_km, 0), 4),
     n_obs = as.integer(replace_na(n_obs, 0L)),
     n_survey_dates = as.integer(replace_na(n_survey_dates, 0L)),
     habitat_potential = habitat_potential(habitat_quality),
@@ -1028,7 +1150,12 @@ cat(sprintf("Building park aggregate stats from %d cells...\n", n_cells))
 park_stats_out <- list()
 for (pid in unique(grid_df$park_id)) {
   rows <- grid_df |> filter(park_id == pid)
-  stats <- aggregate_park_stats(rows, MAX_EXPECTED_RICHNESS, cell_taxa_lookup)
+  stats <- aggregate_park_stats(
+    rows,
+    MAX_EXPECTED_RICHNESS,
+    cell_taxa_lookup,
+    green_metrics |> filter(park_id == pid)
+  )
   if (!is.null(stats)) {
     park_iv <- park_intervention_lookup[[pid]]
     if (!is.null(park_iv)) stats$interventions <- park_iv

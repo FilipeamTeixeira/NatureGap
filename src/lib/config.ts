@@ -39,7 +39,7 @@ export const HEX_CONFIG = {
 
 // ── Score methodology ─────────────────────────────────────────────────────────
 //
-// These thresholds define the 5-band ecological residual scale.
+// These thresholds define the 5-band Nature Gap score scale.
 // They are used in utils.ts, ScoreGauge.tsx, and the
 // data-contract.md colour table — change them here only.
 
@@ -59,7 +59,7 @@ export const SCORE_THRESHOLDS = {
 
   /** Default gauge range. */
   GAUGE_MIN: -50,
-  GAUGE_MAX:  50,
+  GAUGE_MAX: 100,
 } as const;
 
 export const SCORE_COLORS = {
@@ -75,7 +75,7 @@ export const SCORE_COLORS = {
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
   /** Cities to try without relying on Supabase Storage list permissions. */
-  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'yokohama-honmoku')
+  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'yokohama-honmoku,amsterdam-schimmelstraat')
     .split(',')
     .map((city) => city.trim())
     .filter(Boolean),

@@ -199,38 +199,41 @@ Formula:
 
 ```text
 ecological_residual_i =
-  expected_richness_i - effort_corrected_richness_i
+  effort_corrected_richness_i - expected_richness_i
 ```
 
 Interpretation:
 
-- Positive residual: below expectation, habitat pressure, restoration priority
-- Negative residual: above expectation, potential refuge
+- Positive residual: above expectation, potential refuge
+- Negative residual: below expectation, habitat pressure, restoration priority
 - Near zero: observed richness aligns with expectation
 - Unsampled: `NA`
 
-Do not invert this sign in documentation. If a user-facing score uses the
-opposite direction, it must be documented as a separate score.
+Do not reuse this field for public-facing composite scores.
 
-## 8. Impact Score
+## 8. Nature Gap Score
 
-Impact score is computed in `pipeline/05_residuals/residuals.R`.
+Nature Gap score is computed in `pipeline/05_residuals/residuals.R`.
 
 Current implementation:
 
 ```text
-impact_score_i =
-  round(-ecological_residual_i / max(abs(ecological_residual)) * 50)
+nature_gap_score_i =
+  (
+    0.50 * ecological_residual_i / max(abs(ecological_residual)) +
+    0.30 * (1 - habitat_quality_i) +
+    0.20 * (1 - corridor_importance_i)
+  ) * 100
 ```
 
 Interpretation:
 
-- Negative impact score: worse than expected
-- Positive impact score: better than expected
+- Negative Nature Gap score: ecosystem under pressure
+- Positive Nature Gap score: ecological surplus
 - Zero: near expected or no finite residual range
 
 This is intentionally separate from `ecological_residual`. PMTiles expose
-`impactScore` for user-facing styling, while detail panels can also show
+`natureGapScore` for user-facing styling, while detail panels can also show
 `ecologicalResidual`.
 
 Current color/status thresholds:

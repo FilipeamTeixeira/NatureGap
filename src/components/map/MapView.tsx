@@ -72,6 +72,7 @@ function finiteNumber(value: unknown): number | null {
 function statsProperties(stats: ParkStats | undefined) {
   return {
     impactScore: finiteNumber(stats?.impactScore),
+    natureGapScore: finiteNumber(stats?.natureGapScore ?? stats?.impactScore),
     expectedRichness: finiteNumber(stats?.expectedRichness),
     ecologicalResidual: finiteNumber(stats?.ecologicalResidual),
     habitatQuality: finiteNumber(stats?.habitatQuality),
@@ -201,6 +202,7 @@ function layerEnabled(layers: MapLayer[], id: string): boolean {
 }
 
 function setLayerVisibility(map: maplibregl.Map, layerId: string, visible: boolean) {
+  if (!map.getLayer(layerId)) return;
   try {
     map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
   } catch { /* layer not ready */ }
@@ -228,6 +230,7 @@ function applyHexLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
   for (const dataset of datasets) {
     for (const layerId of LAYER_DRAW_ORDER) {
       const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
+      if (!map.getLayer(mlId)) continue;
       const enabled = enabledIds.includes(layerId) && hasHexOverlay(layerId);
       try {
         map.setLayoutProperty(mlId, 'visibility', enabled ? 'visible' : 'none');
@@ -236,12 +239,19 @@ function applyHexLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
     }
 
     try {
-      map.setLayoutProperty(
-        hexOutlineLayerId(dataset.sourceId),
-        'visibility',
-        layerEnabled(layers, 'cell-grid') || enabledIds.length > 0 ? 'visible' : 'none',
-      );
-      map.setLayoutProperty(hexSelectedLayerId(dataset.sourceId), 'visibility', enabledIds.length > 0 ? 'visible' : 'none');
+      const outlineLayerId = hexOutlineLayerId(dataset.sourceId);
+      if (map.getLayer(outlineLayerId)) {
+        map.setLayoutProperty(
+          outlineLayerId,
+          'visibility',
+          layerEnabled(layers, 'cell-grid') || enabledIds.length > 0 ? 'visible' : 'none',
+        );
+      }
+
+      const selectedLayerId = hexSelectedLayerId(dataset.sourceId);
+      if (map.getLayer(selectedLayerId)) {
+        map.setLayoutProperty(selectedLayerId, 'visibility', enabledIds.length > 0 ? 'visible' : 'none');
+      }
     } catch { /* ignore */ }
   }
 }
@@ -278,7 +288,7 @@ function selectedHexFilter(cellId: string | null): maplibregl.FilterSpecificatio
 }
 
 async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
-  if (datasets.length === 0) return;
+  if (datasets.length !== 1) return;
 
   const bounds = new maplibregl.LngLatBounds();
   const headers = await Promise.allSettled(
@@ -311,6 +321,7 @@ function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties'
     parkId: properties.parkId != null ? String(properties.parkId) : undefined,
     parkName: properties.parkName != null ? String(properties.parkName) : undefined,
     impactScore: Number(properties.impactScore ?? 0),
+    natureGapScore: properties.natureGapScore == null ? null : Number(properties.natureGapScore),
     expectedRichness: properties.expectedRichness == null ? null : Number(properties.expectedRichness),
     ecologicalResidual: properties.ecologicalResidual == null ? null : Number(properties.ecologicalResidual),
     habitatQuality: properties.habitatQuality == null ? null : Number(properties.habitatQuality),
@@ -332,6 +343,7 @@ function applyCitizenLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
     ['structured-surveys-layer', 'structured-surveys'],
   ] as const;
   for (const [mapLayerId, layerId, forceVisible] of ids) {
+    if (!map.getLayer(mapLayerId)) continue;
     try {
       map.setLayoutProperty(mapLayerId, 'visibility', forceVisible || layerEnabled(layers, layerId) ? 'visible' : 'none');
     } catch { /* layer not ready */ }
@@ -365,7 +377,7 @@ function createPopupContent({
 
   if (showScore && typeof score === 'number') {
     const labelEl = document.createElement('div');
-    labelEl.textContent = 'Nature impact score';
+    labelEl.textContent = 'Nature Gap score';
     labelEl.style.fontSize = '10px';
     labelEl.style.fontWeight = '500';
     labelEl.style.color = '#667066';
@@ -402,7 +414,7 @@ function patchImpactColorExpression(): maplibregl.ExpressionSpecification {
   return [
     'interpolate',
     ['linear'],
-    ['coalesce', ['get', 'impactScore'], 0],
+    ['coalesce', ['get', 'natureGapScore'], 0],
     -50, '#C95B4B',
     0, '#F4F1E8',
     50, '#2E6F40',
@@ -414,9 +426,9 @@ function patchResidualColorExpression(): maplibregl.ExpressionSpecification {
     'interpolate',
     ['linear'],
     ['coalesce', ['get', 'ecologicalResidual'], 0],
-    -50, '#2E6F40',
+    -50, '#C95B4B',
     0, '#F4F1E8',
-    50, '#C95B4B',
+    50, '#2E6F40',
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -435,7 +447,8 @@ function clearLandUseDonutMarkers(markers: maplibregl.Marker[]) {
 }
 
 function applyLandUseDonutZoom(map: maplibregl.Map, markers: maplibregl.Marker[]) {
-  const display = map.getZoom() >= 11 ? 'block' : 'none';
+  const zoom = map.getZoom();
+  const display = zoom >= 11 && zoom < 14 ? 'block' : 'none';
   for (const marker of markers) {
     marker.getElement().style.display = display;
   }
@@ -570,6 +583,7 @@ export default function MapView({
         type: 'fill',
         source: 'parks',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': patchImpactColorExpression(),
@@ -582,6 +596,7 @@ export default function MapView({
         type: 'fill',
         source: 'parks',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': patchResidualColorExpression(),
@@ -594,6 +609,7 @@ export default function MapView({
         type: 'fill',
         source: 'parks',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': patchSequentialColorExpression('interventionRank', [
@@ -610,6 +626,7 @@ export default function MapView({
         type: 'fill',
         source: 'parks',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': patchSequentialColorExpression('expectedRichness', [
@@ -626,6 +643,7 @@ export default function MapView({
         type: 'fill',
         source: 'parks',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': patchSequentialColorExpression('corridorImportance', [
@@ -725,6 +743,7 @@ export default function MapView({
         type: 'circle',
         source: 'park-centroids',
         minzoom: 11,
+        maxzoom: 14,
         layout: { visibility: 'none' },
         paint: {
           'circle-radius': [
@@ -747,6 +766,7 @@ export default function MapView({
         type: 'circle',
         source: 'park-centroids',
         minzoom: 11,
+        maxzoom: 14,
         filter: ['!=', ['get', 'interventionRank'], null],
         layout: { visibility: 'none' },
         paint: {
@@ -763,6 +783,7 @@ export default function MapView({
         type: 'symbol',
         source: 'park-centroids',
         minzoom: 11,
+        maxzoom: 14,
         filter: ['!=', ['get', 'interventionRank'], null],
         layout: {
           visibility: 'none',
@@ -895,7 +916,7 @@ export default function MapView({
 
         const props = renderCellProperties(f.properties);
         if (!props) return;
-        const numericScore = Number(props.impactScore);
+        const numericScore = Number(props.natureGapScore ?? props.impactScore);
         const impactOn = getEnabledLayerIds(layersRef.current).includes('impact');
 
         popupRef.current?.remove();
@@ -965,10 +986,11 @@ export default function MapView({
       });
     });
 
+    const landUseMarkers = landUseMarkersRef.current;
     return () => {
       layersAddedRef.current = false;
       popupRef.current?.remove();
-      clearLandUseDonutMarkers(landUseMarkersRef.current);
+      clearLandUseDonutMarkers(landUseMarkers);
       map.remove();
       mapRef.current = null;
     };

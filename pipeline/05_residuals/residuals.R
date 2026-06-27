@@ -1,12 +1,12 @@
 # NatureGap — Step 05: Mismatch and Intervention Layer
 # Computes the ecological residual and ranks cells for intervention.
 #
-# Ecological residual = expected richness − effort-corrected richness
-# Positive residual → high habitat pressure
-# Negative residual → potential refuge
+# Ecological residual = effort-corrected richness − expected richness
+# Positive residual → more species than expected
+# Negative residual → fewer species than expected
 #
 # Intervention ranking:
-#   intervention_score = (ecological_residual * 0.5) * (corridor_importance * 0.5)
+#   intervention_score = underperformance * corridor_importance weighting
 #   Top-ranked cells get counterfactual connectivity estimates.
 #
 # Outputs:
@@ -23,11 +23,19 @@ TOP_N         <- 20    # number of cells for counterfactual connectivity
 
 # ── 1. Load and join layers ──────────────────────────────────────────────────
 
-hab  <- st_read(PROC_GRID_HABITAT,     quiet = TRUE)
-obs  <- st_read(PROC_GRID_OBS,quiet = TRUE) |>
-  st_drop_geometry() |>
+hab  <- st_read(PROC_GRID_HABITAT, quiet = TRUE) |>
+  select(-any_of("is_unsampled"))
+
+obs  <- st_read(PROC_GRID_OBS, quiet = TRUE) |>
+  st_drop_geometry()
+
+if ("is_unsampled" %in% names(obs)) {
+  obs <- obs |> rename(obs_is_unsampled = is_unsampled)
+}
+
+obs <- obs |>
   select(cell_id, species_richness, richness_corrected,
-         effort_corrected_richness, is_unsampled, n_obs, species_shannon,
+         effort_corrected_richness, any_of("obs_is_unsampled"), n_obs, species_shannon,
          n_survey_dates, weighted_observation_effort, has_structured_survey,
          weekend_only, temporal_bias_flag,
          plant, bird, insect, mammal, fungi)
@@ -42,6 +50,10 @@ grid <- hab |>
   left_join(obs,  by = "cell_id") |>
   left_join(conn, by = "cell_id")
 
+if (!"obs_is_unsampled" %in% names(grid)) {
+  grid$obs_is_unsampled <- NA
+}
+
 # ── 2. Expected richness model ────────────────────────────────────────────────
 # Uses existing habitat proxies, connectivity metrics, and path accessibility.
 # Unsampled cells still receive an expected richness estimate, but their
@@ -53,9 +65,9 @@ grid <- grid |>
   mutate(
     effort_corrected_richness = coalesce(effort_corrected_richness, richness_corrected),
     is_unsampled = if_else(
-      is.na(is_unsampled),
+      is.na(obs_is_unsampled),
       replace_na(path_km, 0) <= 0,
-      is_unsampled
+      obs_is_unsampled
     ),
     max_path_km = max(path_km, na.rm = TRUE),
     habitat_component = replace_na(habitat_quality, 0),
@@ -73,11 +85,11 @@ grid <- grid |>
     ecological_residual = if_else(
       is_unsampled,
       NA_real_,
-      expected_richness - effort_corrected_richness
+      effort_corrected_richness - expected_richness
     ),
-    underperformance = pmax(0, ecological_residual)
+    underperformance = pmax(0, -ecological_residual)
   ) |>
-  select(-max_path_km)
+  select(-max_path_km, -obs_is_unsampled)
 
 max_abs_residual <- max(abs(grid$ecological_residual), na.rm = TRUE)
 # grid <- grid |>
@@ -93,14 +105,36 @@ m <- if (is.finite(max_abs_residual)) max_abs_residual else NA_real_
 
 if (is.na(m) || m == 0) {
   grid <- grid |>
-    mutate(impact_score = 0)
+    mutate(
+      impact_score = 0,
+      bio_residual_norm = NA_real_,
+      nature_gap_score = NA_real_
+    )
 } else {
   grid <- grid |>
-    mutate(impact_score = if_else(
-      is.na(ecological_residual),
-      NA_real_,
-      round(-ecological_residual / m * 50)
-    ))
+    mutate(
+      bio_residual_norm = if_else(
+        is.na(ecological_residual),
+        NA_real_,
+        ecological_residual / m
+      ),
+      impact_score = if_else(
+        is.na(bio_residual_norm),
+        NA_real_,
+        round(bio_residual_norm * 50)
+      ),
+      habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality, 0))),
+      connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),
+      nature_gap_score = if_else(
+        is.na(bio_residual_norm),
+        NA_real_,
+        (
+          0.50 * bio_residual_norm +
+          0.30 * habitat_quality_deficit +
+          0.20 * connectivity_deficit
+        ) * 100
+      )
+    )
 }
 
 # ── 3. Intervention score and ranking ────────────────────────────────────────
@@ -108,7 +142,7 @@ if (is.na(m) || m == 0) {
 grid <- grid |>
   mutate(
     intervention_score = (
-      replace_na(ecological_residual, 0) * 0.5
+      replace_na(underperformance, 0) * 0.5
     ) * (
       replace_na(corridor_importance, 0) * 0.5
     ),
@@ -130,7 +164,11 @@ counterfactual_gain <- function(grid_sf, target_cell_id, radius_m = CELL_SIZE * 
   target <- grid_sf |> filter(cell_id == target_cell_id)
   if (nrow(target) != 1L) return(NA_real_)
 
-  local_idx <- lengths(st_is_within_distance(st_centroid(grid_sf), st_centroid(target), dist = radius_m)) > 0
+  local_idx <- lengths(st_is_within_distance(
+    suppressWarnings(st_centroid(grid_sf)),
+    suppressWarnings(st_centroid(target)),
+    dist = radius_m
+  )) > 0
   local_grid <- grid_sf[local_idx, ]
   if (nrow(local_grid) < 3L) return(NA_real_)
 
@@ -139,7 +177,7 @@ counterfactual_gain <- function(grid_sf, target_cell_id, radius_m = CELL_SIZE * 
     if (upgraded) {
       qualities[local_grid$cell_id == target_cell_id] <- 1
     }
-    pts <- st_centroid(local_grid)
+    pts <- suppressWarnings(st_centroid(local_grid))
     within <- st_is_within_distance(pts, pts, dist = CELL_SIZE * 1.15, sparse = TRUE)
     edges <- bind_rows(lapply(seq_along(within), function(i) {
       neighbors <- within[[i]]
@@ -205,6 +243,7 @@ cell_attributes <- grid |>
     expected_richness,
     effort_corrected_richness,
     ecological_residual,
+    nature_gap_score,
     corridor_importance,
     intervention_rank,
     intervention_score,

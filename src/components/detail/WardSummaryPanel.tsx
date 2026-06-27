@@ -41,7 +41,7 @@ export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProp
 
         <div className="flex flex-col items-center py-4">
           <p className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest mb-2">
-            Nature impact (gap)
+            Nature Gap
           </p>
           <span
             className={cn(

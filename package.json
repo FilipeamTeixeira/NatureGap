@@ -9,6 +9,9 @@
     "stage:pipeline-export": "node scripts/stage-pipeline-export.mjs",
     "lint": "eslint"
   },
+  "browserslist": [
+    "defaults"
+  ],
   "dependencies": {
     "@radix-ui/react-slider": "^1.4.1",
     "@radix-ui/react-switch": "^1.3.1",

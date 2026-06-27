@@ -32,6 +32,14 @@ type DatasetManifest = {
   files?: unknown;
 };
 
+type PipelineDatasetRow = {
+  city_id: unknown;
+  dataset_id: unknown;
+  storage_prefix: unknown;
+  manifest_path: unknown;
+  source_layer: unknown;
+};
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -59,6 +67,11 @@ export function joinPath(...parts: string[]): string {
     .join('/');
 }
 
+function storageObjectPath(path: string): string {
+  const prefix = `${STORAGE.PIPELINE_BUCKET}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
 export async function fetchStorageJson(path: string): Promise<unknown | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.storage
@@ -74,19 +87,6 @@ export async function fetchStorageJson(path: string): Promise<unknown | null> {
   }
 }
 
-export async function listCityFolders(): Promise<string[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase.storage
-    .from(STORAGE.PIPELINE_BUCKET)
-    .list('', { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
-
-  if (error || !data) return [];
-
-  return data
-    .map((entry) => entry.name)
-    .filter((name) => typeof name === 'string' && name.length > 0 && !name.includes('.'));
-}
-
 function normalizeManifestFiles(value: unknown): Record<string, string> {
   const files = asObject(value);
   if (!files) return {};
@@ -99,6 +99,14 @@ function normalizeManifestFiles(value: unknown): Record<string, string> {
 
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.length > 0)));
+}
+
+function mergeDatasets(datasets: ActivePipelineDataset[]): ActivePipelineDataset[] {
+  const byCity = new Map<string, ActivePipelineDataset>();
+  for (const dataset of datasets) {
+    if (!byCity.has(dataset.cityId)) byCity.set(dataset.cityId, dataset);
+  }
+  return Array.from(byCity.values());
 }
 
 function datasetFromPointers(
@@ -150,29 +158,85 @@ function legacyDataset(cityFolder: string): ActivePipelineDataset {
   };
 }
 
+async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('pipeline_datasets')
+    .select('city_id,dataset_id,storage_prefix,manifest_path,source_layer')
+    .eq('is_active', true)
+    .order('city_id', { ascending: true });
+
+  if (error || !data) return [];
+
+  const datasets = await Promise.all((data as PipelineDatasetRow[]).map(async (row) => {
+    const cityId = asString(row.city_id);
+    const dataVersion = asString(row.dataset_id);
+    const storagePrefix = asString(row.storage_prefix);
+    const manifestPath = asString(row.manifest_path);
+    if (!cityId || !dataVersion || !storagePrefix || !manifestPath) return null;
+
+    const basePath = storageObjectPath(storagePrefix);
+    const normalizedManifestPath = storageObjectPath(manifestPath);
+    const manifestValue = await fetchStorageJson(normalizedManifestPath);
+    const manifest = asObject(manifestValue) as DatasetManifest | null;
+    const files = normalizeManifestFiles(manifest?.files);
+    const manifestPmtilesPath = asString(manifest?.pmtiles?.path);
+
+    return {
+      cityId,
+      dataVersion,
+      sourceLayer: asString(manifest?.pmtiles?.sourceLayer)
+        ?? asString(manifest?.sourceLayer)
+        ?? asString(row.source_layer)
+        ?? STORAGE.HEXGRID_SOURCE_LAYER,
+      basePath,
+      manifestPath: normalizedManifestPath,
+      hexgridPath: joinPath(basePath, manifestPmtilesPath ?? STORAGE.HEXGRID_PMTILES_KEY),
+      files,
+    };
+  }));
+
+  return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
+}
+
+async function listStoragePointerDatasets(): Promise<ActivePipelineDataset[]> {
+  const cityFolders = uniqueStrings([...STORAGE.PIPELINE_CITY_IDS]);
+  const datasets = await Promise.all(cityFolders.map(async (cityFolder) => {
+    const currentValue = await fetchStorageJson(`${cityFolder}/current.json`);
+    const current = asObject(currentValue) as CurrentPointer | null;
+    if (!current) return null;
+
+    const manifestPath = asString(current.manifest);
+    const manifestValue = manifestPath
+      ? await fetchStorageJson(joinPath(cityFolder, manifestPath))
+      : null;
+    const manifest = asObject(manifestValue) as DatasetManifest | null;
+
+    return datasetFromPointers(cityFolder, current, manifest);
+  }));
+
+  return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
+}
+
 let activeDatasetsPromise: Promise<ActivePipelineDataset[]> | null = null;
 
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
   if (!supabase) return [];
 
   activeDatasetsPromise ??= (async () => {
-    const listedFolders = await listCityFolders();
-    const cityFolders = uniqueStrings([...STORAGE.PIPELINE_CITY_IDS, ...listedFolders]);
-    const datasets = await Promise.all(cityFolders.map(async (cityFolder) => {
-      const currentValue = await fetchStorageJson(`${cityFolder}/current.json`);
-      const current = asObject(currentValue) as CurrentPointer | null;
-      if (!current) return legacyDataset(cityFolder);
+    const storageDatasets = await listStoragePointerDatasets();
+    if (storageDatasets.length > 0) return storageDatasets;
 
-      const manifestPath = asString(current.manifest);
-      const manifestValue = manifestPath
-        ? await fetchStorageJson(joinPath(cityFolder, manifestPath))
-        : null;
-      const manifest = asObject(manifestValue) as DatasetManifest | null;
+    const databaseDatasets = await listDatabaseActiveDatasets();
+    const activeDatasets = mergeDatasets([
+      ...storageDatasets,
+      ...databaseDatasets,
+    ]);
+    if (activeDatasets.length > 0) return activeDatasets;
 
-      return datasetFromPointers(cityFolder, current, manifest);
-    }));
-
-    return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
+    const cityFolders = uniqueStrings([...STORAGE.PIPELINE_CITY_IDS]);
+    return cityFolders.map(legacyDataset);
   })();
 
   return activeDatasetsPromise;

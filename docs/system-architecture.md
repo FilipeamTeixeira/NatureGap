@@ -168,7 +168,8 @@ Canonical 20 m hex grid and R-computed cell outputs.
 - `geometry geometry(Polygon, 4326)`
 - Referenced by live observations and structured surveys
 - Stores expected richness, effort-corrected richness, ecological residual,
-  stressors, connectivity, ranking, detail-panel JSON fields, and timestamps
+  Nature Gap score, stressors, connectivity, ranking, detail-panel JSON fields,
+  and timestamps
 - Required before live observation assignment works
 
 Versioning model:
@@ -382,27 +383,32 @@ MAX_EXPECTED_RICHNESS * (
 Source: `pipeline/05_residuals/residuals.R`
 
 ```text
-expected_richness - effort_corrected_richness
+effort_corrected_richness - expected_richness
 ```
 
-- Positive residual: below expectation, habitat pressure
-- Negative residual: above expectation, potential refuge
+- Positive residual: above expectation, ecological surplus
+- Negative residual: below expectation, ecosystem under pressure
 - Unsampled cells: `NA`
 
-### `impact_score`
+### `nature_gap_score`
 
 Source: `pipeline/05_residuals/residuals.R`
 
-Current implementation scales and inverts ecological residual:
+Current implementation:
 
 ```text
-impact_score = round(-ecological_residual / max_abs_residual * 50)
+nature_gap_score =
+  (
+    0.50 * ecological_residual / max_abs_residual +
+    0.30 * (1 - habitat_quality) +
+    0.20 * (1 - corridor_importance)
+  ) * 100
 ```
 
-- Negative impact score: worse than expected
-- Positive impact score: better than expected
+- Negative Nature Gap score: ecosystem under pressure
+- Positive Nature Gap score: ecological surplus
 
-Do not treat `impact_score` and `ecological_residual` as the same sign.
+Do not treat `nature_gap_score` and `ecological_residual` as the same metric.
 
 ### `intervention_score`
 

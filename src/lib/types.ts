@@ -46,6 +46,7 @@ export interface Intervention {
 /** Pipeline-derived stats shared by cells and park aggregates. */
 export interface CellStatsFields {
   impactScore: number;
+  natureGapScore?: number | null;
   habitatQuality: number;
   habitatQualityIndex: number;
   speciesRichnessRaw: number;

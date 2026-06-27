@@ -125,9 +125,9 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
         </li>
       </ul>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        Ecological residual = expected ({cell.expectedRichness.toFixed(1)}) − effort-corrected
-        richness ({formatMetric(cell.observedRichness)}) = {formatMetric(cell.ecologicalResidual)}.
-        {' '}Positive values mean effort-corrected richness is below the habitat expectation.
+        Ecological residual = effort-corrected richness ({formatMetric(cell.observedRichness)}) −
+        expected ({cell.expectedRichness.toFixed(1)}) = {formatMetric(cell.ecologicalResidual)}.
+        {' '}Positive values mean effort-corrected richness is above the habitat expectation.
       </p>
     </div>
   );
@@ -241,13 +241,13 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
           <div className="p-5 flex flex-col gap-4">
             <Card>
               <CardTitle>Ecological diagnosis</CardTitle>
-              <CardSubtitle>Nature impact score from pipeline</CardSubtitle>
+              <CardSubtitle>Nature Gap score from pipeline</CardSubtitle>
               <div className="flex items-center gap-5">
                 <ScoreGauge score={cell.impactScore} />
                 <div className="flex-1">
                   <p className="text-[12px] text-[#667066] leading-relaxed">
-                    Impact score normalises the ecological residual (observed − expected richness)
-                    across the study grid to roughly −50…+50.
+                    Nature Gap combines biodiversity residual, habitat quality, and corridor
+                    connectivity into the public headline score.
                   </p>
                   {cell.pressures.length > 0 && (
                     <div className="mt-3 flex flex-col gap-1.5">

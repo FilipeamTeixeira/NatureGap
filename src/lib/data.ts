@@ -104,11 +104,18 @@ export async function fetchActions(): Promise<TakeAction[]> {
   if (!supabase) return [];
   try {
     const { data, error } = await supabase
-      .from('recommended_actions')
-      .select('id, icon, title, description, impact, time_estimate')
-      .order('id', { ascending: true });
+      .from('conservation_actions')
+      .select('id, name, description, impact_type, effort_level')
+      .order('name', { ascending: true });
     if (error || !data) return [];
-    return data.map((r) => ({ ...r, time: r.time_estimate })) as TakeAction[];
+    return data.map((r) => ({
+      id: r.id,
+      icon: String(r.impact_type ?? 'canopy'),
+      title: r.name,
+      description: r.description,
+      impact: String(r.impact_type ?? '').replaceAll('_', ' '),
+      time: String(r.effort_level ?? '').replaceAll('_', ' '),
+    })) as TakeAction[];
   } catch {
     return [];
   }

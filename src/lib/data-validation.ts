@@ -73,7 +73,8 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
   if (!isRecord(value)) throw new Error(`Invalid stats entry for ${id}: expected object`);
 
   const valid =
-    isNumber(value.impactScore) &&
+    isNullableNumber(value.impactScore) &&
+    (value.natureGapScore === undefined || isNullableNumber(value.natureGapScore)) &&
     isNumber(value.habitatQuality) &&
     isNumber(value.habitatQualityIndex) &&
     isNumber(value.speciesRichnessRaw) &&
@@ -126,6 +127,8 @@ function normalizeCellStats(value: Record<string, unknown>): CellStatsFields {
   const stats = value as CellStatsFields;
   return {
     ...stats,
+    impactScore: stats.impactScore ?? 0,
+    natureGapScore: stats.natureGapScore ?? stats.impactScore ?? 0,
     species: normalizeSpeciesNames(stats.species),
     pressures: normalizeStringArray(value.pressures),
   };

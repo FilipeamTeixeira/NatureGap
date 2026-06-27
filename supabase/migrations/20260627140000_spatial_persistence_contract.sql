@@ -11,10 +11,15 @@ create table if not exists public.hex_cells (
   green_space_id text,
   geometry geometry(Polygon, 4326) not null,
   habitat_quality numeric,
-  path_km numeric,
-  is_unsampled boolean,
+  ndvi_idx numeric,
+  canopy_height_idx numeric,
+  lst_idx numeric,
+  disturbance_idx numeric,
+  land_use_class text,
   betweenness_centrality numeric,
-  properties jsonb not null default '{}'::jsonb,
+  intervention_rank numeric,
+  ecological_residual numeric,
+  nature_gap_score numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (city_id, dataset_id, cell_id),
@@ -30,27 +35,85 @@ create table if not exists public.hex_cells (
 create table if not exists public.corridor_links (
   city_id text not null,
   dataset_id text not null,
-  from_cell_id text not null,
-  to_cell_id text not null,
-  weight numeric not null,
+  link_id text not null,
   geometry geometry(LineString, 4326) not null,
-  properties jsonb not null default '{}'::jsonb,
+  resistance numeric,
+  importance numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  primary key (city_id, dataset_id, from_cell_id, to_cell_id),
+  primary key (city_id, dataset_id, link_id),
   constraint corridor_links_city_not_blank check (length(trim(city_id)) > 0),
   constraint corridor_links_dataset_not_blank check (length(trim(dataset_id)) > 0),
-  constraint corridor_links_distinct_cells check (from_cell_id <> to_cell_id),
-  constraint corridor_links_weight_nonnegative check (weight >= 0),
-  constraint corridor_links_from_hex_fk
-    foreign key (city_id, dataset_id, from_cell_id)
-    references public.hex_cells(city_id, dataset_id, cell_id)
-    on delete restrict,
-  constraint corridor_links_to_hex_fk
-    foreign key (city_id, dataset_id, to_cell_id)
-    references public.hex_cells(city_id, dataset_id, cell_id)
-    on delete restrict
+  constraint corridor_links_link_not_blank check (length(trim(link_id)) > 0)
 );
+
+alter table public.hex_cells
+drop column if exists path_km,
+drop column if exists is_unsampled,
+drop column if exists properties,
+drop column if exists tree_cover,
+drop column if exists heat_exposure,
+drop column if exists land_use_green,
+drop column if exists nature_gap,
+add column if not exists ndvi_idx numeric,
+add column if not exists canopy_height_idx numeric,
+add column if not exists lst_idx numeric,
+add column if not exists disturbance_idx numeric,
+add column if not exists land_use_class text,
+add column if not exists intervention_rank numeric,
+add column if not exists ecological_residual numeric,
+add column if not exists nature_gap_score numeric;
+
+alter table public.corridor_links
+add column if not exists link_id text,
+add column if not exists resistance numeric,
+add column if not exists importance numeric;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'corridor_links'
+      and column_name = 'from_cell_id'
+  ) and exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'corridor_links'
+      and column_name = 'to_cell_id'
+  ) then
+    update public.corridor_links
+    set link_id = coalesce(link_id, from_cell_id || '--' || to_cell_id);
+  end if;
+end;
+$$;
+
+alter table public.corridor_links
+drop constraint if exists corridor_links_pkey,
+drop constraint if exists corridor_links_distinct_cells,
+drop constraint if exists corridor_links_weight_nonnegative,
+drop constraint if exists corridor_links_from_hex_fk,
+drop constraint if exists corridor_links_to_hex_fk,
+drop column if exists from_cell_id,
+drop column if exists to_cell_id,
+drop column if exists weight,
+drop column if exists properties;
+
+alter table public.corridor_links
+alter column link_id set not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'corridor_links_pkey'
+      and conrelid = 'public.corridor_links'::regclass
+  ) then
+    alter table public.corridor_links
+    add constraint corridor_links_pkey primary key (city_id, dataset_id, link_id);
+  end if;
+end;
+$$;
 
 create index if not exists hex_cells_green_space_idx
 on public.hex_cells (city_id, dataset_id, green_space_id);
@@ -58,11 +121,8 @@ on public.hex_cells (city_id, dataset_id, green_space_id);
 create index if not exists hex_cells_geometry_gist_idx
 on public.hex_cells using gist (geometry);
 
-create index if not exists corridor_links_from_idx
-on public.corridor_links (city_id, dataset_id, from_cell_id);
-
-create index if not exists corridor_links_to_idx
-on public.corridor_links (city_id, dataset_id, to_cell_id);
+create index if not exists corridor_links_city_dataset_idx
+on public.corridor_links (city_id, dataset_id);
 
 create index if not exists corridor_links_geometry_gist_idx
 on public.corridor_links using gist (geometry);
@@ -290,8 +350,7 @@ begin
     pk := jsonb_build_object(
       'city_id', case when tg_op = 'INSERT' then new.city_id else old.city_id end,
       'dataset_id', case when tg_op = 'INSERT' then new.dataset_id else old.dataset_id end,
-      'from_cell_id', case when tg_op = 'INSERT' then new.from_cell_id else old.from_cell_id end,
-      'to_cell_id', case when tg_op = 'INSERT' then new.to_cell_id else old.to_cell_id end
+      'link_id', case when tg_op = 'INSERT' then new.link_id else old.link_id end
     );
   elsif tg_table_name = 'pipeline_datasets' then
     pk := jsonb_build_object(

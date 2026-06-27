@@ -30,11 +30,13 @@ export const LAYER_DRAW_ORDER = [
 export type HexLayerId = (typeof LAYER_DRAW_ORDER)[number];
 
 export const HEX_OVERLAY_LAYER_IDS = [
+  'impact',
   'expected',
   'residual',
   'intervention',
   'habitat',
   'treecover',
+  'biodiversity',
   'connectivity',
   'heat',
   'landuse',
@@ -47,7 +49,7 @@ export function hasHexOverlay(layerId: HexLayerId): boolean {
 /** Saturated ramps — even low values stay visible on the light basemap. */
 const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'landuse'>, [number, string][]> = {
   expected:     [[0, '#deebf7'], [25, '#9ecae1'], [50, '#4292c6'], [75, '#08519c'], [100, '#08306b']],
-  residual:     [[-50, '#2E6F40'], [-20, '#73A56D'], [0, '#B8C9AE'], [20, '#E8A44C'], [50, '#C95B4B']],
+  residual:     [[-50, '#C95B4B'], [-20, '#E8A44C'], [0, '#B8C9AE'], [20, '#73A56D'], [50, '#2E6F40']],
   intervention: [[1, '#4a148c'], [5, '#6a1b9a'], [10, '#8e24aa'], [20, '#ab47bc'], [50, '#d8a7df']],
   habitat:      [[0, '#8ecf9a'], [25, '#52a868'], [50, '#3d8b57'], [75, '#2E6F40'], [100, '#1a4a28']],
   treecover:    [[0, '#66bb6a'], [25, '#43a047'], [50, '#2e7d32'], [75, '#1b5e20'], [100, '#0d3d12']],
@@ -72,7 +74,16 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
 /** Build MapLibre fill-color expression for a data layer. */
 export function hexFillColorExpression(layerId: HexLayerId): ExpressionSpecification {
   if (layerId === 'impact') {
-    return ['literal', '#000000'] as ExpressionSpecification;
+    return [
+      'interpolate',
+      ['linear'],
+      ['coalesce', ['get', 'natureGapScore'], 0],
+      -50, '#C95B4B',
+      -20, '#E8A44C',
+      0, '#B8C9AE',
+      20, '#73A56D',
+      50, '#2E6F40',
+    ] as ExpressionSpecification;
   }
 
   if (layerId === 'landuse') {
@@ -113,13 +124,14 @@ export function hexFillOpacity(enabledCount: number): number {
 
 export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   impact: {
-    title: 'Nature Impact Gap',
+    title: 'Nature Gap',
+    property: 'natureGapScore',
     legend: [
-      { color: '#2E6F40', label: 'Much better than expected' },
-      { color: '#73A56D', label: 'Better than expected' },
-      { color: '#B8C9AE', label: 'As expected' },
-      { color: '#E8A44C', label: 'Worse than expected' },
-      { color: '#C95B4B', label: 'Much worse than expected' },
+      { color: '#2E6F40', label: 'Strong surplus' },
+      { color: '#73A56D', label: 'Surplus' },
+      { color: '#B8C9AE', label: 'Near expected' },
+      { color: '#E8A44C', label: 'Pressure' },
+      { color: '#C95B4B', label: 'Strong pressure' },
     ],
   },
   expected: {

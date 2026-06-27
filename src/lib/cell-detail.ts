@@ -7,6 +7,7 @@ export type RenderCellProperties = {
   parkId?: string;
   parkName?: string;
   impactScore?: number;
+  natureGapScore?: number | null;
   expectedRichness?: number | null;
   ecologicalResidual?: number | null;
   habitatQuality?: number | null;
@@ -21,6 +22,7 @@ export type RenderCellProperties = {
 type CellAttributeRow = {
   cell_id: string;
   impact_score: number | null;
+  nature_gap_score: number | null;
   habitat_quality: number | null;
   habitat_quality_index: number | null;
   species_richness_raw: number | null;
@@ -68,11 +70,6 @@ function habitatPotential(habitatQuality: number): HabitatPotential {
   return 'low';
 }
 
-function impactFromResidual(residual: number | null | undefined): number {
-  if (typeof residual !== 'number' || !Number.isFinite(residual)) return 0;
-  return Math.round(Math.max(-50, Math.min(50, -residual / 5)));
-}
-
 function speciesArray(value: unknown): Species[] {
   if (!Array.isArray(value)) {
     return [
@@ -114,7 +111,8 @@ function detailFromRow(
   const expectedRichness = Number(row?.expected_richness ?? render.expectedRichness ?? 0);
   const observedRichness = row?.observed_richness ?? row?.effort_corrected_richness ?? render.observedRichness ?? null;
   const ecologicalResidual = row?.ecological_residual ?? render.ecologicalResidual ?? null;
-  const impactScore = Number(row?.impact_score ?? render.impactScore ?? impactFromResidual(ecologicalResidual));
+  const natureGapScore = Number(row?.nature_gap_score ?? render.natureGapScore ?? row?.impact_score ?? render.impactScore ?? 0);
+  const impactScore = natureGapScore;
   const habitatQuality = pct(row?.habitat_quality ?? render.habitatQuality);
   const corridorImportance = pct(row?.corridor_importance ?? render.corridorImportance);
   const heatExposure = pct(row?.heat_exposure ?? render.heatExposure);
@@ -130,6 +128,7 @@ function detailFromRow(
     nameJa: displayName,
     coordinates,
     impactScore,
+    natureGapScore,
     habitatQuality,
     habitatQualityIndex: row?.habitat_quality_index ?? habitatQuality / 100,
     speciesRichnessRaw: Number(row?.species_richness_raw ?? 0),
@@ -174,6 +173,7 @@ export async function fetchCellDetail(
       [
         'cell_id',
         'impact_score',
+        'nature_gap_score',
         'habitat_quality',
         'habitat_quality_index',
         'species_richness_raw',

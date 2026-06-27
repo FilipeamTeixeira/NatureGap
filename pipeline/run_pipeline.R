@@ -9,7 +9,7 @@
 #   source("config_amsterdam.R")
 #   source("run_pipeline.R")
 #
-# To run only from a specific step (e.g. skip ingest):
+# To run only from a specific numbered folder (e.g. skip 01_ingest):
 #   START_STEP <- 2
 #   source("run_pipeline.R")
 #   # or from the shell:
@@ -34,31 +34,34 @@ START_STEP <- if (length(cli_start) == 1L && !is.na(cli_start)) {
 }
 
 steps <- list(
-  list(n = 1L, label = "Ingest",        file = "01_ingest/ingest.R"),
-  list(n = 2L, label = "Spatial base",  file = "02_spatial/spatial_base.R"),
-  list(n = 3L, label = "Habitat model", file = "02_habitat/habitat_model.R"),
-  list(n = 3L, label = "Supabase observations", file = "01_ingest/export_supabase_observations.R"),
-  list(n = 3L, label = "Observations",  file = "03_observations/observation_layer.R"),
-  list(n = 4L, label = "Connectivity",  file = "04_connectivity/connectivity.R"),
-  list(n = 5L, label = "Patch aggregation", file = "05_patch/patch_aggregation.R"),
-  list(n = 6L, label = "Residuals",     file = "05_residuals/residuals.R"),
-  list(n = 6L, label = "Export",        file = "06_export/export.R"),
-  list(n = 7L, label = "Spatial PostgreSQL import", file = "07_import/import_spatial_outputs.R"),
-  list(n = 7L, label = "PostgreSQL import", file = "07_import/import_to_postgres.R")
+  list(n = 1L, folder = "01_ingest", label = "Ingest", file = "01_ingest/ingest.R"),
+  list(n = 1L, folder = "01_ingest", label = "Supabase observations", file = "01_ingest/export_supabase_observations.R"),
+  list(n = 2L, folder = "02_spatial", label = "Spatial base", file = "02_spatial/spatial_base.R"),
+  list(n = 2L, folder = "02_habitat", label = "Habitat model", file = "02_habitat/habitat_model.R"),
+  list(n = 3L, folder = "03_observations", label = "Observations", file = "03_observations/observation_layer.R"),
+  list(n = 4L, folder = "04_connectivity", label = "Connectivity", file = "04_connectivity/connectivity.R"),
+  list(n = 5L, folder = "05_residuals", label = "Residuals", file = "05_residuals/residuals.R"),
+  list(n = 5L, folder = "05_patch", label = "Patch aggregation", file = "05_patch/patch_aggregation.R"),
+  list(n = 6L, folder = "06_export", label = "Export", file = "06_export/export.R"),
+  list(n = 7L, folder = "07_import", label = "Spatial PostgreSQL import", file = "07_import/import_spatial_outputs.R"),
+  list(n = 7L, folder = "07_import", label = "PostgreSQL import", file = "07_import/import_to_postgres.R")
 )
 
-for (step in steps) {
+TOTAL_STEPS <- max(vapply(steps, \(step) step$n, integer(1)))
+
+for (step_idx in seq_along(steps)) {
+  step <- steps[[step_idx]]
   if (step$n < START_STEP) next
 
   cat(sprintf("\n%s\n", strrep("─", 60)))
-  cat(sprintf("  Step %d / %d — %s\n", step$n, length(steps), step$label))
+  cat(sprintf("  Step %02d / %02d — %s — %s\n", step$n, TOTAL_STEPS, step$folder, step$label))
   cat(sprintf("%s\n\n", strrep("─", 60)))
 
   t0 <- proc.time()
   source(here::here(step$file), local = FALSE)
   elapsed <- round((proc.time() - t0)[["elapsed"]])
 
-  cat(sprintf("\n  ✓ Step %d done in %d s\n", step$n, elapsed))
+  cat(sprintf("\n  ✓ Step %02d — %s done in %d s\n", step$n, step$folder, elapsed))
 }
 
 cat(sprintf("\n%s\n", strrep("═", 60)))

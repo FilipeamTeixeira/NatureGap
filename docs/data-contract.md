@@ -104,7 +104,8 @@ Required properties include:
   "cell_id": "yokohama-honmoku-123",
   "expected_richness": 104.2,
   "effort_corrected_richness": 75.9,
-  "ecological_residual": 28.3,
+  "ecological_residual": -28.3,
+  "nature_gap_score": -14,
   "impact_score": -14,
   "habitat_quality": 52,
   "habitat_quality_index": 0.52,
@@ -386,18 +387,17 @@ Implemented workflow:
 `ecological_residual`:
 
 ```text
-expected_richness - effort_corrected_richness
+effort_corrected_richness - expected_richness
 ```
 
-- Positive means below expectation, habitat pressure.
-- Negative means above expectation, potential refuge.
+- Positive means above expectation, ecological surplus.
+- Negative means below expectation, ecosystem under pressure.
 
-`impactScore`:
+`natureGapScore`:
 
-- Derived by R from ecological residual.
-- Current implementation inverts residual sign.
-- Negative means worse than expected.
-- Positive means better than expected.
+- Composite of normalised ecological residual, habitat quality deficit, and connectivity deficit.
+- Negative means ecosystem under pressure.
+- Positive means ecological surplus.
 
 Do not use one field as an alias for the other.
 

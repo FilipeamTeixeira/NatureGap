@@ -5,6 +5,7 @@ set search_path = public, extensions;
 
 alter table public.cell_attributes
 add column if not exists impact_score integer,
+add column if not exists nature_gap_score numeric,
 add column if not exists habitat_quality numeric,
 add column if not exists habitat_quality_index numeric,
 add column if not exists species_richness_raw integer,

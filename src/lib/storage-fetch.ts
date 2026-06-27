@@ -46,7 +46,7 @@ export async function fetchPipelineJson(
   const parts: unknown[] = [];
 
   for (const dataset of datasets) {
-    if (manifestName && mergeChunks) {
+    if (manifestName && mergeChunks && dataset.files[manifestName]) {
       const chunkManifestPath = resolveDatasetFile(dataset, manifestName);
       const chunkManifest = await fetchStorageJson(chunkManifestPath);
       if (isManifest(chunkManifest) && chunkManifest.chunks?.length) {

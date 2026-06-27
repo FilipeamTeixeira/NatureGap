@@ -78,7 +78,7 @@ export default function ScoreGauge({
         fill="#667066"
         style={{ fontSize: 9, fontFamily: 'inherit' }}
       >
-        Impact score
+        Nature Gap
       </text>
 
       {/* Range labels */}
