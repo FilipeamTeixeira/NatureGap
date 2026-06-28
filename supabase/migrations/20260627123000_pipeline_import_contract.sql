@@ -19,6 +19,7 @@ create table if not exists public.green_spaces (
   effort_corrected_richness numeric,
   expected_richness numeric,
   ecological_residual numeric,
+  ecological_residual_normalized numeric,
   nature_gap_score numeric,
   corridor_importance numeric,
   intervention_rank numeric,
@@ -44,6 +45,7 @@ create table if not exists public.pipeline_green_spaces (
   effort_corrected_richness numeric,
   expected_richness numeric,
   ecological_residual numeric,
+  ecological_residual_normalized numeric,
   nature_gap_score numeric,
   corridor_importance numeric,
   intervention_rank numeric,
@@ -67,6 +69,7 @@ add column if not exists habitat_quality_index numeric,
 add column if not exists effort_corrected_richness numeric,
 add column if not exists expected_richness numeric,
 add column if not exists ecological_residual numeric,
+add column if not exists ecological_residual_normalized numeric,
 add column if not exists nature_gap_score numeric,
 add column if not exists corridor_importance numeric,
 add column if not exists intervention_rank numeric;
@@ -81,6 +84,7 @@ add column if not exists habitat_quality_index numeric,
 add column if not exists effort_corrected_richness numeric,
 add column if not exists expected_richness numeric,
 add column if not exists ecological_residual numeric,
+add column if not exists ecological_residual_normalized numeric,
 add column if not exists nature_gap_score numeric,
 add column if not exists corridor_importance numeric,
 add column if not exists intervention_rank numeric;
@@ -333,7 +337,8 @@ begin
 
   insert into public.cell_attributes (
     cell_id, geometry, expected_richness, effort_corrected_richness,
-    ecological_residual, nature_gap_score, corridor_importance, intervention_rank,
+    ecological_residual, ecological_residual_normalized, nature_gap_score,
+    corridor_importance, intervention_rank,
     heat_exposure, noise, light_pollution, fragmentation, water_proximity,
     connectivity_score, last_updated, disturbance_index, fragmentation_index,
     intervention_score, node_importance, impact_score, habitat_quality,
@@ -345,7 +350,8 @@ begin
   )
   select
     cell_id, geometry, expected_richness, effort_corrected_richness,
-    ecological_residual, nature_gap_score, corridor_importance, intervention_rank,
+    ecological_residual, ecological_residual_normalized, nature_gap_score,
+    corridor_importance, intervention_rank,
     heat_exposure, noise, light_pollution, fragmentation, water_proximity,
     connectivity_score, last_updated, disturbance_index, fragmentation_index,
     intervention_score, node_importance, impact_score, habitat_quality,
@@ -362,6 +368,7 @@ begin
     expected_richness = excluded.expected_richness,
     effort_corrected_richness = excluded.effort_corrected_richness,
     ecological_residual = excluded.ecological_residual,
+    ecological_residual_normalized = excluded.ecological_residual_normalized,
     nature_gap_score = excluded.nature_gap_score,
     corridor_importance = excluded.corridor_importance,
     intervention_rank = excluded.intervention_rank,
@@ -407,14 +414,14 @@ begin
   insert into public.green_spaces (
     green_space_id, city_id, dataset_id, generated_at, name, name_ja,
     ward_id, geometry, habitat_quality_index, effort_corrected_richness,
-    expected_richness, ecological_residual, nature_gap_score, corridor_importance,
-    intervention_rank, is_active
+    expected_richness, ecological_residual, ecological_residual_normalized,
+    nature_gap_score, corridor_importance, intervention_rank, is_active
   )
   select
     green_space_id, city_id, dataset_id, generated_at, name, name_ja,
     ward_id, geometry, habitat_quality_index, effort_corrected_richness,
-    expected_richness, ecological_residual, nature_gap_score, corridor_importance,
-    intervention_rank, true
+    expected_richness, ecological_residual, ecological_residual_normalized,
+    nature_gap_score, corridor_importance, intervention_rank, true
   from public.pipeline_green_spaces
   where city_id = target_city_id
     and dataset_id = target_dataset_id
@@ -430,6 +437,7 @@ begin
     effort_corrected_richness = excluded.effort_corrected_richness,
     expected_richness = excluded.expected_richness,
     ecological_residual = excluded.ecological_residual,
+    ecological_residual_normalized = excluded.ecological_residual_normalized,
     nature_gap_score = excluded.nature_gap_score,
     corridor_importance = excluded.corridor_importance,
     intervention_rank = excluded.intervention_rank,
@@ -536,7 +544,8 @@ begin
 
   insert into public.pipeline_cell_attributes (
     cell_id, geometry, expected_richness, effort_corrected_richness,
-    ecological_residual, nature_gap_score, corridor_importance, intervention_rank,
+    ecological_residual, ecological_residual_normalized, nature_gap_score,
+    corridor_importance, intervention_rank,
     heat_exposure, noise, light_pollution, fragmentation, water_proximity,
     connectivity_score, last_updated, disturbance_index, fragmentation_index,
     intervention_score, node_importance, impact_score, habitat_quality,
@@ -552,6 +561,7 @@ begin
     nullif(props->>'expected_richness', '')::numeric,
     nullif(props->>'effort_corrected_richness', '')::numeric,
     nullif(props->>'ecological_residual', '')::numeric,
+    nullif(props->>'ecological_residual_normalized', '')::numeric,
     nullif(props->>'nature_gap_score', '')::numeric,
     nullif(props->>'corridor_importance', '')::numeric,
     nullif(props->>'intervention_rank', '')::integer,
@@ -594,6 +604,7 @@ begin
     expected_richness = excluded.expected_richness,
     effort_corrected_richness = excluded.effort_corrected_richness,
     ecological_residual = excluded.ecological_residual,
+    ecological_residual_normalized = excluded.ecological_residual_normalized,
     nature_gap_score = excluded.nature_gap_score,
     corridor_importance = excluded.corridor_importance,
     intervention_rank = excluded.intervention_rank,
@@ -686,8 +697,8 @@ begin
     insert into public.pipeline_green_spaces (
       city_id, dataset_id, green_space_id, generated_at, name, name_ja,
       ward_id, geometry, habitat_quality_index, effort_corrected_richness,
-      expected_richness, ecological_residual, nature_gap_score, corridor_importance,
-      intervention_rank
+      expected_richness, ecological_residual, ecological_residual_normalized,
+      nature_gap_score, corridor_importance, intervention_rank
     )
     select
       target_city_id,
@@ -702,6 +713,7 @@ begin
       nullif(props->>'effort_corrected_richness', '')::numeric,
       nullif(props->>'expected_richness', '')::numeric,
       nullif(props->>'ecological_residual', '')::numeric,
+      nullif(props->>'ecological_residual_normalized', '')::numeric,
       nullif(props->>'nature_gap_score', '')::numeric,
       nullif(props->>'corridor_importance', '')::numeric,
       nullif(props->>'intervention_rank', '')::numeric
@@ -716,6 +728,7 @@ begin
       effort_corrected_richness = excluded.effort_corrected_richness,
       expected_richness = excluded.expected_richness,
       ecological_residual = excluded.ecological_residual,
+      ecological_residual_normalized = excluded.ecological_residual_normalized,
       nature_gap_score = excluded.nature_gap_score,
       corridor_importance = excluded.corridor_importance,
       intervention_rank = excluded.intervention_rank;

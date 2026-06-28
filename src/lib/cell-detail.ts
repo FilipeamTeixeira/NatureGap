@@ -10,11 +10,17 @@ export type RenderCellProperties = {
   natureGapScore?: number | null;
   expectedRichness?: number | null;
   ecologicalResidual?: number | null;
+  ecologicalResidualNormalized?: number | null;
   habitatQuality?: number | null;
   observedRichness?: number | null;
   corridorImportance?: number | null;
+  betweennessCentrality?: number | null;
   treeCover?: number | null;
+  meanCanopy?: number | null;
+  canopyHeightIdx?: number | null;
   heatExposure?: number | null;
+  meanLst?: number | null;
+  lstIdx?: number | null;
   landUseGreen?: number | null;
   interventionRank?: number | null;
 };
@@ -111,7 +117,7 @@ function detailFromRow(
   const expectedRichness = Number(row?.expected_richness ?? render.expectedRichness ?? 0);
   const observedRichness = row?.observed_richness ?? row?.effort_corrected_richness ?? render.observedRichness ?? null;
   const ecologicalResidual = row?.ecological_residual ?? render.ecologicalResidual ?? null;
-  const natureGapScore = Number(row?.nature_gap_score ?? render.natureGapScore ?? row?.impact_score ?? render.impactScore ?? 0);
+  const natureGapScore = Number(row?.nature_gap_score ?? render.natureGapScore ?? 0);
   const impactScore = natureGapScore;
   const habitatQuality = pct(row?.habitat_quality ?? render.habitatQuality);
   const corridorImportance = pct(row?.corridor_importance ?? render.corridorImportance);
@@ -150,9 +156,14 @@ function detailFromRow(
     taxonomicDiversity: Number(row?.taxonomic_diversity ?? 0),
     species: speciesArray(row?.species),
     corridorImportance,
+    betweennessCentrality: pct(render.betweennessCentrality),
     fragmentationIndex,
     treeCover: pct(row?.tree_cover ?? render.treeCover),
+    meanCanopy: pct(render.meanCanopy),
+    canopyHeightIdx: pct(render.canopyHeightIdx),
     heatExposure,
+    meanLst: pct(render.meanLst),
+    lstIdx: pct(render.lstIdx),
     landUseGreen: pct(row?.land_use_green ?? render.landUseGreen),
     pressures: stringArray(row?.pressures),
     interventions: interventionArray(row?.interventions),

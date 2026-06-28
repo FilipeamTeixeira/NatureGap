@@ -104,7 +104,9 @@ Required properties include:
   "cell_id": "yokohama-honmoku-123",
   "expected_richness": 104.2,
   "effort_corrected_richness": 75.9,
+  "survey_effort_units": 0.17,
   "ecological_residual": -28.3,
+  "ecological_residual_normalized": -0.62,
   "nature_gap_score": -14,
   "impact_score": -14,
   "habitat_quality": 52,
@@ -132,6 +134,17 @@ Required properties include:
   "interventions": []
 }
 ```
+
+`observed_richness` definition:
+
+- `observed_richness = species_richness / survey_effort_units`
+- `survey_effort_units = log1p(path_km)`
+- `effort_corrected_richness` is the backwards-compatible canonical alias used
+  in residual calculations.
+- sampled cells with no observations export `observed_richness = 0`;
+  unsampled cells export `observed_richness = null`.
+- patch/green-space outputs aggregate this same cell-level field using
+  cell-overlap weights; they must not recompute a city-specific variant.
 
 Constraints:
 
@@ -387,15 +400,28 @@ Implemented workflow:
 `ecological_residual`:
 
 ```text
-effort_corrected_richness - expected_richness
+observed_richness - expected_richness
 ```
 
-- Positive means above expectation, ecological surplus.
-- Negative means below expectation, ecosystem under pressure.
+- Raw backend analytics value.
+- Positive means field-observed richness is above model expectation.
+- Negative means field-observed richness is below model expectation.
+
+`ecological_residual_normalized`:
+
+```text
+(ecological_residual - city_mean(ecological_residual)) /
+city_stddev(ecological_residual)
+```
+
+- City-wise standardized residual.
+- MapLibre residual layers use this field only.
+- Visual styling may clamp `ecological_residual_normalized * 25` to
+  `[-50, 50]`; stored backend values are not clamped.
 
 `natureGapScore`:
 
-- Composite of normalised ecological residual, habitat quality deficit, and connectivity deficit.
+- Decision score combining standardized residual and pressure indices.
 - Negative means ecosystem under pressure.
 - Positive means ecological surplus.
 

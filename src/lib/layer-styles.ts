@@ -28,6 +28,7 @@ export const LAYER_DRAW_ORDER = [
 ] as const satisfies readonly LayerId[];
 
 export type HexLayerId = (typeof LAYER_DRAW_ORDER)[number];
+export const THEMATIC_LAYER_IDS = LAYER_DRAW_ORDER;
 
 export const HEX_OVERLAY_LAYER_IDS = [
   'impact',
@@ -73,6 +74,19 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
 
 /** Build MapLibre fill-color expression for a data layer. */
 export function hexFillColorExpression(layerId: HexLayerId): ExpressionSpecification {
+  if (layerId === 'residual') {
+    return [
+      'interpolate',
+      ['linear'],
+      ['max', -50, ['min', 50, ['*', ['coalesce', ['get', 'ecologicalResidualNormalized'], 0], 25]]],
+      -50, '#C95B4B',
+      -20, '#E8A44C',
+      0, '#B8C9AE',
+      20, '#73A56D',
+      50, '#2E6F40',
+    ] as ExpressionSpecification;
+  }
+
   if (layerId === 'impact') {
     return [
       'interpolate',
@@ -147,7 +161,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   residual: {
     title: 'Ecological Residual',
-    property: 'ecologicalResidual',
+    property: 'ecologicalResidualNormalized',
     legend: [
       { color: '#C95B4B', label: 'Strong pressure' },
       { color: '#E8A44C', label: 'Pressure' },
@@ -180,7 +194,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   treecover: {
     title: 'Tree Cover',
-    property: 'treeCover',
+    property: 'canopyHeightIdx',
     legend: [
       { color: '#0d3d12', label: 'Dense canopy' },
       { color: '#1b5e20', label: 'High' },
@@ -202,7 +216,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   connectivity: {
     title: 'Connectivity',
-    property: 'corridorImportance',
+    property: 'betweennessCentrality',
     legend: [
       { color: '#4a148c', label: 'Critical corridor' },
       { color: '#6a1b9a', label: 'High' },
@@ -213,7 +227,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   heat: {
     title: 'Heat Exposure',
-    property: 'heatExposure',
+    property: 'lstIdx',
     legend: [
       { color: '#a50026', label: 'Very hot' },
       { color: '#f46d43', label: 'Hot' },

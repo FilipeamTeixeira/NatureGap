@@ -83,6 +83,8 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     isNumber(value.expectedRichness) &&
     isNumber(value.maxExpectedRichness) &&
     isNullableNumber(value.ecologicalResidual) &&
+    (value.ecologicalResidualNormalized === undefined || isNullableNumber(value.ecologicalResidualNormalized)) &&
+    (value.dataAvailabilityRatio === undefined || isNullableNumber(value.dataAvailabilityRatio)) &&
     (value.isUnsampled === undefined || typeof value.isUnsampled === 'boolean') &&
     (value.temporalBiasFlag === undefined || typeof value.temporalBiasFlag === 'boolean') &&
     (value.pathKm === undefined || isNumber(value.pathKm)) &&
@@ -95,9 +97,14 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     isNumber(value.observerEffortScore) &&
     isNumber(value.taxonomicDiversity) &&
     isNumber(value.corridorImportance) &&
+    (value.betweennessCentrality === undefined || isNumber(value.betweennessCentrality)) &&
     isNumber(value.fragmentationIndex) &&
     (value.treeCover === undefined || isNumber(value.treeCover)) &&
+    (value.meanCanopy === undefined || isNumber(value.meanCanopy)) &&
+    (value.canopyHeightIdx === undefined || isNumber(value.canopyHeightIdx)) &&
     (value.heatExposure === undefined || isNumber(value.heatExposure)) &&
+    (value.meanLst === undefined || isNumber(value.meanLst)) &&
+    (value.lstIdx === undefined || isNumber(value.lstIdx)) &&
     (value.landUseGreen === undefined || isNumber(value.landUseGreen)) &&
     (value.landUseClass === undefined ||
       (typeof value.landUseClass === 'string' && LAND_USE_CLASSES.includes(value.landUseClass))) &&
@@ -128,7 +135,7 @@ function normalizeCellStats(value: Record<string, unknown>): CellStatsFields {
   return {
     ...stats,
     impactScore: stats.impactScore ?? 0,
-    natureGapScore: stats.natureGapScore ?? stats.impactScore ?? 0,
+    natureGapScore: stats.natureGapScore ?? null,
     species: normalizeSpeciesNames(stats.species),
     pressures: normalizeStringArray(value.pressures),
   };
@@ -159,6 +166,10 @@ export function parseGreenSpaces(value: unknown): GreenSpace[] {
       nameJa: space.nameJa,
       wardId: space.wardId,
       ring: space.ring,
+      geometry: {
+        type: 'Polygon',
+        coordinates: [space.ring],
+      },
     };
   });
 }

@@ -15,6 +15,8 @@ export interface GreenSpace {
   wardId: string;
   /** Closed polygon ring in [lng, lat] order (WGS-84). */
   ring: [number, number][];
+  /** Full source geometry, preserving polygon holes and multipolygons. */
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 }
 
 let runtimeParks: GreenSpace[] = parseGreenSpaces(localGreenSpaces);
@@ -54,6 +56,7 @@ function featureToGreenSpace(f: Record<string, unknown>): GreenSpace | null {
     nameJa:  String(props.nameJa  ?? props['name:ja'] ?? props.name ?? id),
     wardId:  String(props.wardId  ?? ''),
     ring,
+    geometry: geom as GeoJSON.Polygon | GeoJSON.MultiPolygon,
   };
 }
 

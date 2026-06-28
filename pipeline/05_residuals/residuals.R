@@ -35,7 +35,7 @@ if ("is_unsampled" %in% names(obs)) {
 
 obs <- obs |>
   select(cell_id, species_richness, richness_corrected,
-         effort_corrected_richness, any_of("obs_is_unsampled"), n_obs, species_shannon,
+         effort_corrected_richness, any_of(c("observed_richness", "survey_effort_units", "obs_is_unsampled")), n_obs, species_shannon,
          n_survey_dates, weighted_observation_effort, has_structured_survey,
          weekend_only, temporal_bias_flag,
          plant, bird, insect, mammal, fungi)
@@ -43,6 +43,7 @@ obs <- obs |>
 conn <- st_read(PROC_GRID_CONN,quiet = TRUE) |>
   st_drop_geometry() |>
   select(cell_id, corridor_importance, connectivity_score, node_importance,
+         any_of("betweenness_centrality"),
          fragmentation_index, neighbor_fragmentation, edge_density,
          patch_isolation, patch_size_distribution, patch_area_ha)
 
@@ -52,6 +53,9 @@ grid <- hab |>
 
 if (!"obs_is_unsampled" %in% names(grid)) {
   grid$obs_is_unsampled <- NA
+}
+if (!"betweenness_centrality" %in% names(grid)) {
+  grid$betweenness_centrality <- grid$corridor_importance
 }
 
 # ── 2. Expected richness model ────────────────────────────────────────────────
@@ -64,6 +68,12 @@ if (!exists("MAX_EXPECTED_RICHNESS")) MAX_EXPECTED_RICHNESS <- 350L
 grid <- grid |>
   mutate(
     effort_corrected_richness = coalesce(effort_corrected_richness, richness_corrected),
+    survey_effort_units = if_else(
+      replace_na(path_km, 0) <= 0,
+      NA_real_,
+      coalesce(survey_effort_units, log1p(path_km))
+    ),
+    observed_richness = coalesce(observed_richness, effort_corrected_richness),
     is_unsampled = if_else(
       is.na(obs_is_unsampled),
       replace_na(path_km, 0) <= 0,
@@ -85,39 +95,37 @@ grid <- grid |>
     ecological_residual = if_else(
       is_unsampled,
       NA_real_,
-      effort_corrected_richness - expected_richness
+      observed_richness - expected_richness
     ),
     underperformance = pmax(0, -ecological_residual)
   ) |>
   select(-max_path_km, -obs_is_unsampled)
 
-max_abs_residual <- max(abs(grid$ecological_residual), na.rm = TRUE)
-# grid <- grid |>
-#   mutate(
-#     impact_score = if_else(
-#       max_abs_residual == 0,
-#       0,
-#       round(ecological_residual / max_abs_residual * 50)
-#     )
-#   )
+finite_residuals <- grid$ecological_residual[is.finite(grid$ecological_residual)]
+city_residual_mean <- if (length(finite_residuals) > 0L) mean(finite_residuals) else NA_real_
+city_residual_sd <- if (length(finite_residuals) > 1L) stats::sd(finite_residuals) else NA_real_
 
-m <- if (is.finite(max_abs_residual)) max_abs_residual else NA_real_
-
-if (is.na(m) || m == 0) {
+if (!is.finite(city_residual_sd) || city_residual_sd <= 0) {
   grid <- grid |>
     mutate(
       impact_score = 0,
+      ecological_residual_mean = city_residual_mean,
+      ecological_residual_std = city_residual_sd,
+      ecological_residual_normalized = NA_real_,
       bio_residual_norm = NA_real_,
       nature_gap_score = NA_real_
     )
 } else {
   grid <- grid |>
     mutate(
-      bio_residual_norm = if_else(
+      ecological_residual_mean = city_residual_mean,
+      ecological_residual_std = city_residual_sd,
+      ecological_residual_normalized = if_else(
         is.na(ecological_residual),
         NA_real_,
-        ecological_residual / m
+        (ecological_residual - city_residual_mean) / city_residual_sd
       ),
+      bio_residual_norm = pmax(-1, pmin(1, ecological_residual_normalized / 2)),
       impact_score = if_else(
         is.na(bio_residual_norm),
         NA_real_,
@@ -240,11 +248,17 @@ write_csv(top_cells, PROC_TOP_INTER)
 cell_attributes <- grid |>
   transmute(
     cell_id = paste0(CITY_ID, "-", cell_id),
+    observed_richness,
     expected_richness,
     effort_corrected_richness,
+    survey_effort_units,
     ecological_residual,
+    ecological_residual_normalized,
+    ecological_residual_mean,
+    ecological_residual_std,
     nature_gap_score,
     corridor_importance,
+    betweenness_centrality,
     intervention_rank,
     intervention_score,
     heat_exposure,

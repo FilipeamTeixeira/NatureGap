@@ -34,11 +34,17 @@ PMTILES_REQUIRED_FIELDS <- c(
   "natureGapScore",
   "expectedRichness",
   "ecologicalResidual",
+  "ecologicalResidualNormalized",
   "habitatQuality",
   "observedRichness",
   "corridorImportance",
+  "betweennessCentrality",
   "treeCover",
+  "meanCanopy",
+  "canopyHeightIdx",
   "heatExposure",
+  "meanLst",
+  "lstIdx",
   "landUseGreen",
   "landUseClass",
   "interventionRank"
@@ -303,6 +309,29 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
     crsLocal = CRS_LOCAL,
     sourceLayer = PMTILES_SOURCE_LAYER,
     requiredRenderFields = as.list(PMTILES_REQUIRED_FIELDS),
+    metricDefinitions = list(
+      observedRichness = list(
+        sourceField = "observed_richness",
+        definition = "Effort-normalised observed richness per survey effort unit.",
+        formula = "species_richness / survey_effort_units",
+        surveyEffortUnits = "log1p(path_km)",
+        missingValueRule = "Unsampled cells keep observed_richness and survey_effort_units as null; sampled cells with no observations use 0."
+      ),
+      effortCorrectedRichness = list(
+        sourceField = "effort_corrected_richness",
+        definition = "Canonical alias of observed_richness for residual calculation and backwards-compatible consumers."
+      ),
+      ecologicalResidual = list(
+        sourceField = "ecological_residual",
+        definition = "Raw observed_richness minus expected_richness. Preserved for backend analytics."
+      ),
+      ecologicalResidualNormalized = list(
+        sourceField = "ecological_residual_normalized",
+        definition = "City-wise z-score of raw ecological_residual using finite sampled cells.",
+        formula = "(ecological_residual - city_mean(ecological_residual)) / city_stddev(ecological_residual)",
+        visualizationRule = "Map render fields clamp ecologicalResidualNormalized * 25 to [-50, 50]; raw and normalized backend values are not clamped."
+      )
+    ),
     database = list(
       datasetTable = "pipeline_datasets",
       immutableCellTable = "pipeline_cell_attributes",
@@ -412,6 +441,12 @@ habitat_potential <- function(hq_index) {
 
 pct_index <- function(value) {
   as.integer(round(pmin(100, pmax(0, replace_na(value, 0) * 100))))
+}
+
+index_or_pct <- function(value) {
+  value <- replace_na(value, 0)
+  scaled <- ifelse(abs(value) <= 1, value * 100, value)
+  as.integer(round(pmin(100, pmax(0, scaled))))
 }
 
 finite_median <- function(value) {
@@ -609,11 +644,12 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     habitatQuality       = pct_index(hq),
     habitatQualityIndex  = round(hq, 4),
     speciesRichnessRaw   = as.integer(replace_na(row$species_richness, 0L)),
-    observedRichness     = if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$richness_corrected, 0), 1),
+    observedRichness     = if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$observed_richness, 0), 1),
     effortCorrectedRichness = if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$effort_corrected_richness, row$richness_corrected), 1),
     expectedRichness     = round(replace_na(row$expected_richness, 0), 1),
     maxExpectedRichness  = as.integer(max_expected),
     ecologicalResidual   = if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$ecological_residual, 0), 1),
+    ecologicalResidualNormalized = if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$ecological_residual_normalized, 0), 4),
     isUnsampled          = isTRUE(row$is_unsampled),
     temporalBiasFlag     = isTRUE(row$temporal_bias_flag),
     pathKm               = round(replace_na(row$path_km, 0), 4),
@@ -630,9 +666,14 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
       row$plant, row$bird, row$insect, row$mammal, row$fungi, taxa = taxa
     ),
     corridorImportance = pct_index(row$corridor_importance),
+    betweennessCentrality = pct_index(row$betweenness_centrality),
     fragmentationIndex = pct_index(row$fragmentation_index),
     treeCover          = pct_index(row$tree_fraction),
+    meanCanopy         = index_or_pct(row$mean_canopy),
+    canopyHeightIdx    = pct_index(row$canopy_height_idx),
     heatExposure       = pct_index(row$lst_rank),
+    meanLst            = index_or_pct(row$mean_lst),
+    lstIdx             = pct_index(row$lst_idx),
     landUseGreen       = pct_index(row$green_fraction_wc),
     landUseClass       = unbox(land_use_class(
       row$tree_fraction, row$shrub_fraction, row$grass_fraction,
@@ -640,7 +681,7 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     )),
     interventionRank   = as.integer(replace_na(row$intervention_rank, 50L)),
     pressures          = as.list(derive_pressures(
-      row$n_obs, row$n_survey_dates, row$richness_corrected,
+      row$n_obs, row$n_survey_dates, row$observed_richness,
       row$expected_richness, row$ecological_residual,
       row$fragmentation_index, row$corridor_importance,
       row$is_unsampled, row$temporal_bias_flag
@@ -654,9 +695,12 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
   sampled <- !rows$is_unsampled
   hq_mean <- finite_mean(rows$habitat_quality)
   patch_habitat_quality <- finite_first(patch_metrics$habitat_quality_index)
+  patch_observed <- finite_first(patch_metrics$observed_richness)
   patch_effort_corrected <- finite_first(patch_metrics$effort_corrected_richness)
   patch_expected <- finite_first(patch_metrics$expected_richness)
   patch_residual <- finite_first(patch_metrics$ecological_residual)
+  patch_residual_normalized <- finite_first(patch_metrics$ecological_residual_normalized)
+  patch_data_availability <- finite_first(patch_metrics$data_availability_ratio)
   patch_nature_gap <- finite_first(patch_metrics$nature_gap_score)
   aggregate_nature_gap <- if (is.finite(patch_nature_gap)) {
     round(patch_nature_gap, 1)
@@ -666,6 +710,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     NA_real_
   }
   patch_corridor <- finite_first(patch_metrics$corridor_importance)
+  patch_betweenness <- finite_first(patch_metrics$betweenness_centrality)
   patch_rank <- finite_first(patch_metrics$intervention_rank)
   park_taxa <- merge_park_taxa(rows$cell_id, cell_taxa_lookup)
   list(
@@ -674,11 +719,13 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     habitatQuality       = pct_index(coalesce(patch_habitat_quality, hq_mean)),
     habitatQualityIndex  = round(replace_na(coalesce(patch_habitat_quality, hq_mean), 0), 4),
     speciesRichnessRaw   = as.integer(sum(replace_na(rows$species_richness, 0L))),
-    observedRichness     = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 1) else if (any(sampled)) round(sum(replace_na(rows$effort_corrected_richness[sampled], 0)), 1) else NA_real_,
+    observedRichness     = if (is.finite(patch_observed)) round(patch_observed, 1) else if (any(sampled)) round(sum(replace_na(rows$observed_richness[sampled], 0)), 1) else NA_real_,
     effortCorrectedRichness = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 1) else if (any(sampled)) round(sum(replace_na(rows$effort_corrected_richness[sampled], 0)), 1) else NA_real_,
     expectedRichness     = if (is.finite(patch_expected)) round(patch_expected, 1) else round(replace_na(finite_mean(rows$expected_richness), 0), 1),
     maxExpectedRichness  = as.integer(max_expected),
-    ecologicalResidual   = if (is.finite(patch_residual)) round(patch_residual, 1) else if (any(sampled)) round(sum(replace_na(rows$ecological_residual[sampled], 0)), 1) else NA_real_,
+    ecologicalResidual   = if (is.finite(patch_residual)) round(patch_residual, 1) else if (any(sampled)) round(finite_mean(rows$ecological_residual[sampled]), 1) else NA_real_,
+    ecologicalResidualNormalized = if (is.finite(patch_residual_normalized)) round(patch_residual_normalized, 4) else if (any(sampled)) round(finite_mean(rows$ecological_residual_normalized[sampled]), 4) else NA_real_,
+    dataAvailabilityRatio = if (is.finite(patch_data_availability)) round(patch_data_availability, 4) else if (nrow(rows) > 0) round(sum(sampled, na.rm = TRUE) / nrow(rows), 4) else NA_real_,
     nObs                 = as.integer(sum(replace_na(rows$n_obs, 0L))),
     nSurveyDates         = as.integer(max(replace_na(rows$n_survey_dates, 0L))),
     status               = unbox(score_status(aggregate_nature_gap)),
@@ -697,9 +744,14 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
       taxa = park_taxa
     ),
     corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
+    betweennessCentrality = pct_index(if (is.finite(patch_betweenness)) patch_betweenness else finite_max(rows$betweenness_centrality)),
     fragmentationIndex = pct_index(finite_mean(rows$fragmentation_index)),
     treeCover          = pct_index(finite_mean(rows$tree_fraction)),
+    meanCanopy         = index_or_pct(finite_mean(rows$mean_canopy)),
+    canopyHeightIdx    = pct_index(finite_mean(rows$canopy_height_idx)),
     heatExposure       = pct_index(finite_mean(rows$lst_rank)),
+    meanLst            = index_or_pct(finite_mean(rows$mean_lst)),
+    lstIdx             = pct_index(finite_mean(rows$lst_idx)),
     landUseGreen       = pct_index(finite_mean(rows$green_fraction_wc)),
     landUseClass       = unbox(land_use_class(
       finite_mean(rows$tree_fraction),
@@ -712,7 +764,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     interventionRank   = as.integer(if (is.finite(patch_rank)) patch_rank else finite_min(rows$intervention_rank)),
     pressures = unique(unlist(lapply(seq_len(nrow(rows)), function(i) {
       derive_pressures(
-        rows$n_obs[i], rows$n_survey_dates[i], rows$richness_corrected[i],
+        rows$n_obs[i], rows$n_survey_dates[i], rows$observed_richness[i],
         rows$expected_richness[i], rows$ecological_residual[i],
         rows$fragmentation_index[i], rows$corridor_importance[i],
         rows$is_unsampled[i], rows$temporal_bias_flag[i]
@@ -728,11 +780,16 @@ park_lookup <- tibble(park_id = character(), park_name = character())
 green_metrics <- tibble(
   park_id = character(),
   habitat_quality_index = numeric(),
+  observed_richness = numeric(),
   effort_corrected_richness = numeric(),
+  survey_effort_units = numeric(),
   expected_richness = numeric(),
   ecological_residual = numeric(),
+  ecological_residual_normalized = numeric(),
+  data_availability_ratio = numeric(),
   nature_gap_score = numeric(),
   corridor_importance = numeric(),
+  betweenness_centrality = numeric(),
   intervention_rank = numeric()
 )
 green <- NULL
@@ -753,8 +810,11 @@ if (file.exists(green_path)) {
   if (!"nameJa" %in% names(green_raw)) green_raw$nameJa <- NA_character_
   if (!"wardId" %in% names(green_raw)) green_raw$wardId <- NA_character_
   for (col in c(
-    "habitat_quality_index", "effort_corrected_richness", "expected_richness",
-    "ecological_residual", "nature_gap_score", "corridor_importance", "intervention_rank"
+    "habitat_quality_index", "observed_richness", "effort_corrected_richness",
+    "survey_effort_units", "expected_richness",
+    "ecological_residual", "ecological_residual_normalized",
+    "data_availability_ratio", "nature_gap_score", "corridor_importance",
+    "betweenness_centrality", "intervention_rank"
   )) {
     if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
   }
@@ -776,8 +836,11 @@ if (file.exists(green_path)) {
     ) |>
     select(
       id, name, nameJa, wardId,
-      habitat_quality_index, effort_corrected_richness, expected_richness,
-      ecological_residual, nature_gap_score, corridor_importance, intervention_rank
+      habitat_quality_index, observed_richness, effort_corrected_richness,
+      survey_effort_units, expected_richness,
+      ecological_residual, ecological_residual_normalized,
+      data_availability_ratio, nature_gap_score, corridor_importance,
+      betweenness_centrality, intervention_rank
     )
 
   park_lookup <- green |>
@@ -789,11 +852,16 @@ if (file.exists(green_path)) {
     transmute(
       park_id = id,
       habitat_quality_index,
+      observed_richness,
       effort_corrected_richness,
+      survey_effort_units,
       expected_richness,
       ecological_residual,
+      ecological_residual_normalized,
+      data_availability_ratio,
       nature_gap_score,
       corridor_importance,
+      betweenness_centrality,
       intervention_rank
     )
 
@@ -816,7 +884,25 @@ if (!"effort_corrected_richness" %in% names(grid_raw)) {
 }
 if (!"species_richness" %in% names(grid_raw)) grid_raw$species_richness <- grid_raw$richness_corrected
 if (!"path_km" %in% names(grid_raw)) grid_raw$path_km <- 0
+if (!"observed_richness" %in% names(grid_raw)) grid_raw$observed_richness <- grid_raw$effort_corrected_richness
+if (!"ecological_residual_normalized" %in% names(grid_raw)) grid_raw$ecological_residual_normalized <- NA_real_
+if (!"ecological_residual_mean" %in% names(grid_raw)) grid_raw$ecological_residual_mean <- NA_real_
+if (!"ecological_residual_std" %in% names(grid_raw)) grid_raw$ecological_residual_std <- NA_real_
+if (!"survey_effort_units" %in% names(grid_raw)) {
+  grid_raw$survey_effort_units <- if_else(
+    replace_na(grid_raw$path_km, 0) <= 0,
+    NA_real_,
+    log1p(replace_na(grid_raw$path_km, 0))
+  )
+}
 if (!"nature_gap_score" %in% names(grid_raw)) grid_raw$nature_gap_score <- NA_real_
+if (!"mean_canopy" %in% names(grid_raw)) grid_raw$mean_canopy <- grid_raw$tree_fraction
+if (!"canopy_height_idx" %in% names(grid_raw)) grid_raw$canopy_height_idx <- NA_real_
+if (!"mean_lst" %in% names(grid_raw)) {
+  grid_raw$mean_lst <- grid_raw$lst_rank
+}
+if (!"lst_idx" %in% names(grid_raw)) grid_raw$lst_idx <- NA_real_
+if (!"betweenness_centrality" %in% names(grid_raw)) grid_raw$betweenness_centrality <- grid_raw$corridor_importance
 if (!"is_unsampled" %in% names(grid_raw)) grid_raw$is_unsampled <- replace_na(grid_raw$path_km, 0) <= 0
 if (!"temporal_bias_flag" %in% names(grid_raw)) grid_raw$temporal_bias_flag <- FALSE
 if (!"taxonomic_shannon" %in% names(grid_raw) && "species_shannon" %in% names(grid_raw)) {
@@ -841,14 +927,19 @@ grid <- grid_raw |>
              "water_fraction", "bare_fraction",
              "impervious_fraction", "osm_green_fraction")),
     any_of(c("ndvi_mean", "lst_rank", "heat_exposure", "noise",
-             "light_pollution", "disturbance_index", "water_proximity")),
+             "light_pollution", "disturbance_index", "water_proximity",
+             "mean_canopy", "mean_lst",
+             "canopy_height_idx", "lst_idx")),
     corridor_importance, connectivity_score, node_importance,
+    betweenness_centrality,
     fragmentation_index, patch_area_ha,
-    n_obs, species_richness, richness_corrected, effort_corrected_richness,
+    n_obs, species_richness, richness_corrected, observed_richness,
+    effort_corrected_richness, survey_effort_units,
     taxonomic_shannon, is_unsampled, temporal_bias_flag,
     n_survey_dates, path_km,
     plant, bird, insect, mammal, fungi,
-    expected_richness, ecological_residual
+    expected_richness, ecological_residual, ecological_residual_normalized,
+    ecological_residual_mean, ecological_residual_std
   )
 
 n_total  <- nrow(grid_raw)
@@ -985,11 +1076,17 @@ hexgrid_tiles <- hexgrid_render |>
     natureGapScore     = if_else(is_unsampled, 0, round(replace_na(nature_gap_score, 0), 1)),
     expectedRichness   = round(replace_na(expected_richness, 0), 1),
     ecologicalResidual = if_else(is_unsampled, 0, round(replace_na(ecological_residual, 0), 1)),
+    ecologicalResidualNormalized = if_else(is_unsampled, 0, round(replace_na(ecological_residual_normalized, 0), 4)),
     habitatQuality     = pct_index(habitat_quality),
-    observedRichness   = if_else(is_unsampled, 0, round(replace_na(richness_corrected, 0), 1)),
+    observedRichness   = if_else(is_unsampled, 0, round(replace_na(observed_richness, 0), 1)),
     corridorImportance = pct_index(corridor_importance),
+    betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),
+    meanCanopy         = index_or_pct(mean_canopy),
+    canopyHeightIdx    = pct_index(canopy_height_idx),
     heatExposure       = pct_index(lst_rank),
+    meanLst            = index_or_pct(mean_lst),
+    lstIdx             = pct_index(lst_idx),
     landUseGreen       = pct_index(green_fraction_wc),
     landUseClass       = land_use_class(
       tree_fraction, shrub_fraction, grass_fraction,
@@ -1049,14 +1146,18 @@ if (exists("PROC_CONNECTIVITY_GRAPH") && file.exists(PROC_CONNECTIVITY_GRAPH)) {
 if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
   cell_attr_base <- st_read(PROC_CELL_ATTR, quiet = TRUE) |>
     st_transform(4326) |>
-    select(-any_of("nature_gap_score"))
+    select(-any_of(c("nature_gap_score", "observed_richness")))
 } else {
   cell_attr_base <- grid |>
     transmute(
       cell_id,
       expected_richness,
       effort_corrected_richness,
+      survey_effort_units,
       ecological_residual,
+      ecological_residual_normalized,
+      ecological_residual_mean,
+      ecological_residual_std,
       nature_gap_score,
       corridor_importance,
       intervention_rank,
@@ -1083,7 +1184,7 @@ cell_detail_attrs <- grid_all |>
       cell_taxa_lookup[[sub(paste0("^", CITY_ID, "-"), "", cell_id)]]
     ))),
     pressures = list(derive_pressures(
-      n_obs, n_survey_dates, richness_corrected,
+      n_obs, n_survey_dates, observed_richness,
       expected_richness, ecological_residual,
       fragmentation_index, corridor_importance,
       is_unsampled, temporal_bias_flag
@@ -1102,7 +1203,7 @@ cell_detail_attrs <- grid_all |>
     habitat_quality = pct_index(habitat_quality),
     habitat_quality_index = round(replace_na(habitat_quality, 0), 4),
     species_richness_raw = as.integer(replace_na(species_richness, 0L)),
-    observed_richness = if_else(is_unsampled, NA_real_, round(replace_na(richness_corrected, 0), 1)),
+    observed_richness = if_else(is_unsampled, NA_real_, round(replace_na(observed_richness, 0), 1)),
     max_expected_richness = as.integer(MAX_EXPECTED_RICHNESS),
     n_obs = as.integer(replace_na(n_obs, 0L)),
     n_survey_dates = as.integer(replace_na(n_survey_dates, 0L)),

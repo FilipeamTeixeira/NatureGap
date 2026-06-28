@@ -11,6 +11,7 @@ import { MAP_LAYERS } from '@/lib/mock-data';
 import { initParks } from '@/lib/green-spaces';
 import { initData } from '@/lib/data';
 import { fetchCellDetail, type RenderCellProperties } from '@/lib/cell-detail';
+import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -46,6 +47,10 @@ export default function Page() {
   const quickSightingsFc = useMemo(() => quickSightingsGeoJSON(quickSightings), [quickSightings]);
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
   const structuredSurveysFc = useMemo(() => structuredSurveysGeoJSON(structuredSurveys), [structuredSurveys]);
+  const activeLayer = useMemo<HexLayerId>(
+    () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'impact',
+    [layers],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +97,13 @@ export default function Page() {
   }, [refreshCitizenData]);
 
   const toggleLayer = (id: string) => {
-    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
+    const isThematic = (THEMATIC_LAYER_IDS as readonly string[]).includes(id);
+    setLayers((prev) => prev.map((layer) => {
+      if (isThematic && (THEMATIC_LAYER_IDS as readonly string[]).includes(layer.id)) {
+        return { ...layer, enabled: layer.id === id };
+      }
+      return layer.id === id ? { ...layer, enabled: !layer.enabled } : layer;
+    }));
   };
 
   const handleHexClick = async (
@@ -156,7 +167,12 @@ export default function Page() {
         </div>
 
         {selectedCell ? (
-          <CellDetailPanel cell={selectedCell} onClose={handleClosePanel} />
+          <CellDetailPanel
+            cell={selectedCell}
+            activeLayer={activeLayer}
+            onClose={handleClosePanel}
+            onViewInsidePark={() => setFlyToTarget({ center: selectedCell.coordinates, zoom: 16 })}
+          />
         ) : selectedWard ? (
           <WardSummaryPanel ward={selectedWard} onClose={handleClosePanel} />
         ) : (

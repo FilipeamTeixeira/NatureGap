@@ -55,6 +55,8 @@ export interface CellStatsFields {
   expectedRichness: number;
   maxExpectedRichness: number;
   ecologicalResidual: number | null;
+  ecologicalResidualNormalized?: number | null;
+  dataAvailabilityRatio?: number | null;
   isUnsampled?: boolean;
   temporalBiasFlag?: boolean;
   pathKm?: number;
@@ -66,11 +68,17 @@ export interface CellStatsFields {
   taxonomicDiversity: number;
   species: Species[];
   corridorImportance: number;
+  betweennessCentrality?: number;
   fragmentationIndex: number;
   /** 0–100 tree canopy fraction (from pipeline WorldCover). */
   treeCover?: number;
+  /** 0–100 mean canopy/canopy-height index for overview and detail map styling. */
+  meanCanopy?: number;
+  canopyHeightIdx?: number;
   /** 0–100 heat exposure rank (from Landsat LST when available). */
   heatExposure?: number;
+  meanLst?: number;
+  lstIdx?: number;
   /** 0–100 vegetated land-cover fraction. */
   landUseGreen?: number;
   /** Dominant categorical land-cover class used for map fills. */

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "cityId": "amsterdam-schimmelstraat",
-  "cityName": "Amsterdam",
-  "cityCountry": "The Netherlands",
-  "datasetId": "20260627T113635Z",
-  "dataVersion": "20260627T113635Z",
-  "generatedAt": "2026-06-27T11:36:35Z",
+  "cityId": "yokohama-honmoku",
+  "cityName": "Honmoku, Yokohama",
+  "cityCountry": "Japan",
+  "datasetId": "20260627T201133Z",
+  "dataVersion": "20260627T201133Z",
+  "generatedAt": "2026-06-27T20:11:33Z",
   "cellSizeM": 20,
   "crsLocal": "EPSG:6674",
   "sourceLayer": "hexgrid",
@@ -14,13 +14,19 @@
     "parkId",
     "parkName",
     "impactScore",
+    "natureGapScore",
     "expectedRichness",
     "ecologicalResidual",
     "habitatQuality",
     "observedRichness",
     "corridorImportance",
+    "betweennessCentrality",
     "treeCover",
+    "meanCanopy",
+    "canopyHeightIdx",
     "heatExposure",
+    "meanLst",
+    "lstIdx",
     "landUseGreen",
     "landUseClass",
     "interventionRank"
@@ -64,8 +70,8 @@
     }
   },
   "counts": {
-    "renderCells": 549,
-    "parks": 36
+    "renderCells": 2005,
+    "parks": 50
   },
   "pmtiles": {
     "path": "hexgrid.pmtiles",
@@ -73,36 +79,36 @@
     "minZoom": 0,
     "maxZoom": 18,
     "bounds": [
-      4.8543,
-      52.3664,
-      4.8709,
-      52.3726
+      139.6401,
+      35.4152,
+      139.6725,
+      35.4304
     ]
   },
   "files": {
     "hexgrid.pmtiles": {
       "path": "hexgrid.pmtiles",
-      "bytes": 315475
+      "bytes": 1103305
     },
     "parks.geojson": {
       "path": "parks.geojson",
-      "bytes": 18490
+      "bytes": 58216
     },
     "park-stats.json": {
       "path": "park-stats.json",
-      "bytes": 72706
+      "bytes": 120661
     },
     "cell_attributes.geojson": {
       "path": "cell_attributes.geojson",
-      "bytes": 9672764
+      "bytes": 28581732
     },
     "corridor-links.geojson": {
       "path": "corridor-links.geojson",
-      "bytes": 4463038
+      "bytes": 13057195
     },
     "top_interventions.json": {
       "path": "top_interventions.json",
-      "bytes": 33729
+      "bytes": 36306
     }
   }
 }

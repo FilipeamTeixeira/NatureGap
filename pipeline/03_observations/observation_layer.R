@@ -341,7 +341,10 @@ jsonlite::write_json(
 cat(sprintf("Written: %s (%d cells with taxa)\n", PROC_CELL_TAXA, length(cell_taxa_out)))
 
 # ── 6. Effort correction ──────────────────────────────────────────────────────
-# Corrected richness = species_richness / log1p(path_km)
+# Observed richness is the exported effort-normalised biodiversity metric:
+#
+#   observed_richness = species_richness / survey_effort_units
+#   survey_effort_units = log1p(path_km)
 #
 # Cells with no accessible OSM pedestrian path length are marked unsampled and
 # retain NA for corrected richness so they are excluded from inference.
@@ -353,11 +356,13 @@ richness_corrected <- richness |>
   mutate(
     path_km            = replace_na(path_km, 0),
     is_unsampled       = path_km <= 0,
+    survey_effort_units = if_else(is_unsampled, NA_real_, log1p(path_km)),
     effort_corrected_richness = if_else(
       is_unsampled,
       NA_real_,
-      species_richness / log1p(path_km)
+      species_richness / survey_effort_units
     ),
+    observed_richness = effort_corrected_richness,
     richness_corrected = effort_corrected_richness
   )
 
@@ -374,6 +379,16 @@ grid_obs <- grid |>
       is_unsampled,
       NA_real_,
       replace_na(effort_corrected_richness, 0)
+    ),
+    survey_effort_units = if_else(
+      is_unsampled,
+      NA_real_,
+      replace_na(survey_effort_units, log1p(replace_na(path_km, 0)))
+    ),
+    observed_richness = if_else(
+      is_unsampled,
+      NA_real_,
+      replace_na(observed_richness, effort_corrected_richness)
     ),
     richness_corrected = effort_corrected_richness,
     n_survey_dates     = replace_na(n_survey_dates, 0L),
@@ -392,6 +407,28 @@ grid_obs <- grid |>
     mammal             = replace_na(mammal, 0L),
     fungi              = replace_na(fungi, 0L)
   )
+
+sampled_missing_observed <- grid_obs |>
+  st_drop_geometry() |>
+  filter(!is_unsampled & (is.na(survey_effort_units) | is.na(observed_richness)))
+
+if (nrow(sampled_missing_observed) > 0L) {
+  stop(sprintf(
+    "Observed richness contract violation: %d sampled cells lack survey_effort_units or observed_richness.",
+    nrow(sampled_missing_observed)
+  ), call. = FALSE)
+}
+
+unsampled_with_observed <- grid_obs |>
+  st_drop_geometry() |>
+  filter(is_unsampled & (!is.na(survey_effort_units) | !is.na(observed_richness)))
+
+if (nrow(unsampled_with_observed) > 0L) {
+  stop(sprintf(
+    "Observed richness contract violation: %d unsampled cells have non-null effort-normalised richness.",
+    nrow(unsampled_with_observed)
+  ), call. = FALSE)
+}
 
 st_write(grid_obs, PROC_GRID_OBS, delete_dsn = TRUE)
 cat(sprintf("Written: grid_observations.gpkg (%d cells)\n", nrow(grid_obs)))

@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { X, ArrowLeft } from 'lucide-react';
-import { cn, getScoreLabel } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { SCORE_THRESHOLDS, CITY, MAX_EXPECTED_RICHNESS } from '@/lib/config';
 import type { CellData } from '@/lib/types';
+import type { HexLayerId } from '@/lib/layer-styles';
 import ScoreGauge from './ScoreGauge';
 import InterventionCard from './InterventionCard';
 
@@ -27,7 +28,9 @@ const SPECIES_LABELS: Record<string, string> = {
 
 interface CellDetailPanelProps {
   cell: CellData;
+  activeLayer: HexLayerId;
   onClose: () => void;
+  onViewInsidePark?: () => void;
 }
 
 function formatMetric(value: number | null | undefined, digits = 1): string {
@@ -96,6 +99,12 @@ function SpeciesGroupList({ species }: { species: CellData['species'] }) {
   );
 }
 
+function ecologicalStatus(score: number): string {
+  if (score < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING) return 'Under pressure';
+  if (score > SCORE_THRESHOLDS.BETTER) return 'Potential refuge';
+  return 'Performing as expected';
+}
+
 function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
   const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
   return (
@@ -161,10 +170,16 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
   );
 }
 
-export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps) {
+export default function CellDetailPanel({
+  cell,
+  activeLayer,
+  onClose,
+  onViewInsidePark,
+}: CellDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview');
   const isUnder = cell.impactScore < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
   const speciesTotal = cell.species.reduce((s, sp) => s + sp.count, 0);
+  const showResidualSummary = activeLayer === 'residual';
 
   return (
     <div className="w-[440px] flex-shrink-0 bg-[#F7F8F5] border-l border-[#E4E7E1] flex flex-col overflow-hidden">
@@ -202,7 +217,7 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
                 : 'bg-[#DDEAD8] text-[#2E6F40]',
             )}
           >
-            {getScoreLabel(cell.impactScore)}
+            {ecologicalStatus(cell.impactScore)}
           </span>
           <span
             className={cn(
@@ -239,29 +254,83 @@ export default function CellDetailPanel({ cell, onClose }: CellDetailPanelProps)
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' && (
           <div className="p-5 flex flex-col gap-4">
-            <Card>
-              <CardTitle>Ecological diagnosis</CardTitle>
-              <CardSubtitle>Nature Gap score from pipeline</CardSubtitle>
-              <div className="flex items-center gap-5">
-                <ScoreGauge score={cell.impactScore} />
-                <div className="flex-1">
-                  <p className="text-[12px] text-[#667066] leading-relaxed">
-                    Nature Gap combines biodiversity residual, habitat quality, and corridor
-                    connectivity into the public headline score.
-                  </p>
-                  {cell.pressures.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-1.5">
-                      {cell.pressures.slice(0, 3).map((p) => (
-                        <div key={p} className="flex items-start gap-2 text-[11px] text-[#667066]">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#E8A44C] mt-1.5 flex-shrink-0" />
-                          {p}
-                        </div>
-                      ))}
+            {showResidualSummary ? (
+              <Card>
+                <CardTitle>Ecological residual</CardTitle>
+                <CardSubtitle>Biodiversity-specific metric</CardSubtitle>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-[#F7F8F5] rounded-xl p-4">
+                    <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
+                      {formatMetric(cell.ecologicalResidual)}
                     </div>
-                  )}
+                    <div className="text-[11px] text-[#667066] mt-1.5">Residual</div>
+                  </div>
+                  <div className="bg-[#F7F8F5] rounded-xl p-4">
+                    <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
+                      {cell.nSurveyDates}
+                    </div>
+                    <div className="text-[11px] text-[#667066] mt-1.5">Survey visits</div>
+                  </div>
                 </div>
-              </div>
-            </Card>
+                <p className="text-[12px] text-[#667066] leading-relaxed">
+                  Ecological residual is corrected richness minus expected richness. Positive
+                  values indicate more species than expected; negative values indicate fewer.
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="bg-[#F7F8F5] rounded-xl p-3">
+                    <div className="text-[18px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(1)}</div>
+                    <div className="text-[10px] text-[#667066]">Expected richness</div>
+                  </div>
+                  <div className="bg-[#F7F8F5] rounded-xl p-3">
+                    <div className="text-[18px] font-semibold text-[#1F2A1F]">{formatMetric(cell.effortCorrectedRichness ?? cell.observedRichness)}</div>
+                    <div className="text-[10px] text-[#667066]">Corrected richness</div>
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <Card>
+                <CardTitle>Nature Gap</CardTitle>
+                <CardSubtitle>Composite ecological condition</CardSubtitle>
+                <div className="flex items-center gap-5">
+                  <ScoreGauge score={cell.impactScore} />
+                  <div className="flex-1">
+                    <p className="text-[12px] text-[#667066] leading-relaxed">
+                      Nature Gap combines biodiversity residual, habitat quality, and corridor
+                      connectivity into the public headline score.
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="bg-[#F7F8F5] rounded-xl p-3">
+                        <div className="text-[16px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(0)}</div>
+                        <div className="text-[10px] text-[#667066]">Expected richness</div>
+                      </div>
+                      <div className="bg-[#F7F8F5] rounded-xl p-3">
+                        <div className="text-[16px] font-semibold text-[#1F2A1F]">{formatMetric(cell.observedRichness)}</div>
+                        <div className="text-[10px] text-[#667066]">Observed richness</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-[11px] text-[#667066]">
+                      Intervention priority {cell.interventionRank ?? 'unranked'}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTab('actions')}
+                    className="flex-1 rounded-lg bg-[#2E6F40] px-3 py-2 text-[12px] font-semibold text-white"
+                  >
+                    See what you can do here
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onViewInsidePark}
+                    className="flex-1 rounded-lg border border-[#D1D8CE] px-3 py-2 text-[12px] font-semibold text-[#1F2A1F]"
+                  >
+                    View inside this park
+                  </button>
+                </div>
+              </Card>
+            )}
 
             <Card>
               <CardTitle>Biodiversity</CardTitle>

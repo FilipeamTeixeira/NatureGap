@@ -30,12 +30,25 @@ if (!"green_space_id" %in% names(hex)) {
 
 for (col in c(
   "habitat_quality", "expected_richness", "species_richness",
-  "effort_corrected_richness", "ecological_residual", "corridor_importance",
-  "nature_gap_score", "fragmentation_index", "impact_score", "intervention_rank",
+  "observed_richness", "effort_corrected_richness", "survey_effort_units",
+  "ecological_residual", "ecological_residual_normalized",
+  "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
+  "betweenness_centrality", "nature_gap_score", "fragmentation_index", "impact_score", "intervention_rank",
   "intervention_score", "path_km", "n_obs"
 )) {
   if (!col %in% names(hex)) hex[[col]] <- NA_real_
 }
+
+hex <- hex |>
+  mutate(
+    effort_corrected_richness = coalesce(effort_corrected_richness, observed_richness),
+    observed_richness = coalesce(observed_richness, effort_corrected_richness),
+    survey_effort_units = if_else(
+      replace_na(path_km, 0) <= 0,
+      NA_real_,
+      coalesce(survey_effort_units, log1p(path_km))
+    )
+  )
 
 if (!"is_unsampled" %in% names(hex)) hex$is_unsampled <- replace_na(hex$path_km, 0) <= 0
 
@@ -130,24 +143,41 @@ patch_base <- hex_weighted |>
   group_by(green_space_id) |>
   summarise(
     habitat_quality_index = finite_weighted_mean(habitat_quality, overlap_area_m2),
-    expected_richness = finite_weighted_sum(expected_richness, overlap_fraction),
-    effort_corrected_richness = finite_weighted_sum(
+    expected_richness = finite_weighted_mean(expected_richness, overlap_area_m2),
+    observed_richness = finite_weighted_mean(
+      observed_richness[sampled_for_residual],
+      overlap_area_m2[sampled_for_residual]
+    ),
+    effort_corrected_richness = finite_weighted_mean(
       effort_corrected_richness[sampled_for_residual],
-      overlap_fraction[sampled_for_residual]
+      overlap_area_m2[sampled_for_residual]
     ),
-    species_richness_raw = finite_weighted_sum(
+    survey_effort_units = finite_weighted_mean(
+      survey_effort_units[sampled_for_residual],
+      overlap_area_m2[sampled_for_residual]
+    ),
+    species_richness_raw = finite_weighted_mean(
       species_richness[sampled_for_residual],
-      overlap_fraction[sampled_for_residual]
+      overlap_area_m2[sampled_for_residual]
     ),
-    ecological_residual = finite_weighted_sum(
+    ecological_residual = finite_weighted_mean(
       ecological_residual[sampled_for_residual],
-      overlap_fraction[sampled_for_residual]
+      overlap_area_m2[sampled_for_residual]
     ),
+    ecological_residual_normalized = finite_weighted_mean(
+      ecological_residual_normalized[sampled_for_residual],
+      overlap_area_m2[sampled_for_residual]
+    ),
+    ecological_residual_mean = finite_weighted_mean(ecological_residual_mean, overlap_area_m2),
+    ecological_residual_std = finite_weighted_mean(ecological_residual_std, overlap_area_m2),
     corridor_importance = finite_weighted_mean(corridor_importance, overlap_area_m2),
+    betweenness_centrality = finite_weighted_mean(betweenness_centrality, overlap_area_m2),
     fragmentation_index = finite_weighted_mean(fragmentation_index, overlap_area_m2),
     impact_score = finite_median(impact_score),
     patch_intervention_score = finite_weighted_mean(intervention_score, overlap_area_m2),
     n_visits = sum(replace_na(n_obs, 0), na.rm = TRUE),
+    sampled_area_m2 = sum(overlap_area_m2[sampled_for_residual], na.rm = TRUE),
+    linked_area_m2 = sum(overlap_area_m2, na.rm = TRUE),
     sampled_cell_count = sum(sampled_for_residual, na.rm = TRUE),
     linked_cell_count = n(),
     .groups = "drop"
@@ -172,21 +202,22 @@ patch_metrics <- patch_base |>
   left_join(patch_area, by = "green_space_id") |>
   mutate(
     effort_corrected_richness = if_else(sampled_cell_count == 0L, NA_real_, effort_corrected_richness),
+    observed_richness = if_else(sampled_cell_count == 0L, NA_real_, observed_richness),
+    survey_effort_units = if_else(sampled_cell_count == 0L, NA_real_, survey_effort_units),
     species_richness_raw = if_else(sampled_cell_count == 0L, NA_real_, species_richness_raw),
     ecological_residual = if_else(sampled_cell_count == 0L, NA_real_, ecological_residual),
+    ecological_residual_normalized = if_else(sampled_cell_count == 0L, NA_real_, ecological_residual_normalized),
+    data_availability_ratio = if_else(linked_area_m2 > 0, sampled_area_m2 / linked_area_m2, NA_real_),
     fragmentation = coalesce(fragmentation_index, fragmentation)
   )
 
-max_abs_patch_residual <- max(abs(patch_metrics$ecological_residual), na.rm = TRUE)
-patch_residual_norm <- if (is.finite(max_abs_patch_residual) && max_abs_patch_residual > 0) {
-  patch_metrics$ecological_residual / max_abs_patch_residual
-} else {
-  rep(NA_real_, nrow(patch_metrics))
-}
-
 patch_metrics <- patch_metrics |>
   mutate(
-    bio_residual_norm = patch_residual_norm,
+    bio_residual_norm = if_else(
+      is.na(ecological_residual_normalized),
+      NA_real_,
+      pmax(-1, pmin(1, ecological_residual_normalized / 2))
+    ),
     habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality_index, 0))),
     connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),
     nature_gap_score = if_else(

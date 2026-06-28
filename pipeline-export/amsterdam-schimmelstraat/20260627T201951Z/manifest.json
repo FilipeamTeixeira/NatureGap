@@ -3,9 +3,9 @@
   "cityId": "amsterdam-schimmelstraat",
   "cityName": "Amsterdam",
   "cityCountry": "The Netherlands",
-  "datasetId": "20260627T103324Z",
-  "dataVersion": "20260627T103324Z",
-  "generatedAt": "2026-06-27T10:33:24Z",
+  "datasetId": "20260627T201951Z",
+  "dataVersion": "20260627T201951Z",
+  "generatedAt": "2026-06-27T20:19:51Z",
   "cellSizeM": 20,
   "crsLocal": "EPSG:6674",
   "sourceLayer": "hexgrid",
@@ -14,13 +14,19 @@
     "parkId",
     "parkName",
     "impactScore",
+    "natureGapScore",
     "expectedRichness",
     "ecologicalResidual",
     "habitatQuality",
     "observedRichness",
     "corridorImportance",
+    "betweennessCentrality",
     "treeCover",
+    "meanCanopy",
+    "canopyHeightIdx",
     "heatExposure",
+    "meanLst",
+    "lstIdx",
     "landUseGreen",
     "landUseClass",
     "interventionRank"
@@ -64,8 +70,8 @@
     }
   },
   "counts": {
-    "renderCells": 549,
-    "parks": 36
+    "renderCells": 929,
+    "parks": 35
   },
   "pmtiles": {
     "path": "hexgrid.pmtiles",
@@ -73,36 +79,36 @@
     "minZoom": 0,
     "maxZoom": 18,
     "bounds": [
-      4.8543,
+      4.8542,
       52.3664,
-      4.8709,
+      4.8711,
       52.3726
     ]
   },
   "files": {
     "hexgrid.pmtiles": {
       "path": "hexgrid.pmtiles",
-      "bytes": 315476
+      "bytes": 532050
     },
     "parks.geojson": {
       "path": "parks.geojson",
-      "bytes": 18490
+      "bytes": 29074
     },
     "park-stats.json": {
       "path": "park-stats.json",
-      "bytes": 72706
+      "bytes": 63733
     },
     "cell_attributes.geojson": {
       "path": "cell_attributes.geojson",
-      "bytes": 9672764
+      "bytes": 10265565
     },
     "corridor-links.geojson": {
       "path": "corridor-links.geojson",
-      "bytes": 4463037
+      "bytes": 4463038
     },
     "top_interventions.json": {
       "path": "top_interventions.json",
-      "bytes": 33729
+      "bytes": 35964
     }
   }
 }

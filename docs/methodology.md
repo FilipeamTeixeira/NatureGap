@@ -121,28 +121,50 @@ Problem:
 Citizen-science observations cluster where people walk. Raw richness therefore
 confounds biodiversity with observer effort.
 
-Current formula:
+Canonical formula:
 
 ```text
+survey_effort_units_i = log(1 + path_km_i)
+
 effort_corrected_richness_i =
-  species_richness_i / log(1 + path_km_i)
+  species_richness_i / survey_effort_units_i
+
+observed_richness_i =
+  effort_corrected_richness_i
 ```
 
 Where:
 
 - `species_richness_i` is the distinct species count in cell `i`.
 - `path_km_i` is OSM pedestrian path length in cell `i`.
+- `survey_effort_units_i` is the explicit effort denominator used by every
+  city pipeline run.
+- `observed_richness_i` is the exported biodiversity metric used by hex,
+  patch, and detail outputs. It is intentionally effort-normalised, not raw
+  species count.
 
 Unsampled rule:
 
 ```text
 if path_km_i <= 0:
   is_unsampled_i = true
+  survey_effort_units_i = NA
+  observed_richness_i = NA
   effort_corrected_richness_i = NA
 ```
 
 Unsampled cells are excluded from residual inference. They are not zero-richness
 cells.
+
+Missing-value rule:
+
+- Sampled cells with no records keep `survey_effort_units_i > 0` and export
+  `observed_richness_i = 0`.
+- Unsampled cells export `observed_richness_i = NA`; exporters may coalesce to
+  `0` only for render-only PMTiles fields that cannot style nulls reliably.
+- Patch-level `observed_richness` is aggregated from the same cell-level
+  `observed_richness` field, weighted by cell/patch overlap, so patch and hex
+  values use the same pipeline semantics.
 
 Structured-survey rule:
 
@@ -182,8 +204,9 @@ Where:
 - `accessibility_component_i = log1p(path_km_i) / log1p(max_path_km)`
   clamped to `[0, 1]`
 
-Expected richness is an index-like estimate for relative comparison. It is not
-a calibrated species distribution model.
+Expected richness is model output only. It is an index-like estimate for
+relative comparison, not a calibrated species distribution model and not field
+observation data.
 
 Limitations:
 
@@ -198,18 +221,27 @@ Ecological residual is computed in `pipeline/05_residuals/residuals.R`.
 Formula:
 
 ```text
-ecological_residual_i =
-  effort_corrected_richness_i - expected_richness_i
+ecological_residual_raw_i =
+  observed_richness_i - expected_richness_i
+
+ecological_residual_normalized_i =
+  (ecological_residual_raw_i - city_mean(ecological_residual_raw)) /
+  city_stddev(ecological_residual_raw)
 ```
 
 Interpretation:
 
-- Positive residual: above expectation, potential refuge
-- Negative residual: below expectation, habitat pressure, restoration priority
+- `ecological_residual` stores the raw observed-minus-expected value for
+  backend analytics.
+- `ecological_residual_normalized` stores the city-wise standardized residual
+  used by MapLibre residual styling.
+- Positive normalized residual: above expectation, potential refuge
+- Negative normalized residual: below expectation, habitat pressure, restoration priority
 - Near zero: observed richness aligns with expectation
 - Unsampled: `NA`
 
-Do not reuse this field for public-facing composite scores.
+Map visualisation may clamp `ecological_residual_normalized * 25` to
+`[-50, 50]`. Raw backend values are not clamped.
 
 ## 8. Nature Gap Score
 
@@ -220,7 +252,7 @@ Current implementation:
 ```text
 nature_gap_score_i =
   (
-    0.50 * ecological_residual_i / max(abs(ecological_residual)) +
+    0.50 * clamp(ecological_residual_normalized_i / 2, -1, 1) +
     0.30 * (1 - habitat_quality_i) +
     0.20 * (1 - corridor_importance_i)
   ) * 100
@@ -233,8 +265,9 @@ Interpretation:
 - Zero: near expected or no finite residual range
 
 This is intentionally separate from `ecological_residual`. PMTiles expose
-`natureGapScore` for user-facing styling, while detail panels can also show
-`ecologicalResidual`.
+`natureGapScore` for decision-score styling and
+`ecologicalResidualNormalized` for residual styling, while detail panels can
+also show raw `ecologicalResidual`.
 
 Current color/status thresholds:
 

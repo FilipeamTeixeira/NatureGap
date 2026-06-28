@@ -19,6 +19,7 @@ create table if not exists public.hex_cells (
   betweenness_centrality numeric,
   intervention_rank numeric,
   ecological_residual numeric,
+  ecological_residual_normalized numeric,
   nature_gap_score numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -62,6 +63,7 @@ add column if not exists disturbance_idx numeric,
 add column if not exists land_use_class text,
 add column if not exists intervention_rank numeric,
 add column if not exists ecological_residual numeric,
+add column if not exists ecological_residual_normalized numeric,
 add column if not exists nature_gap_score numeric;
 
 alter table public.corridor_links
