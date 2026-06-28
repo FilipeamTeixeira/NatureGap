@@ -680,4 +680,32 @@ if (!is.na(lst_source)) {
   message("Skipping LST - run download_landsat_temp.R, set LST_FILE, or add LST_*.tif/ST_B10 under LST_DIR.")
 }
 
+# ── 8. Meta/WRI 1 m canopy height (optional) ────────────────────────────────
+# Source: CANOPY_HEIGHT_FILE, prepared by download_canopy_height.R
+
+canopy_written <- FALSE
+canopy_source <- if (config_path_exists(RAW_CANOPY_HEIGHT)) {
+  RAW_CANOPY_HEIGHT
+} else if (exists("CANOPY_HEIGHT_FILE") && config_path_exists(CANOPY_HEIGHT_FILE)) {
+  CANOPY_HEIGHT_FILE
+} else {
+  NA_character_
+}
+
+if (!is.na(canopy_source)) {
+  cat(sprintf("Processing Meta/WRI canopy height: %s\n", canopy_source))
+  canopy_crop <- crop_to_city(rast(canopy_source))
+  names(canopy_crop) <- "canopy_height_m"
+  writeRaster(canopy_crop, RAW_CANOPY_HEIGHT, overwrite = TRUE, datatype = "FLT4S")
+  canopy_written <- TRUE
+  cat(sprintf(
+    "  → Canopy height written (%d × %d pixels at %.2fm resolution)\n",
+    nrow(canopy_crop), ncol(canopy_crop), mean(res(canopy_crop))
+  ))
+} else {
+  message(
+    "Skipping canopy height - run download_canopy_height.R or enable AUTO_DOWNLOAD_RASTER_INPUTS."
+  )
+}
+
 cat("\nIngestion complete. Check data/raw/ for outputs.\n")

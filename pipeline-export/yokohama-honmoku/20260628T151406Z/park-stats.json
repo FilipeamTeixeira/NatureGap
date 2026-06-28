@@ -191,7 +191,7 @@
     "meanLst": 16,
     "lstIdx": 84,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 29,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -254,7 +254,7 @@
     "meanLst": 58,
     "lstIdx": 42,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 24,
     "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (77)", "Effort-corrected richness (0.0) is below the habitat expectation (60)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (98)", "Effort-corrected richness (0.0) is below the habitat expectation (72)"],
     "interventions": []
@@ -380,7 +380,7 @@
     "meanLst": 70,
     "lstIdx": 30,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 13,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (81)", "Effort-corrected richness (0.0) is below the habitat expectation (80)", "Effort-corrected richness (0.0) is below the habitat expectation (72)"],
     "interventions": []
@@ -506,7 +506,7 @@
     "meanLst": 45,
     "lstIdx": 55,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 50,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -569,7 +569,7 @@
     "meanLst": 32,
     "lstIdx": 68,
     "landUseGreen": 34,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 6,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (104)", "Effort-corrected richness (0.0) is below the habitat expectation (120)", "Effort-corrected richness (0.0) is below the habitat expectation (116)"],
     "interventions": []
@@ -632,7 +632,7 @@
     "meanLst": 55,
     "lstIdx": 45,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 49,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -758,7 +758,7 @@
     "meanLst": 68,
     "lstIdx": 32,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 26,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -821,7 +821,7 @@
     "meanLst": 58,
     "lstIdx": 42,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 38,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -884,7 +884,7 @@
     "meanLst": 65,
     "lstIdx": 35,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 36,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -947,7 +947,7 @@
     "meanLst": 79,
     "lstIdx": 21,
     "landUseGreen": 4,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 43,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -1209,7 +1209,7 @@
     "meanLst": 16,
     "lstIdx": 84,
     "landUseGreen": 75,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 2,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (112)", "Effort-corrected richness (0.0) is below the habitat expectation (127)", "Effort-corrected richness (0.0) is below the habitat expectation (133)", "Effort-corrected richness (0.0) is below the habitat expectation (139)", "Effort-corrected richness (0.0) is below the habitat expectation (142)", "Effort-corrected richness (0.0) is below the habitat expectation (140)", "Effort-corrected richness (0.0) is below the habitat expectation (148)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (69.9) is below the habitat expectation (126)", "Effort-corrected richness (0.0) is below the habitat expectation (155)", "Effort-corrected richness (0.0) is below the habitat expectation (156)", "Effort-corrected richness (0.0) is below the habitat expectation (159)", "Effort-corrected richness (0.0) is below the habitat expectation (158)", "Effort-corrected richness (0.0) is below the habitat expectation (154)", "Effort-corrected richness (0.0) is below the habitat expectation (151)", "Effort-corrected richness (0.0) is below the habitat expectation (157)", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (152)", "Effort-corrected richness (0.0) is below the habitat expectation (162)", "Effort-corrected richness (0.0) is below the habitat expectation (149)", "Effort-corrected richness (0.0) is below the habitat expectation (161)", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (0.0) is below the habitat expectation (109)", "Effort-corrected richness (23.9) is below the habitat expectation (157)", "Effort-corrected richness (0.0) is below the habitat expectation (103)", "Effort-corrected richness (0.0) is below the habitat expectation (160)", "Effort-corrected richness (0.0) is below the habitat expectation (141)", "Effort-corrected richness (0.0) is below the habitat expectation (110)", "Effort-corrected richness (0.0) is below the habitat expectation (146)", "Effort-corrected richness (0.0) is below the habitat expectation (117)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (47.9) is below the habitat expectation (142)", "Effort-corrected richness (0.0) is below the habitat expectation (121)"],
     "interventions": []
@@ -1432,7 +1432,7 @@
     "meanLst": 10,
     "lstIdx": 90,
     "landUseGreen": 73,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 16,
     "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (126)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (143)", "Effort-corrected richness (0.0) is below the habitat expectation (133)", "Effort-corrected richness (0.0) is below the habitat expectation (136)", "Effort-corrected richness (0.0) is below the habitat expectation (151)", "Effort-corrected richness (0.0) is below the habitat expectation (145)", "Effort-corrected richness (0.0) is below the habitat expectation (141)", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (149)", "Effort-corrected richness (0.0) is below the habitat expectation (154)", "Effort-corrected richness (0.0) is below the habitat expectation (152)", "Effort-corrected richness (0.0) is below the habitat expectation (158)", "Effort-corrected richness (0.0) is below the habitat expectation (139)", "Effort-corrected richness (0.0) is below the habitat expectation (142)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (33.1) is below the habitat expectation (148)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (109.1) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (79)", "Effort-corrected richness (0.0) is below the habitat expectation (157)", "Effort-corrected richness (0.0) is below the habitat expectation (179)", "Effort-corrected richness (0.0) is below the habitat expectation (121)"],
     "interventions": []
@@ -1495,7 +1495,7 @@
     "meanLst": 75,
     "lstIdx": 25,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 35,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -1657,7 +1657,7 @@
     "meanLst": 9,
     "lstIdx": 91,
     "landUseGreen": 94,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 3,
     "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (106)", "Effort-corrected richness (0.0) is below the habitat expectation (129)", "Effort-corrected richness (0.0) is below the habitat expectation (127)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (157)", "Effort-corrected richness (0.0) is below the habitat expectation (115)", "Effort-corrected richness (0.0) is below the habitat expectation (158)", "Effort-corrected richness (0.0) is below the habitat expectation (143)", "Effort-corrected richness (0.0) is below the habitat expectation (161)", "Effort-corrected richness (0.0) is below the habitat expectation (147)", "Effort-corrected richness (0.0) is below the habitat expectation (156)", "Effort-corrected richness (0.0) is below the habitat expectation (167)", "Effort-corrected richness (0.0) is below the habitat expectation (172)", "Effort-corrected richness (0.0) is below the habitat expectation (170)", "Effort-corrected richness (0.0) is below the habitat expectation (150)", "Effort-corrected richness (0.0) is below the habitat expectation (182)", "Effort-corrected richness (0.0) is below the habitat expectation (203)", "Effort-corrected richness (0.0) is below the habitat expectation (138)", "Effort-corrected richness (0.0) is below the habitat expectation (168)", "Effort-corrected richness (0.0) is below the habitat expectation (216)", "Effort-corrected richness (0.0) is below the habitat expectation (215)", "Effort-corrected richness (0.0) is below the habitat expectation (208)", "Effort-corrected richness (0.0) is below the habitat expectation (190)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (149.7) is below the habitat expectation (184)", "Effort-corrected richness (0.0) is below the habitat expectation (221)", "Effort-corrected richness (0.0) is below the habitat expectation (211)", "Effort-corrected richness (0.0) is below the habitat expectation (201)", "Effort-corrected richness (0.0) is below the habitat expectation (140)", "Effort-corrected richness (0.0) is below the habitat expectation (175)", "Effort-corrected richness (0.0) is below the habitat expectation (160)", "Effort-corrected richness (0.0) is below the habitat expectation (188)", "Effort-corrected richness (0.0) is below the habitat expectation (154)", "Effort-corrected richness (28.4) is below the habitat expectation (192)", "Effort-corrected richness (0.0) is below the habitat expectation (126)", "Effort-corrected richness (0.0) is below the habitat expectation (163)", "Effort-corrected richness (0.0) is below the habitat expectation (171)", "Effort-corrected richness (0.0) is below the habitat expectation (120)", "Effort-corrected richness (0.0) is below the habitat expectation (187)", "Effort-corrected richness (0.0) is below the habitat expectation (224)", "Effort-corrected richness (128.0) is below the habitat expectation (200)", "Effort-corrected richness (0.0) is below the habitat expectation (204)", "Effort-corrected richness (42.7) is below the habitat expectation (162)", "Effort-corrected richness (66.2) is below the habitat expectation (211)", "Effort-corrected richness (0.0) is below the habitat expectation (192)", "Effort-corrected richness (0.0) is below the habitat expectation (149)", "Effort-corrected richness (97.5) is below the habitat expectation (167)", "Effort-corrected richness (0.0) is below the habitat expectation (166)", "Effort-corrected richness (67.2) is below the habitat expectation (166)", "Effort-corrected richness (0.0) is below the habitat expectation (196)", "Effort-corrected richness (0.0) is below the habitat expectation (165)", "Effort-corrected richness (0.0) is below the habitat expectation (183)", "Effort-corrected richness (0.0) is below the habitat expectation (176)", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (0.0) is below the habitat expectation (117)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (50.5) is below the habitat expectation (151)", "Effort-corrected richness (0.0) is below the habitat expectation (151)", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (169)", "Effort-corrected richness (0.0) is below the habitat expectation (148)", "Effort-corrected richness (0.0) is below the habitat expectation (113)", "Effort-corrected richness (0.0) is below the habitat expectation (173)", "Effort-corrected richness (0.0) is below the habitat expectation (189)", "Effort-corrected richness (0.0) is below the habitat expectation (121)", "Effort-corrected richness (50.4) is below the habitat expectation (160)", "Effort-corrected richness (0.0) is below the habitat expectation (180)", "Effort-corrected richness (29.1) is below the habitat expectation (195)", "Effort-corrected richness (141.8) is below the habitat expectation (198)", "Effort-corrected richness (0.0) is below the habitat expectation (186)", "Effort-corrected richness (36.8) is below the habitat expectation (199)", "Effort-corrected richness (60.7) is below the habitat expectation (168)", "Effort-corrected richness (47.8) is below the habitat expectation (161)", "Effort-corrected richness (93.8) is below the habitat expectation (165)", "Effort-corrected richness (0.0) is below the habitat expectation (139)", "Effort-corrected richness (66.8) is below the habitat expectation (181)", "Effort-corrected richness (0.0) is below the habitat expectation (185)", "Effort-corrected richness (0.0) is below the habitat expectation (141)", "Effort-corrected richness (0.0) is below the habitat expectation (135)", "Effort-corrected richness (48.7) is below the habitat expectation (145)", "Effort-corrected richness (32.5) is below the habitat expectation (152)", "Effort-corrected richness (0.0) is below the habitat expectation (177)", "Effort-corrected richness (0.0) is below the habitat expectation (191)", "Effort-corrected richness (0.0) is below the habitat expectation (112)", "Effort-corrected richness (48.7) is below the habitat expectation (147)", "Effort-corrected richness (28.5) is below the habitat expectation (168)", "Effort-corrected richness (86.2) is below the habitat expectation (174)", "Effort-corrected richness (0.0) is below the habitat expectation (178)", "Effort-corrected richness (28.5) is below the habitat expectation (151)", "Effort-corrected richness (52.6) is below the habitat expectation (144)", "Effort-corrected richness (0.0) is below the habitat expectation (123)", "Effort-corrected richness (30.0) is below the habitat expectation (132)", "Effort-corrected richness (0.0) is below the habitat expectation (114)", "Effort-corrected richness (0.0) is below the habitat expectation (146)", "Effort-corrected richness (0.0) is below the habitat expectation (124)", "Effort-corrected richness (0.0) is below the habitat expectation (145)", "Effort-corrected richness (0.0) is below the habitat expectation (142)", "Effort-corrected richness (23.3) is below the habitat expectation (142)", "Effort-corrected richness (0.0) is below the habitat expectation (133)", "Effort-corrected richness (0.0) is below the habitat expectation (134)", "Effort-corrected richness (0.0) is below the habitat expectation (110)", "Effort-corrected richness (0.0) is below the habitat expectation (164)", "Effort-corrected richness (0.0) is below the habitat expectation (184)", "Effort-corrected richness (0.0) is below the habitat expectation (197)", "Effort-corrected richness (47.1) is below the habitat expectation (149)", "Effort-corrected richness (0.0) is below the habitat expectation (206)", "Effort-corrected richness (0.0) is below the habitat expectation (152)", "Effort-corrected richness (0.0) is below the habitat expectation (207)", "Effort-corrected richness (0.0) is below the habitat expectation (174)", "Effort-corrected richness (71.0) is below the habitat expectation (168)", "Effort-corrected richness (0.0) is below the habitat expectation (179)", "Effort-corrected richness (34.3) is below the habitat expectation (188)", "Effort-corrected richness (0.0) is below the habitat expectation (202)", "Effort-corrected richness (0.0) is below the habitat expectation (194)", "Effort-corrected richness (0.0) is below the habitat expectation (181)", "Effort-corrected richness (0.0) is below the habitat expectation (200)", "Effort-corrected richness (20.9) is below the habitat expectation (173)", "Effort-corrected richness (47.4) is below the habitat expectation (159)", "Effort-corrected richness (15.2) is below the habitat expectation (182)", "Effort-corrected richness (131.3) is below the habitat expectation (176)", "Effort-corrected richness (0.0) is below the habitat expectation (144)", "Effort-corrected richness (61.3) is below the habitat expectation (156)", "Effort-corrected richness (72.7) is below the habitat expectation (141)", "Effort-corrected richness (0.0) is below the habitat expectation (137)", "Effort-corrected richness (25.4) is below the habitat expectation (145)", "Effort-corrected richness (49.3) is below the habitat expectation (142)", "Effort-corrected richness (38.6) is below the habitat expectation (168)", "Effort-corrected richness (0.0) is below the habitat expectation (136)", "Effort-corrected richness (32.0) is below the habitat expectation (157)", "Effort-corrected richness (0.0) is below the habitat expectation (125)", "Effort-corrected richness (72.3) is below the habitat expectation (167)", "Effort-corrected richness (0.0) is below the habitat expectation (155)"],
     "interventions": [
@@ -2153,7 +2153,7 @@
     "meanLst": 4,
     "lstIdx": 96,
     "landUseGreen": 87,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 9,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (125.7) is below the habitat expectation (167)", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (172)", "Effort-corrected richness (0.0) is below the habitat expectation (158)", "Effort-corrected richness (0.0) is below the habitat expectation (167)", "Effort-corrected richness (0.0) is below the habitat expectation (190)", "Effort-corrected richness (0.0) is below the habitat expectation (175)", "Effort-corrected richness (99.0) is below the habitat expectation (179)", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (72.3) is below the habitat expectation (194)", "Effort-corrected richness (74.9) is below the habitat expectation (151)", "Effort-corrected richness (92.8) is below the habitat expectation (190)", "Effort-corrected richness (0.0) is below the habitat expectation (165)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (82.8) is below the habitat expectation (185)", "Effort-corrected richness (25.8) is below the habitat expectation (164)", "Effort-corrected richness (46.5) is below the habitat expectation (171)", "Effort-corrected richness (140.3) is below the habitat expectation (173)", "Effort-corrected richness (77.6) is below the habitat expectation (148)", "Effort-corrected richness (82.9) is below the habitat expectation (166)", "Effort-corrected richness (0.0) is below the habitat expectation (166)", "Effort-corrected richness (31.2) is below the habitat expectation (149)", "Effort-corrected richness (49.5) is below the habitat expectation (158)", "Effort-corrected richness (98.9) is below the habitat expectation (159)", "Effort-corrected richness (85.7) is below the habitat expectation (178)", "Effort-corrected richness (0.0) is below the habitat expectation (135)", "Effort-corrected richness (0.0) is below the habitat expectation (168)", "Effort-corrected richness (0.0) is below the habitat expectation (157)", "Effort-corrected richness (28.7) is below the habitat expectation (172)", "Effort-corrected richness (0.0) is below the habitat expectation (173)", "Effort-corrected richness (0.0) is below the habitat expectation (151)", "Effort-corrected richness (117.8) is below the habitat expectation (162)", "Effort-corrected richness (30.3) is below the habitat expectation (164)", "Effort-corrected richness (107.9) is below the habitat expectation (162)", "Effort-corrected richness (43.0) is below the habitat expectation (134)", "Effort-corrected richness (45.9) is below the habitat expectation (174)", "Effort-corrected richness (0.0) is below the habitat expectation (163)", "Effort-corrected richness (125.1) is below the habitat expectation (151)", "Effort-corrected richness (0.0) is below the habitat expectation (144)", "Effort-corrected richness (37.2) is below the habitat expectation (179)", "Effort-corrected richness (0.0) is below the habitat expectation (147)", "Effort-corrected richness (22.6) is below the habitat expectation (141)", "Effort-corrected richness (0.0) is below the habitat expectation (123)", "Effort-corrected richness (116.1) is below the habitat expectation (171)", "Effort-corrected richness (41.2) is below the habitat expectation (154)", "Effort-corrected richness (22.4) is below the habitat expectation (164)", "Effort-corrected richness (57.6) is below the habitat expectation (187)", "Effort-corrected richness (29.5) is below the habitat expectation (191)", "Effort-corrected richness (0.0) is below the habitat expectation (150)", "Effort-corrected richness (0.0) is below the habitat expectation (117)", "Effort-corrected richness (0.0) is below the habitat expectation (177)", "Effort-corrected richness (69.1) is below the habitat expectation (189)", "Effort-corrected richness (0.0) is below the habitat expectation (219)", "Effort-corrected richness (0.0) is below the habitat expectation (188)", "Effort-corrected richness (0.0) is below the habitat expectation (174)", "Effort-corrected richness (0.0) is below the habitat expectation (131)", "Effort-corrected richness (0.0) is below the habitat expectation (189)", "Effort-corrected richness (0.0) is below the habitat expectation (212)", "Effort-corrected richness (77.4) is below the habitat expectation (196)", "Effort-corrected richness (0.0) is below the habitat expectation (164)", "Effort-corrected richness (35.3) is below the habitat expectation (154)", "Effort-corrected richness (0.0) is below the habitat expectation (205)", "Effort-corrected richness (0.0) is below the habitat expectation (136)", "Effort-corrected richness (0.0) is below the habitat expectation (134)", "Effort-corrected richness (65.8) is below the habitat expectation (177)", "Effort-corrected richness (0.0) is below the habitat expectation (169)", "Effort-corrected richness (53.3) is below the habitat expectation (127)", "Effort-corrected richness (0.0) is below the habitat expectation (118)", "Effort-corrected richness (0.0) is below the habitat expectation (152)", "Effort-corrected richness (0.0) is below the habitat expectation (145)", "Effort-corrected richness (35.3) is below the habitat expectation (196)", "Effort-corrected richness (19.8) is below the habitat expectation (127)", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (30.5) is below the habitat expectation (183)", "Effort-corrected richness (29.3) is below the habitat expectation (142)", "Effort-corrected richness (54.5) is below the habitat expectation (138)", "Effort-corrected richness (28.5) is below the habitat expectation (154)", "Effort-corrected richness (40.9) is below the habitat expectation (166)", "Effort-corrected richness (0.0) is below the habitat expectation (176)", "Effort-corrected richness (86.3) is below the habitat expectation (161)", "Effort-corrected richness (78.0) is below the habitat expectation (142)", "Effort-corrected richness (81.5) is below the habitat expectation (118)", "Effort-corrected richness (26.2) is below the habitat expectation (182)", "Effort-corrected richness (0.0) is below the habitat expectation (170)", "Effort-corrected richness (0.0) is below the habitat expectation (161)", "Effort-corrected richness (58.2) is below the habitat expectation (150)", "Effort-corrected richness (0.0) is below the habitat expectation (162)", "Effort-corrected richness (0.0) is below the habitat expectation (183)", "Effort-corrected richness (0.0) is below the habitat expectation (156)", "Effort-corrected richness (0.0) is below the habitat expectation (154)", "Effort-corrected richness (76.8) is below the habitat expectation (169)", "Effort-corrected richness (71.1) is below the habitat expectation (134)", "Effort-corrected richness (62.7) is below the habitat expectation (130)", "Effort-corrected richness (32.4) is below the habitat expectation (140)", "Effort-corrected richness (23.6) is below the habitat expectation (161)", "Effort-corrected richness (0.0) is below the habitat expectation (142)", "Effort-corrected richness (0.0) is below the habitat expectation (122)", "Effort-corrected richness (0.0) is below the habitat expectation (137)", "Effort-corrected richness (0.0) is below the habitat expectation (146)", "Effort-corrected richness (0.0) is below the habitat expectation (160)", "Effort-corrected richness (41.8) is below the habitat expectation (148)", "Effort-corrected richness (50.8) is below the habitat expectation (145)", "Effort-corrected richness (21.1) is below the habitat expectation (144)", "Effort-corrected richness (0.0) is below the habitat expectation (124)", "Effort-corrected richness (33.3) is below the habitat expectation (180)", "Effort-corrected richness (0.0) is below the habitat expectation (139)", "Effort-corrected richness (0.0) is below the habitat expectation (182)", "Effort-corrected richness (169.0) is below the habitat expectation (198)", "Effort-corrected richness (33.5) is below the habitat expectation (131)", "Effort-corrected richness (0.0) is below the habitat expectation (179)", "Effort-corrected richness (0.0) is below the habitat expectation (148)", "Effort-corrected richness (54.2) is below the habitat expectation (136)", "Effort-corrected richness (90.0) is below the habitat expectation (172)", "Effort-corrected richness (105.5) is below the habitat expectation (154)", "Effort-corrected richness (55.3) is below the habitat expectation (139)", "Effort-corrected richness (0.0) is below the habitat expectation (155)", "Effort-corrected richness (0.0) is below the habitat expectation (138)", "Effort-corrected richness (0.0) is below the habitat expectation (130)"],
     "interventions": [
@@ -2225,7 +2225,7 @@
     "meanLst": 17,
     "lstIdx": 83,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 41,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -2424,7 +2424,7 @@
     "meanLst": 2,
     "lstIdx": 98,
     "landUseGreen": 100,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 30,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -2487,7 +2487,7 @@
     "meanLst": 34,
     "lstIdx": 66,
     "landUseGreen": 20,
-    "landUseClass": "mixed",
+    "landUseClass": "tree",
     "interventionRank": 27,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -2613,7 +2613,7 @@
     "meanLst": 91,
     "lstIdx": 9,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 28,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -2739,7 +2739,7 @@
     "meanLst": 72,
     "lstIdx": 28,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 25,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (74)", "Effort-corrected richness (0.0) is below the habitat expectation (90)", "Effort-corrected richness (0.0) is below the habitat expectation (92)"],
     "interventions": []
@@ -2802,7 +2802,7 @@
     "meanLst": 87,
     "lstIdx": 13,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 21,
     "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (67)", "Effort-corrected richness (0.0) is below the habitat expectation (66)"],
     "interventions": []
@@ -2928,7 +2928,7 @@
     "meanLst": 86,
     "lstIdx": 14,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 20,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (67)", "Effort-corrected richness (0.0) is below the habitat expectation (61)"],
     "interventions": []
@@ -3120,7 +3120,7 @@
     "meanLst": 87,
     "lstIdx": 13,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 46,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -3183,7 +3183,7 @@
     "meanLst": 93,
     "lstIdx": 7,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 45,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -3246,7 +3246,7 @@
     "meanLst": 29,
     "lstIdx": 71,
     "landUseGreen": 1,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 19,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (103)", "Effort-corrected richness (0.0) is below the habitat expectation (107)", "Effort-corrected richness (0.0) is below the habitat expectation (102)"],
     "interventions": []
@@ -3375,7 +3375,7 @@
     "meanLst": 93,
     "lstIdx": 7,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 37,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -3438,7 +3438,7 @@
     "meanLst": 29,
     "lstIdx": 71,
     "landUseGreen": 18,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 33,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -3501,7 +3501,7 @@
     "meanLst": 92,
     "lstIdx": 8,
     "landUseGreen": 3,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 22,
     "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (78)"],
     "interventions": []
@@ -3627,7 +3627,7 @@
     "meanLst": 97,
     "lstIdx": 3,
     "landUseGreen": 0,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 31,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
@@ -3690,7 +3690,7 @@
     "meanLst": 83,
     "lstIdx": 17,
     "landUseGreen": 16,
-    "landUseClass": "mixed",
+    "landUseClass": "built",
     "interventionRank": 32,
     "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []

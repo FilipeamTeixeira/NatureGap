@@ -10,7 +10,7 @@ import CitizenSciencePanel from '@/components/citizen-science/CitizenSciencePane
 import { MAP_LAYERS } from '@/lib/mock-data';
 import { initParks } from '@/lib/green-spaces';
 import { initData } from '@/lib/data';
-import { fetchCellDetail, type RenderCellProperties } from '@/lib/cell-detail';
+import { fetchCellDetail, fetchParkDetail, type RenderCellProperties } from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
@@ -118,6 +118,15 @@ export default function Page() {
     }
   };
 
+  const handleParkClick = async (parkId: string, coordinates: [number, number]) => {
+    const cell = await fetchParkDetail(parkId, coordinates);
+    if (cell) {
+      setSelectedCell(cell);
+      setSelectedWard(null);
+      setSelectedSurveyPoint(null);
+    }
+  };
+
   const handlePlaceSelect = (center: [number, number]) => {
     setSelectedWard(null);
     setSelectedCell(null);
@@ -156,6 +165,7 @@ export default function Page() {
             layers={layers}
             selectedCellId={selectedCell?.id ?? null}
             onHexClick={handleHexClick}
+            onParkClick={handleParkClick}
             flyToTarget={flyToTarget}
             dataRevision={dataRevision}
             quickSightingsGeoJSON={quickSightingsFc}

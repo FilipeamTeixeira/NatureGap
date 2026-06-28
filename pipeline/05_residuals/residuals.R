@@ -125,7 +125,7 @@ if (!is.finite(city_residual_max) || city_residual_max <= 0) {
       ecological_residual_mean = city_residual_mean,
       ecological_residual_std = city_residual_sd,
       ecological_residual_normalized = if_else(
-        is.na(ecological_residual) || !is.finite(city_residual_sd) || city_residual_sd <= 0,
+        is.na(ecological_residual) | !is.finite(city_residual_sd) | city_residual_sd <= 0,
         NA_real_,
         (ecological_residual - city_residual_mean) / city_residual_sd
       ),

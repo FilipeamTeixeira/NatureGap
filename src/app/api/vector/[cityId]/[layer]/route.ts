@@ -66,15 +66,6 @@ function mergeFeatureCollections(parts: unknown[]): GeoJSON.FeatureCollection | 
   return features.length > 0 ? { type: 'FeatureCollection', features } : null;
 }
 
-async function readJsonFile(filePath: string): Promise<unknown | null> {
-  try {
-    const { readFile } = await import('node:fs/promises');
-    return JSON.parse(await readFile(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
 async function loadStorageGeoJSON(cityId: string, layer: VectorLayer): Promise<GeoJSON.FeatureCollection | null> {
   const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
   if (!dataset) return null;
@@ -99,28 +90,8 @@ async function loadStorageGeoJSON(cityId: string, layer: VectorLayer): Promise<G
   return isFeatureCollection(data) ? data : null;
 }
 
-async function loadLocalGeoJSON(cityId: string, layer: VectorLayer): Promise<GeoJSON.FeatureCollection | null> {
-  if (process.env.NODE_ENV !== 'development') return null;
-
-  const path = await import('node:path');
-  const exportRoot = path.join(process.cwd(), 'pipeline-export', cityId);
-  const current = asObject(await readJsonFile(path.join(exportRoot, 'current.json')));
-  const manifestRel = asString(current?.manifest);
-  if (!manifestRel) return null;
-
-  const manifestPath = path.join(exportRoot, manifestRel);
-  const manifestDir = path.dirname(manifestPath);
-  const manifest = asObject(await readJsonFile(manifestPath));
-  const { fileName } = LAYER_FILES[layer];
-  const manifestFilePath = asString(asObject(asObject(manifest?.files)?.[fileName])?.path);
-  const dataPath = path.join(manifestDir, manifestFilePath ?? fileName);
-  const data = await readJsonFile(dataPath);
-
-  return isFeatureCollection(data) ? data : null;
-}
-
 async function loadGeoJSON(cityId: string, layer: VectorLayer): Promise<GeoJSON.FeatureCollection | null> {
-  return await loadStorageGeoJSON(cityId, layer) ?? await loadLocalGeoJSON(cityId, layer);
+  return loadStorageGeoJSON(cityId, layer);
 }
 
 export async function GET(

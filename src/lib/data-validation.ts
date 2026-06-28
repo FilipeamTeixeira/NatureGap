@@ -101,8 +101,7 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     (value.betweennessCentrality === undefined || isNumber(value.betweennessCentrality)) &&
     isNumber(value.fragmentationIndex) &&
     (value.treeCover === undefined || isNumber(value.treeCover)) &&
-    (value.meanCanopy === undefined || isNumber(value.meanCanopy)) &&
-    (value.canopyHeightIdx === undefined || isNumber(value.canopyHeightIdx)) &&
+    (value.treeCoverNorm === undefined || isNumber(value.treeCoverNorm)) &&
     (value.heatExposure === undefined || isNumber(value.heatExposure)) &&
     (value.meanLst === undefined || isNumber(value.meanLst)) &&
     (value.lstIdx === undefined || isNumber(value.lstIdx)) &&
@@ -114,7 +113,6 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     (value.effortCorrectedRichnessNorm === undefined || isNumber(value.effortCorrectedRichnessNorm)) &&
     (value.expectedRichnessNorm === undefined || isNumber(value.expectedRichnessNorm)) &&
     (value.corridorImportanceNorm === undefined || isNumber(value.corridorImportanceNorm)) &&
-    (value.meanCanopyNorm === undefined || isNumber(value.meanCanopyNorm)) &&
     (value.meanLstNorm === undefined || isNumber(value.meanLstNorm)) &&
     (value.ecologicalResidualNorm === undefined || isNumber(value.ecologicalResidualNorm)) &&
     (value.natureGapScoreNorm === undefined || isNumber(value.natureGapScoreNorm)) &&

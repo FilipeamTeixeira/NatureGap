@@ -4,9 +4,8 @@
 #
 # Primary data sources (from step 01):
 #   data/raw/ndvi.tif           — Sentinel-2 NDVI
-#   data/raw/canopy_height.tif  — LiDAR canopy height, metres
+#   data/raw/canopy_height.tif  — Meta/WRI 1 m canopy height, metres
 #   data/raw/lst.tif            — Landsat surface temperature
-#   data/raw/lidar_variance.tif — optional precomputed LiDAR variance
 #   data/raw/osm_paths.gpkg
 #
 # Outputs:
@@ -307,16 +306,8 @@ canopy_path <- if (file.exists(RAW_CANOPY_HEIGHT)) {
   NA_character_
 }
 
-lidar_variance_path <- if (file.exists(RAW_LIDAR_VARIANCE)) {
-  RAW_LIDAR_VARIANCE
-} else if (exists("LIDAR_VARIANCE_FILE") && file.exists(LIDAR_VARIANCE_FILE)) {
-  LIDAR_VARIANCE_FILE
-} else {
-  NA_character_
-}
-
 if (!is.na(canopy_path)) {
-  cat("Extracting LiDAR canopy height per cell...\n")
+  cat("Extracting Meta/WRI canopy height per cell...\n")
   canopy <- rast(canopy_path) |> project(CRS_LOCAL, method = "bilinear")
   canopy_mean <- terra::extract(canopy, vect(grid), fun = mean, na.rm = TRUE)
   grid$canopy_height_m <- replace_na(canopy_mean[[2]], NA_real_)
@@ -325,7 +316,7 @@ if (!is.na(canopy_path)) {
   canopy_var <- terra::extract(canopy, vect(grid), fun = stats::var, na.rm = TRUE)
   grid$lidar_variance <- replace_na(canopy_var[[2]], NA_real_)
 } else {
-  message("LiDAR canopy height raster not found — canopy_height_idx set to NA.")
+  message("Meta/WRI canopy height raster not found — canopy_height_idx set to NA.")
 }
 
 if (file.exists(RAW_LST)) {
@@ -337,13 +328,6 @@ if (file.exists(RAW_LST)) {
   grid$lst_idx <- 1 - grid$lst_rank
 } else {
   message("LST raster not found — lst_idx set to NA.")
-}
-
-if (!is.na(lidar_variance_path)) {
-  cat("Extracting precomputed LiDAR variance per cell...\n")
-  lidar_variance <- rast(lidar_variance_path) |> project(CRS_LOCAL, method = "bilinear")
-  lidar_variance_mean <- terra::extract(lidar_variance, vect(grid), fun = mean, na.rm = TRUE)
-  grid$lidar_variance <- replace_na(lidar_variance_mean[[2]], NA_real_)
 }
 
 grid$lidar_variance_idx <- if (all(is.na(grid$lidar_variance))) {

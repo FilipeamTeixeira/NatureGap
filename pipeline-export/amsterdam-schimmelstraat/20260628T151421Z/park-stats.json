@@ -1,0 +1,2614 @@
+{
+  "osm-bellamyplein": {
+    "impactScore": 35,
+    "natureGapScore": 34.6,
+    "habitatQuality": 50,
+    "habitatQualityIndex": 0.5015,
+    "speciesRichnessRaw": 6,
+    "observedRichness": 82.5,
+    "effortCorrectedRichness": 82.5,
+    "expectedRichness": 122.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 40.2,
+    "ecologicalResidualNormalized": 0.2931,
+    "habitatQualityNorm": 0.9139,
+    "effortCorrectedRichnessNorm": 0.0102,
+    "expectedRichnessNorm": 0.9098,
+    "corridorImportanceNorm": 0.7857,
+    "treeCoverNorm": 0.8844,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.3527,
+    "natureGapScoreNorm": 0.8601,
+    "interventionRankNorm": 0.9118,
+    "dataAvailabilityRatio": 0.8854,
+    "nObs": 11,
+    "nSurveyDates": 2,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 64.7,
+    "taxonomicDiversity": 0.2,
+    "species": [
+      {
+        "type": "plant",
+        "count": 7,
+        "names": [
+          "Alliaria petiolata",
+          "common chickweed (Stellaria media)",
+          "daylilies (Hemerocallis)",
+          "Lythrum Loosestrifes (Lythrum)",
+          "walnut family (Juglandaceae)",
+          "wood crane's-bill (Geranium sylvaticum)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 2,
+        "names": [
+          "Columba livia",
+          "Feral Pigeon (Columba livia domestica)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 1,
+        "names": [
+          "Phyllobius (Phyllobius)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 18,
+    "heatExposure": 49,
+    "meanLst": 49,
+    "lstIdx": 51,
+    "landUseGreen": 70,
+    "landUseClass": "mixed",
+    "interventionRank": 4,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "Temporal sampling bias — observations are weekend-only", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (75.1) is below the habitat expectation (135)", "Effort-corrected richness (92.2) is below the habitat expectation (123)", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (101)", "Effort-corrected richness (0.0) is below the habitat expectation (107)", "Effort-corrected richness (0.0) is below the habitat expectation (106)", "Effort-corrected richness (71.8) is below the habitat expectation (115)", "Effort-corrected richness (0.0) is below the habitat expectation (120)"],
+    "interventions": [
+      {
+        "id": "amsterdam-schimmelstraat-1202-rank-12",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #12 for intervention priority (composite score 2.11). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "medium",
+        "category": "pollinator",
+        "connectivityGain": 5
+      }
+    ]
+  },
+  "osm-bilderdijkpark": {
+    "impactScore": 34,
+    "natureGapScore": 34,
+    "habitatQuality": 54,
+    "habitatQualityIndex": 0.5409,
+    "speciesRichnessRaw": 24,
+    "observedRichness": 17.8,
+    "effortCorrectedRichness": 17.8,
+    "expectedRichness": 132.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 115.1,
+    "ecologicalResidualNormalized": 0.3085,
+    "habitatQualityNorm": 0.9941,
+    "effortCorrectedRichnessNorm": 0.0022,
+    "expectedRichnessNorm": 0.9939,
+    "corridorImportanceNorm": 0.2372,
+    "treeCoverNorm": 1,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 1,
+    "natureGapScoreNorm": 0.8438,
+    "interventionRankNorm": 0.8529,
+    "dataAvailabilityRatio": 0.4742,
+    "nObs": 52,
+    "nSurveyDates": 2,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 79.7,
+    "taxonomicDiversity": 1,
+    "species": [
+      {
+        "type": "plant",
+        "count": 2,
+        "names": [
+          "Common Laburnum (Laburnum anagyroides)",
+          "Hedera helix"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 40,
+        "names": [
+          "Alexandrine Parakeet (Psittacula eupatria)",
+          "Barn Swallow (Hirundo rustica)",
+          "Black-headed Gull (Chroicocephalus ridibundus)",
+          "Black-legged Kittiwake (Rissa tridactyla)",
+          "Carrion Crow (Corvus corone)",
+          "Common Gull (Larus canus)",
+          "Common Swift (Apus apus)",
+          "Common Wood-Pigeon (Columba palumbus)",
+          "Eurasian Blackbird (Turdus merula)",
+          "Eurasian Blue Tit (Cyanistes caeruleus)",
+          "Eurasian Coot (Fulica atra)",
+          "Eurasian Jackdaw (Coloeus monedula)",
+          "Eurasian Kestrel (Falco tinnunculus)",
+          "Eurasian Magpie (Pica pica)",
+          "Eurasian Moorhen (Gallinula chloropus)",
+          "Eurasian Skylark (Alauda arvensis)",
+          "Eurasian Wren (Troglodytes troglodytes)",
+          "European Herring Gull (Larus argentatus)",
+          "European Robin (Erithacus rubecula)",
+          "European Starling (Sturnus vulgaris)",
+          "Gray Heron (Ardea cinerea)",
+          "Great Spotted Woodpecker (Dendrocopos major)",
+          "Great Tit (Parus major)",
+          "House Sparrow (Passer domesticus)",
+          "Lesser Black-backed Gull (Larus fuscus)",
+          "Mallard (Anas platyrhynchos)",
+          "Mute Swan (Cygnus olor)",
+          "Northern Lapwing (Vanellus vanellus)",
+          "Rock Pigeon (Columba livia)",
+          "Rook (Corvus frugilegus)",
+          "Rose-ringed Parakeet (Psittacula krameri)",
+          "Short-toed Treecreeper (Certhia brachydactyla)",
+          "White Wagtail (Motacilla alba)",
+          "Yellow-legged Gull (Larus michahellis)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 1,
+        "names": [
+          "Common Carder Bumble Bee (Bombus pascuorum)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 30,
+    "heatExposure": 52,
+    "meanLst": 52,
+    "lstIdx": 48,
+    "landUseGreen": 98,
+    "landUseClass": "tree",
+    "interventionRank": 6,
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (83)", "Unsampled cell — no accessible pedestrian path length from OSM", "Temporal sampling bias — observations are weekend-only", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (63.3) is below the habitat expectation (100)", "Effort-corrected richness (0.0) is below the habitat expectation (115)", "Effort-corrected richness (0.0) is below the habitat expectation (124)", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (27.8) is below the habitat expectation (144)", "Effort-corrected richness (0.0) is below the habitat expectation (100)", "Effort-corrected richness (0.0) is below the habitat expectation (120)", "Effort-corrected richness (0.0) is below the habitat expectation (136)", "Effort-corrected richness (0.0) is below the habitat expectation (187)", "Effort-corrected richness (0.0) is below the habitat expectation (135)", "Effort-corrected richness (0.0) is below the habitat expectation (153)", "Effort-corrected richness (0.0) is below the habitat expectation (108)", "Effort-corrected richness (28.3) is below the habitat expectation (164)", "Effort-corrected richness (0.0) is below the habitat expectation (134)"],
+    "interventions": [
+      {
+        "id": "amsterdam-schimmelstraat-1900-rank-20",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #20 for intervention priority (composite score 1.74). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "low",
+        "category": "pollinator",
+        "connectivityGain": 4
+      }
+    ]
+  },
+  "osm-940709635": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 46,
+    "habitatQualityIndex": 0.4557,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 105.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.8205,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7649,
+    "corridorImportanceNorm": 0.7053,
+    "treeCoverNorm": 0.1058,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 4,
+    "heatExposure": 19,
+    "meanLst": 19,
+    "lstIdx": 81,
+    "landUseGreen": 17,
+    "landUseClass": "mixed",
+    "interventionRank": 35,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-zimmerterrein": {
+    "impactScore": 33,
+    "natureGapScore": 33,
+    "habitatQuality": 55,
+    "habitatQualityIndex": 0.5505,
+    "speciesRichnessRaw": 6,
+    "observedRichness": 24.7,
+    "effortCorrectedRichness": 24.7,
+    "expectedRichness": 135.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 110.7,
+    "ecologicalResidualNormalized": 0.3076,
+    "habitatQualityNorm": 1,
+    "effortCorrectedRichnessNorm": 0.003,
+    "expectedRichnessNorm": 1,
+    "corridorImportanceNorm": 1,
+    "treeCoverNorm": 0.4995,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.97,
+    "natureGapScoreNorm": 0.8195,
+    "interventionRankNorm": 0.9706,
+    "dataAvailabilityRatio": 0.6073,
+    "nObs": 11,
+    "nSurveyDates": 1,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 29.5,
+    "taxonomicDiversity": 0.2,
+    "species": [
+      {
+        "type": "plant",
+        "count": 8,
+        "names": [
+          "Argentina anserina",
+          "common alder (Alnus glutinosa)",
+          "common valerian (Valeriana officinalis)",
+          "Dicots (Magnoliopsida)",
+          "feverfew (Tanacetum parthenium)",
+          "Hollyhock (Alcea rosea)",
+          "Mycelis muralis",
+          "Veronica arvensis"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 1,
+        "names": [
+          "Short-toed Treecreeper (Certhia brachydactyla)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 4,
+    "betweennessCentrality": 4,
+    "fragmentationIndex": 0,
+    "treeCover": 12,
+    "heatExposure": 20,
+    "meanLst": 20,
+    "lstIdx": 80,
+    "landUseGreen": 66,
+    "landUseClass": "mixed",
+    "interventionRank": 2,
+    "pressures": ["Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (31.5) is below the habitat expectation (147)", "Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (0.0) is below the habitat expectation (119)", "Effort-corrected richness (0.0) is below the habitat expectation (132)", "Effort-corrected richness (0.0) is below the habitat expectation (122)", "Effort-corrected richness (0.0) is below the habitat expectation (117)", "Effort-corrected richness (0.0) is below the habitat expectation (147)", "Effort-corrected richness (0.0) is below the habitat expectation (127)", "Effort-corrected richness (0.0) is below the habitat expectation (143)", "Effort-corrected richness (0.0) is below the habitat expectation (166)", "Effort-corrected richness (0.0) is below the habitat expectation (149)", "Effort-corrected richness (0.0) is below the habitat expectation (151)"],
+    "interventions": [
+      {
+        "id": "amsterdam-schimmelstraat-2308-rank-1",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #1 for intervention priority (composite score 3.60). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "high",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-2271-rank-2",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #2 for intervention priority (composite score 3.56). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "high",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-2348-rank-6",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #6 for intervention priority (composite score 2.70). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "medium",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-2310-rank-9",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #9 for intervention priority (composite score 2.39). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "medium",
+        "category": "pollinator",
+        "connectivityGain": 4
+      },
+      {
+        "id": "amsterdam-schimmelstraat-2309-rank-18",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #18 for intervention priority (composite score 1.77). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "low",
+        "category": "pollinator",
+        "connectivityGain": 4
+      }
+    ]
+  },
+  "osm-1472521075": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 47,
+    "habitatQualityIndex": 0.4698,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 108,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.8492,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7883,
+    "corridorImportanceNorm": 0.5039,
+    "treeCoverNorm": 0.259,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.3529,
+    "dataAvailabilityRatio": 0,
+    "nObs": 4,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 7.8,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 3,
+        "names": [
+          "Allium ursinum",
+          "Loquat (Eriobotrya japonica)",
+          "Rubus phoenicolasius"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 1,
+        "names": [
+          "Otiorhynchus (Otiorhynchus)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 5,
+    "heatExposure": 48,
+    "meanLst": 48,
+    "lstIdx": 52,
+    "landUseGreen": 49,
+    "landUseClass": "mixed",
+    "interventionRank": 23,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521076": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 45,
+    "habitatQualityIndex": 0.4523,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 104.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.8135,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7559,
+    "corridorImportanceNorm": 0.5374,
+    "treeCoverNorm": 0.1781,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.3235,
+    "dataAvailabilityRatio": 0,
+    "nObs": 2,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 10,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 2,
+        "names": [
+          "Acer pseudoplatanus",
+          "Cymbalaria muralis"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 3,
+    "heatExposure": 38,
+    "meanLst": 38,
+    "lstIdx": 62,
+    "landUseGreen": 30,
+    "landUseClass": "built",
+    "interventionRank": 24,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-221097644": {
+    "impactScore": 40,
+    "natureGapScore": 40.2,
+    "habitatQuality": 33,
+    "habitatQualityIndex": 0.3294,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "effortCorrectedRichness": 0,
+    "expectedRichness": 82.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 82.6,
+    "ecologicalResidualNormalized": 0.3018,
+    "habitatQualityNorm": 0.5631,
+    "effortCorrectedRichnessNorm": 0,
+    "expectedRichnessNorm": 0.5781,
+    "corridorImportanceNorm": 0.1596,
+    "treeCoverNorm": 0.0447,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.7239,
+    "natureGapScoreNorm": 1,
+    "interventionRankNorm": 0.8824,
+    "dataAvailabilityRatio": 0.4463,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "much-better",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 1,
+    "heatExposure": 42,
+    "meanLst": 42,
+    "lstIdx": 58,
+    "landUseGreen": 30,
+    "landUseClass": "built",
+    "interventionRank": 5,
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (122)", "Effort-corrected richness (0.0) is below the habitat expectation (112)", "Effort-corrected richness (0.0) is below the habitat expectation (127)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (119)", "Effort-corrected richness (0.0) is below the habitat expectation (107)", "Effort-corrected richness (0.0) is below the habitat expectation (100)"],
+    "interventions": []
+  },
+  "osm-1472521074": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 39,
+    "habitatQualityIndex": 0.3885,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 89.4,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6836,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.6348,
+    "corridorImportanceNorm": 0.4568,
+    "treeCoverNorm": 0.5391,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.3824,
+    "dataAvailabilityRatio": 0,
+    "nObs": 40,
+    "nSurveyDates": 22,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 58.8,
+    "taxonomicDiversity": 0.6,
+    "species": [
+      {
+        "type": "plant",
+        "count": 23,
+        "names": [
+          "Actinidia",
+          "Alliaria petiolata",
+          "balsams (Impatiens)",
+          "bittersweet nightshade (Solanum dulcamara)",
+          "common valerian (Valeriana officinalis)",
+          "Cotoneasters (Cotoneaster)",
+          "Dicots (Magnoliopsida)",
+          "European black elderberry (Sambucus nigra)",
+          "Evening Lilies (Hesperantha)",
+          "Faboideae",
+          "flower-of-an-hour (Hibiscus trionum)",
+          "Flowering Plants (Angiospermae)",
+          "Hedge mustard (Sisymbrium officinale)",
+          "Lamium galeobdolon",
+          "meadow-rues (Thalictrum)",
+          "Melilotus albus",
+          "serviceberries (Amelanchier)",
+          "Vascular Plants (Tracheophyta)",
+          "Weyer's Butterfly-bush (Buddleja × weyeriana)",
+          "willowherbs (Epilobium)",
+          "Yellow Corydalis (Pseudo-fumaria lutea)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 11,
+        "names": [
+          "Acalyptrate Flies (Acalyptratae)",
+          "Bathroom Moth Fly (Clogmia albipunctata)",
+          "Black Slip Wasp (Pimpla rufipes)",
+          "Common Cockchafer (Melolontha melolontha)",
+          "Great Green Bush-cricket (Tettigonia viridissima)",
+          "Lily Leaf Beetle (Lilioceris lilii)",
+          "Mother of Pearl (Patania ruralis)",
+          "Narcissus Bulb Fly (Merodon equestris)",
+          "Non-biting Midges (Chironomidae)",
+          "Orange Ladybird (Halyzia sedecimguttata)",
+          "Webbing Clothes Moth (Tineola bisselliella)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 2,
+        "names": [
+          "European Common Frog (Rana temporaria)"
+        ]
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 12,
+    "heatExposure": 44,
+    "meanLst": 44,
+    "lstIdx": 56,
+    "landUseGreen": 60,
+    "landUseClass": "mixed",
+    "interventionRank": 22,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521077": {
+    "impactScore": 35,
+    "natureGapScore": 35.1,
+    "habitatQuality": 49,
+    "habitatQualityIndex": 0.4948,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "effortCorrectedRichness": 0,
+    "expectedRichness": 114.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 114.1,
+    "ecologicalResidualNormalized": 0.3083,
+    "habitatQualityNorm": 0.9003,
+    "effortCorrectedRichnessNorm": 0,
+    "expectedRichnessNorm": 0.8385,
+    "corridorImportanceNorm": 0.7008,
+    "treeCoverNorm": 0.3525,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 1,
+    "natureGapScoreNorm": 0.8719,
+    "interventionRankNorm": 0.7647,
+    "dataAvailabilityRatio": 0.0017,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 4.2,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 1,
+        "names": [
+          "European Common Frog (Rana temporaria)"
+        ]
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 6,
+    "heatExposure": 31,
+    "meanLst": 31,
+    "lstIdx": 69,
+    "landUseGreen": 25,
+    "landUseClass": "built",
+    "interventionRank": 9,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (97)"],
+    "interventions": []
+  },
+  "osm-1472521078": {
+    "impactScore": -14,
+    "natureGapScore": -13.6,
+    "habitatQuality": 44,
+    "habitatQualityIndex": 0.441,
+    "speciesRichnessRaw": 1,
+    "observedRichness": 16123.6,
+    "effortCorrectedRichness": 16123.6,
+    "expectedRichness": 101.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": -16022,
+    "ecologicalResidualNormalized": -3.0151,
+    "habitatQualityNorm": 0.7906,
+    "effortCorrectedRichnessNorm": 1,
+    "expectedRichnessNorm": 0.7352,
+    "corridorImportanceNorm": 0.5028,
+    "treeCoverNorm": 0.3855,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": -1,
+    "natureGapScoreNorm": -0.3369,
+    "interventionRankNorm": 0.8235,
+    "dataAvailabilityRatio": 0.0247,
+    "nObs": 14,
+    "nSurveyDates": 1,
+    "status": "worse",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 25,
+    "taxonomicDiversity": 0.6,
+    "species": [
+      {
+        "type": "plant",
+        "count": 3,
+        "names": [
+          "Carpinus betulus",
+          "Prunella vulgaris",
+          "Wild Tulip (Tulipa sylvestris)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 11,
+        "names": [
+          "Black-headed Gull (Chroicocephalus ridibundus)",
+          "Common Wood-Pigeon (Columba palumbus)",
+          "Eurasian Blackbird (Turdus merula)",
+          "Eurasian Blue Tit (Cyanistes caeruleus)",
+          "Eurasian Coot (Fulica atra)",
+          "Eurasian Jay (Garrulus glandarius)",
+          "Eurasian Magpie (Pica pica)",
+          "European Herring Gull (Larus argentatus)",
+          "Gray Heron (Ardea cinerea)",
+          "Mallard (Anas platyrhynchos)",
+          "Tufted Duck (Aythya fuligula)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 8,
+    "heatExposure": 24,
+    "meanLst": 24,
+    "lstIdx": 76,
+    "landUseGreen": 37,
+    "landUseClass": "mixed",
+    "interventionRank": 7,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (86)", "Effort-corrected richness (0.0) is below the habitat expectation (108)", "Effort-corrected richness (0.0) is below the habitat expectation (110)", "Low survey effort — fewer than 2 distinct survey dates"],
+    "interventions": []
+  },
+  "osm-1467846340": {
+    "impactScore": 44,
+    "natureGapScore": 43.7,
+    "habitatQuality": 21,
+    "habitatQualityIndex": 0.211,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "effortCorrectedRichness": 0,
+    "expectedRichness": 48.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 48.5,
+    "ecologicalResidualNormalized": 0.2948,
+    "habitatQualityNorm": 0.3218,
+    "effortCorrectedRichnessNorm": 0,
+    "expectedRichnessNorm": 0.2963,
+    "corridorImportanceNorm": 0.0989,
+    "treeCoverNorm": 0.2042,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.4251,
+    "natureGapScoreNorm": 1,
+    "interventionRankNorm": 0.7941,
+    "dataAvailabilityRatio": 0.0084,
+    "nObs": 3,
+    "nSurveyDates": 2,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 11.1,
+    "taxonomicDiversity": 0.3,
+    "species": [
+      {
+        "type": "plant",
+        "count": 3,
+        "names": [
+          "arborvitaes (Thuja)",
+          "Rose campion (Silene coronaria)",
+          "Stachys palustris"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 8,
+    "heatExposure": 55,
+    "meanLst": 55,
+    "lstIdx": 45,
+    "landUseGreen": 56,
+    "landUseClass": "mixed",
+    "interventionRank": 8,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (128)", "Effort-corrected richness (0.0) is below the habitat expectation (106)"],
+    "interventions": []
+  },
+  "osm-1467846339": {
+    "impactScore": 37,
+    "natureGapScore": 36.8,
+    "habitatQuality": 44,
+    "habitatQualityIndex": 0.4354,
+    "speciesRichnessRaw": 1,
+    "observedRichness": 43.3,
+    "effortCorrectedRichness": 43.3,
+    "expectedRichness": 100.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 56.8,
+    "ecologicalResidualNormalized": 0.2965,
+    "habitatQualityNorm": 0.7791,
+    "effortCorrectedRichnessNorm": 0.0053,
+    "expectedRichnessNorm": 0.7228,
+    "corridorImportanceNorm": 0.406,
+    "treeCoverNorm": 0.2032,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.4981,
+    "natureGapScoreNorm": 0.9157,
+    "interventionRankNorm": 0.7353,
+    "dataAvailabilityRatio": 0.0068,
+    "nObs": 16,
+    "nSurveyDates": 3,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 53.6,
+    "taxonomicDiversity": 0.4,
+    "species": [
+      {
+        "type": "plant",
+        "count": 2,
+        "names": [
+          "Apium graveolens",
+          "Italian arum (Arum italicum)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 1,
+        "names": [
+          "Eurasian Jay (Garrulus glandarius)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 5,
+        "names": [
+          "Broad-nosed Weevils (Entiminae)",
+          "Early Bumble Bee (Bombus pratorum)",
+          "Morning-glory Plume Moth (Emmelina monodactyla)",
+          "Southern Hawker (Aeshna cyanea)",
+          "Western Conifer Seed Bug (Leptoglossus occidentalis)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 1,
+        "names": [
+          "chicken of the woods (Laetiporus sulphureus)"
+        ]
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 7,
+    "heatExposure": 62,
+    "meanLst": 62,
+    "lstIdx": 38,
+    "landUseGreen": 45,
+    "landUseClass": "mixed",
+    "interventionRank": 10,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "Temporal sampling bias — observations are weekend-only", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (55.6) is below the habitat expectation (101)", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (88)"],
+    "interventions": []
+  },
+  "osm-1472521070": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 44,
+    "habitatQualityIndex": 0.437,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 100.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.7825,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7273,
+    "corridorImportanceNorm": 0.5387,
+    "treeCoverNorm": 0.3695,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.4706,
+    "dataAvailabilityRatio": 0,
+    "nObs": 5,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 7.2,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 3,
+        "names": [
+          "Aegopodium podagraria",
+          "Alliaria petiolata",
+          "Circaea lutetiana"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 1,
+        "names": [
+          "False Pirate Spider (Platnickina tincta)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 7,
+    "heatExposure": 63,
+    "meanLst": 63,
+    "lstIdx": 37,
+    "landUseGreen": 30,
+    "landUseClass": "mixed",
+    "interventionRank": 19,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-natuurtuin-slatuinen": {
+    "impactScore": 31,
+    "natureGapScore": 31.2,
+    "habitatQuality": 60,
+    "habitatQualityIndex": 0.6013,
+    "speciesRichnessRaw": 48,
+    "observedRichness": 123.8,
+    "effortCorrectedRichness": 123.8,
+    "expectedRichness": 160.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 37.1,
+    "ecologicalResidualNormalized": 0.2924,
+    "habitatQualityNorm": 1,
+    "effortCorrectedRichnessNorm": 0.0152,
+    "expectedRichnessNorm": 1,
+    "corridorImportanceNorm": 1,
+    "treeCoverNorm": 1,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.3254,
+    "natureGapScoreNorm": 0.7757,
+    "interventionRankNorm": 1,
+    "dataAvailabilityRatio": 0.9127,
+    "nObs": 63,
+    "nSurveyDates": 5,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 152.7,
+    "taxonomicDiversity": 0.5,
+    "species": [
+      {
+        "type": "plant",
+        "count": 24,
+        "names": [
+          "Alliaria petiolata",
+          "Allium ursinum",
+          "Anthriscus sylvestris",
+          "Arum italicum",
+          "Caltha palustris",
+          "Chelidonium majus",
+          "Circaea lutetiana",
+          "Cornus sanguinea",
+          "Filipendula ulmaria",
+          "Galium odoratum",
+          "Geranium phaeum",
+          "Heracleum sphondylium",
+          "Impatiens glandulifera",
+          "Onoclea sensibilis",
+          "Parietaria officinalis",
+          "Paris quadrifolia",
+          "Silene dioica",
+          "Spanish Bluebell (Hyacinthoides hispanica)",
+          "Vinca minor"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 20,
+        "names": [
+          "Acrotrichis fascicularis",
+          "Anacaena limbata",
+          "Anisodactylus binotatus",
+          "Bradycellus verbasci",
+          "Cartodere bifasciata",
+          "Cercyon convexiusculus",
+          "Cercyon ustulatus",
+          "Cortinicara gibbosa",
+          "Dryops luridus",
+          "Harmonia axyridis",
+          "Harpalus griseus",
+          "Hydrobius fuscipes",
+          "Notiophilus rufipes",
+          "Orthoperus corticalis",
+          "Otiorhynchus sulcatus",
+          "Paranchus albipes",
+          "Propylaea quatuordecimpunctata",
+          "Ptenidium intermedium",
+          "Sericoderus lateralis",
+          "Trechus quadristriatus"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 4,
+    "betweennessCentrality": 4,
+    "fragmentationIndex": 0,
+    "treeCover": 40,
+    "heatExposure": 76,
+    "meanLst": 76,
+    "lstIdx": 24,
+    "landUseGreen": 91,
+    "landUseClass": "tree",
+    "interventionRank": 1,
+    "pressures": ["Effort-corrected richness (105.3) is below the habitat expectation (164)", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (162)", "Unsampled cell — no accessible pedestrian path length from OSM", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (27.3) is below the habitat expectation (173)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (49.4) is below the habitat expectation (172)", "Effort-corrected richness (0.0) is below the habitat expectation (182)", "Effort-corrected richness (110.7) is below the habitat expectation (175)", "Effort-corrected richness (59.4) is below the habitat expectation (168)", "Effort-corrected richness (0.0) is below the habitat expectation (152)", "Effort-corrected richness (36.1) is below the habitat expectation (175)", "Effort-corrected richness (32.1) is below the habitat expectation (159)", "Effort-corrected richness (36.8) is below the habitat expectation (168)", "Effort-corrected richness (93.3) is below the habitat expectation (131)", "Effort-corrected richness (0.0) is below the habitat expectation (108)"],
+    "interventions": [
+      {
+        "id": "amsterdam-schimmelstraat-3336-rank-3",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #3 for intervention priority (composite score 3.36). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "high",
+        "category": "pollinator",
+        "connectivityGain": 6
+      },
+      {
+        "id": "amsterdam-schimmelstraat-3415-rank-7",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #7 for intervention priority (composite score 2.67). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "medium",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-3178-rank-10",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #10 for intervention priority (composite score 2.31). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "medium",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-3296-rank-16",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #16 for intervention priority (composite score 1.82). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "low",
+        "category": "pollinator",
+        "connectivityGain": 5
+      },
+      {
+        "id": "amsterdam-schimmelstraat-3138-rank-19",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #19 for intervention priority (composite score 1.75). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "low",
+        "category": "pollinator",
+        "connectivityGain": 5
+      }
+    ]
+  },
+  "osm-1472521083": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.3684,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 84.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6427,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.5926,
+    "corridorImportanceNorm": 0.1743,
+    "treeCoverNorm": 0.245,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.2647,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 4,
+    "heatExposure": 5,
+    "meanLst": 5,
+    "lstIdx": 95,
+    "landUseGreen": 5,
+    "landUseClass": "built",
+    "interventionRank": 26,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521071": {
+    "impactScore": 37,
+    "natureGapScore": 36.7,
+    "habitatQuality": 44,
+    "habitatQualityIndex": 0.4419,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "effortCorrectedRichness": 0,
+    "expectedRichness": 101.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 101.9,
+    "ecologicalResidualNormalized": 0.3057,
+    "habitatQualityNorm": 0.7923,
+    "effortCorrectedRichnessNorm": 0,
+    "expectedRichnessNorm": 0.7374,
+    "corridorImportanceNorm": 0.6064,
+    "treeCoverNorm": 0.4599,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.8928,
+    "natureGapScoreNorm": 0.9117,
+    "interventionRankNorm": 0.7059,
+    "dataAvailabilityRatio": 0.0003,
+    "nObs": 20,
+    "nSurveyDates": 2,
+    "status": "much-better",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 31.7,
+    "taxonomicDiversity": 0.6,
+    "species": [
+      {
+        "type": "plant",
+        "count": 5,
+        "names": [
+          "Acer pseudoplatanus",
+          "Circaea lutetiana",
+          "Impatiens glandulifera",
+          "Silene dioica",
+          "Stellaria media"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 12,
+        "names": [
+          "Carrion Crow (Corvus corone)",
+          "Common Firecrest (Regulus ignicapilla)",
+          "Eurasian Blackbird (Turdus merula)",
+          "Eurasian Blue Tit (Cyanistes caeruleus)",
+          "Eurasian Coot (Fulica atra)",
+          "Eurasian Jackdaw (Coloeus monedula)",
+          "Eurasian Moorhen (Gallinula chloropus)",
+          "European Robin (Erithacus rubecula)",
+          "Lesser Black-backed Gull (Larus fuscus)",
+          "Mallard (Anas platyrhynchos)",
+          "Pallas's Leaf Warbler (Phylloscopus proregulus)",
+          "Rose-ringed Parakeet (Psittacula krameri)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 9,
+    "heatExposure": 68,
+    "meanLst": 68,
+    "lstIdx": 32,
+    "landUseGreen": 46,
+    "landUseClass": "mixed",
+    "interventionRank": 11,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (63)"],
+    "interventions": []
+  },
+  "osm-1472521082": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 37,
+    "habitatQualityIndex": 0.366,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 83.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6377,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.5873,
+    "corridorImportanceNorm": 0.1258,
+    "treeCoverNorm": 0.2625,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.2941,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 5,
+    "heatExposure": 4,
+    "meanLst": 4,
+    "lstIdx": 96,
+    "landUseGreen": 30,
+    "landUseClass": "mixed",
+    "interventionRank": 25,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1467846335": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 5,
+    "habitatQualityIndex": 0.0546,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 13.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.003,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.0032,
+    "corridorImportanceNorm": 0.2353,
+    "treeCoverNorm": 0.1292,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.6765,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 2,
+    "heatExposure": 86,
+    "meanLst": 86,
+    "lstIdx": 14,
+    "landUseGreen": 11,
+    "landUseClass": "mixed",
+    "interventionRank": 12,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521073": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 44,
+    "habitatQualityIndex": 0.4429,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 101.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.7944,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7324,
+    "corridorImportanceNorm": 0.1586,
+    "treeCoverNorm": 0,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.4118,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 0,
+    "heatExposure": 25,
+    "meanLst": 25,
+    "lstIdx": 75,
+    "landUseGreen": 0,
+    "landUseClass": "built",
+    "interventionRank": 21,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-de-krommert": {
+    "impactScore": 38,
+    "natureGapScore": 37.7,
+    "habitatQuality": 41,
+    "habitatQualityIndex": 0.4084,
+    "speciesRichnessRaw": 0,
+    "observedRichness": 0,
+    "effortCorrectedRichness": 0,
+    "expectedRichness": 105.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": 105.8,
+    "ecologicalResidualNormalized": 0.3066,
+    "habitatQualityNorm": 0.7241,
+    "effortCorrectedRichnessNorm": 0,
+    "expectedRichnessNorm": 0.77,
+    "corridorImportanceNorm": 0.645,
+    "treeCoverNorm": 0.6693,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0.9273,
+    "natureGapScoreNorm": 0.9365,
+    "interventionRankNorm": 0.9412,
+    "dataAvailabilityRatio": 0.8154,
+    "nObs": 8,
+    "nSurveyDates": 1,
+    "status": "much-better",
+    "habitatPotential": "low",
+    "observerEffortScore": 29.6,
+    "taxonomicDiversity": 2.1,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 8,
+        "names": [
+          "Common Swift (Apus apus)",
+          "Common Wood-Pigeon (Columba palumbus)",
+          "Eurasian Blackbird (Turdus merula)",
+          "Eurasian Jay (Garrulus glandarius)",
+          "Eurasian Magpie (Pica pica)",
+          "Great Tit (Parus major)",
+          "Rose-ringed Parakeet (Psittacula krameri)",
+          "White Wagtail (Motacilla alba)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 14,
+    "heatExposure": 84,
+    "meanLst": 84,
+    "lstIdx": 16,
+    "landUseGreen": 53,
+    "landUseClass": "mixed",
+    "interventionRank": 3,
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (81)", "Effort-corrected richness (0.0) is below the habitat expectation (87)", "Effort-corrected richness (0.0) is below the habitat expectation (96)", "Effort-corrected richness (0.0) is below the habitat expectation (103)", "Effort-corrected richness (0.0) is below the habitat expectation (104)", "Effort-corrected richness (0.0) is below the habitat expectation (100)", "Effort-corrected richness (0.0) is below the habitat expectation (99)", "Effort-corrected richness (0.0) is below the habitat expectation (112)", "Effort-corrected richness (0.0) is below the habitat expectation (148)", "Effort-corrected richness (0.0) is below the habitat expectation (117)", "Effort-corrected richness (0.0) is below the habitat expectation (115)", "Effort-corrected richness (0.0) is below the habitat expectation (69)", "Effort-corrected richness (0.0) is below the habitat expectation (60)"],
+    "interventions": [
+      {
+        "id": "amsterdam-schimmelstraat-4046-rank-14",
+        "title": "Increase native plant diversity",
+        "description": "Ranked #14 for intervention priority (composite score 1.91). Local 20m-hex connectivity graph rerun with candidate cell upgraded to habitat quality 1.0",
+        "impact": "low",
+        "category": "pollinator",
+        "connectivityGain": 5
+      }
+    ]
+  },
+  "osm-1480413509": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 39,
+    "habitatQualityIndex": 0.3874,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 88.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6813,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.6289,
+    "corridorImportanceNorm": 0.2193,
+    "treeCoverNorm": 0.0037,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.0294,
+    "dataAvailabilityRatio": 0,
+    "nObs": 4,
+    "nSurveyDates": 2,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 10.5,
+    "taxonomicDiversity": 0.3,
+    "species": [
+      {
+        "type": "plant",
+        "count": 3,
+        "names": [
+          "Hybrid bluebell (Hyacinthoides × massartiana)",
+          "Indian Pokeweed (Phytolacca acinosa)",
+          "Japanese snowball (Viburnum plicatum)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 0,
+    "heatExposure": 47,
+    "meanLst": 47,
+    "lstIdx": 53,
+    "landUseGreen": 15,
+    "landUseClass": "built",
+    "interventionRank": 34,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521084": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 39,
+    "habitatQualityIndex": 0.3945,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 90,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6959,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.639,
+    "corridorImportanceNorm": 0.0007,
+    "treeCoverNorm": 0.689,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.2353,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "betweennessCentrality": 0,
+    "fragmentationIndex": 0,
+    "treeCover": 13,
+    "heatExposure": 2,
+    "meanLst": 2,
+    "lstIdx": 98,
+    "landUseGreen": 24,
+    "landUseClass": "mixed",
+    "interventionRank": 27,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1467846336": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 5,
+    "habitatQualityIndex": 0.0497,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 11.8,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0,
+    "corridorImportanceNorm": 0.1341,
+    "treeCoverNorm": 0.2722,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.6471,
+    "dataAvailabilityRatio": 0,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 10,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1,
+        "names": [
+          "black locust (Robinia pseudoacacia)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 4,
+    "heatExposure": 92,
+    "meanLst": 92,
+    "lstIdx": 8,
+    "landUseGreen": 17,
+    "landUseClass": "mixed",
+    "interventionRank": 13,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521072": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 38,
+    "habitatQualityIndex": 0.3763,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 86.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6588,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.6106,
+    "corridorImportanceNorm": 0.3731,
+    "treeCoverNorm": 0.2221,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.4412,
+    "dataAvailabilityRatio": 0,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 4,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1,
+        "names": [
+          "Alliaria petiolata"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 4,
+    "heatExposure": 69,
+    "meanLst": 69,
+    "lstIdx": 31,
+    "landUseGreen": 8,
+    "landUseClass": "built",
+    "interventionRank": 20,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1467846337": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 3,
+    "habitatQualityIndex": 0.0295,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 7.1,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0,
+    "corridorImportanceNorm": 0.1134,
+    "treeCoverNorm": 0.063,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.6176,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 3,
+    "heatExposure": 83,
+    "meanLst": 83,
+    "lstIdx": 17,
+    "landUseGreen": 0,
+    "landUseClass": "mixed",
+    "interventionRank": 14,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521088": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 25,
+    "habitatQualityIndex": 0.2481,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 56.9,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.3974,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.3661,
+    "corridorImportanceNorm": 0.162,
+    "treeCoverNorm": 0.5659,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.2059,
+    "dataAvailabilityRatio": 0,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 6.7,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1,
+        "names": [
+          "Circaea lutetiana"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 9,
+    "heatExposure": 19,
+    "meanLst": 19,
+    "lstIdx": 81,
+    "landUseGreen": 7,
+    "landUseClass": "mixed",
+    "interventionRank": 28,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521097": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 39,
+    "habitatQualityIndex": 0.3931,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 90.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6929,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.644,
+    "corridorImportanceNorm": 0.4968,
+    "treeCoverNorm": 0.3026,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.0588,
+    "dataAvailabilityRatio": 0,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 4.2,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1,
+        "names": [
+          "Dicots (Magnoliopsida)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 2,
+    "betweennessCentrality": 2,
+    "fragmentationIndex": 0,
+    "treeCover": 6,
+    "heatExposure": 73,
+    "meanLst": 73,
+    "lstIdx": 27,
+    "landUseGreen": 34,
+    "landUseClass": "mixed",
+    "interventionRank": 33,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521096": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 43,
+    "habitatQualityIndex": 0.4336,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 99.6,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.7755,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.7191,
+    "corridorImportanceNorm": 0.4258,
+    "treeCoverNorm": 0.0962,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.0882,
+    "dataAvailabilityRatio": 0,
+    "nObs": 7,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 25,
+    "taxonomicDiversity": 0.5,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 4,
+        "names": [
+          "Eurasian Blackbird (Turdus merula)",
+          "Eurasian Coot (Fulica atra)",
+          "Great Crested Grebe (Podiceps cristatus)",
+          "Mallard (Anas platyrhynchos)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 1,
+        "names": [
+          "Long-bodied Cellar Spider (Pholcus phalangioides)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 1,
+        "names": [
+          "Chlorophyllum (Chlorophyllum)"
+        ]
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 2,
+    "heatExposure": 42,
+    "meanLst": 42,
+    "lstIdx": 58,
+    "landUseGreen": 22,
+    "landUseClass": "mixed",
+    "interventionRank": 32,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472520441": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 12,
+    "habitatQualityIndex": 0.1184,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 27.3,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.133,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.1212,
+    "corridorImportanceNorm": 0.1052,
+    "treeCoverNorm": 0.269,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.5882,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 5,
+    "heatExposure": 82,
+    "meanLst": 82,
+    "lstIdx": 18,
+    "landUseGreen": 18,
+    "landUseClass": "mixed",
+    "interventionRank": 15,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521093": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 42,
+    "habitatQualityIndex": 0.4191,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 96,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.7459,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.6887,
+    "corridorImportanceNorm": 0.2273,
+    "treeCoverNorm": 0.0693,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.1471,
+    "dataAvailabilityRatio": 0,
+    "nObs": 13,
+    "nSurveyDates": 3,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 92.9,
+    "taxonomicDiversity": 0.2,
+    "species": [
+      {
+        "type": "plant",
+        "count": 5,
+        "names": [
+          "bellflowers (Campanula)",
+          "Cirsium vulgare",
+          "common silverweed (Argentina anserina)",
+          "greater bird's-foot-trefoil (Lotus pedunculatus)",
+          "Lysimachia ciliata"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 3,
+        "names": [
+          "Burnished Brass (Diachrysia chrysitis)",
+          "Hollyhock Weevil (Rhopalapion longirostre)",
+          "Mimela junii (Mimela junii)"
+        ]
+      },
+      {
+        "type": "mammal",
+        "count": 1,
+        "names": [
+          "Water Frogs (Pelophylax)"
+        ]
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 2,
+    "heatExposure": 38,
+    "meanLst": 38,
+    "lstIdx": 62,
+    "landUseGreen": 25,
+    "landUseClass": "mixed",
+    "interventionRank": 30,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521092": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 41,
+    "habitatQualityIndex": 0.4104,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 94.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.7281,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.6743,
+    "corridorImportanceNorm": 0.3541,
+    "treeCoverNorm": 0.3815,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.1765,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "moderate",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 7,
+    "heatExposure": 50,
+    "meanLst": 50,
+    "lstIdx": 50,
+    "landUseGreen": 32,
+    "landUseClass": "mixed",
+    "interventionRank": 29,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472521094": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 25,
+    "habitatQualityIndex": 0.2537,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 58,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.4089,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.3751,
+    "corridorImportanceNorm": 0.0614,
+    "treeCoverNorm": 0.1352,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.1176,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "betweennessCentrality": 0,
+    "fragmentationIndex": 0,
+    "treeCover": 2,
+    "heatExposure": 73,
+    "meanLst": 73,
+    "lstIdx": 27,
+    "landUseGreen": 15,
+    "landUseClass": "mixed",
+    "interventionRank": 31,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472520442": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 35,
+    "habitatQualityIndex": 0.3502,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 80.2,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.6056,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.5582,
+    "corridorImportanceNorm": 0.1601,
+    "treeCoverNorm": 0,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.5588,
+    "dataAvailabilityRatio": 0,
+    "nObs": 1,
+    "nSurveyDates": 1,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 10,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 1,
+        "names": [
+          "horseweed (Erigeron canadensis)"
+        ]
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 1,
+    "betweennessCentrality": 1,
+    "fragmentationIndex": 0,
+    "treeCover": 0,
+    "heatExposure": 62,
+    "meanLst": 62,
+    "lstIdx": 38,
+    "landUseGreen": 0,
+    "landUseClass": "built",
+    "interventionRank": 16,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472520444": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 34,
+    "habitatQualityIndex": 0.3441,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 78.5,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.593,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.5441,
+    "corridorImportanceNorm": 0,
+    "treeCoverNorm": 0.2922,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.5294,
+    "dataAvailabilityRatio": 0,
+    "nObs": 3,
+    "nSurveyDates": 2,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 10.7,
+    "taxonomicDiversity": 0.6,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 2,
+        "names": [
+          "Common Swift (Apus apus)",
+          "Great Cormorant (Phalacrocorax carbo)"
+        ]
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "betweennessCentrality": 0,
+    "fragmentationIndex": 0,
+    "treeCover": 6,
+    "heatExposure": 58,
+    "meanLst": 58,
+    "lstIdx": 42,
+    "landUseGreen": 19,
+    "landUseClass": "mixed",
+    "interventionRank": 17,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  },
+  "osm-1472520445": {
+    "impactScore": 0,
+    "natureGapScore": null,
+    "habitatQuality": 28,
+    "habitatQualityIndex": 0.275,
+    "speciesRichnessRaw": 0,
+    "observedRichness": null,
+    "effortCorrectedRichness": null,
+    "expectedRichness": 62.7,
+    "maxExpectedRichness": 350,
+    "ecologicalResidual": null,
+    "ecologicalResidualNormalized": null,
+    "habitatQualityNorm": 0.4523,
+    "effortCorrectedRichnessNorm": 0.5,
+    "expectedRichnessNorm": 0.414,
+    "corridorImportanceNorm": 0,
+    "treeCoverNorm": 0.5973,
+    "meanLstNorm": 0.5,
+    "ecologicalResidualNorm": 0,
+    "natureGapScoreNorm": 0,
+    "interventionRankNorm": 0.5,
+    "dataAvailabilityRatio": 0,
+    "nObs": 0,
+    "nSurveyDates": 0,
+    "status": "as-expected",
+    "habitatPotential": "low",
+    "observerEffortScore": 0,
+    "taxonomicDiversity": 0,
+    "species": [
+      {
+        "type": "plant",
+        "count": 0
+      },
+      {
+        "type": "bird",
+        "count": 0
+      },
+      {
+        "type": "insect",
+        "count": 0
+      },
+      {
+        "type": "mammal",
+        "count": 0
+      },
+      {
+        "type": "fungi",
+        "count": 0
+      }
+    ],
+    "corridorImportance": 0,
+    "betweennessCentrality": 0,
+    "fragmentationIndex": 0,
+    "treeCover": 11,
+    "heatExposure": 67,
+    "meanLst": 67,
+    "lstIdx": 33,
+    "landUseGreen": 3,
+    "landUseClass": "mixed",
+    "interventionRank": 18,
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
+    "interventions": []
+  }
+}

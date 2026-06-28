@@ -1,4 +1,5 @@
 import { MAX_EXPECTED_RICHNESS } from './config';
+import { getParkStats, getParks } from './green-spaces';
 import { supabase } from './supabase';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 
@@ -16,8 +17,6 @@ export type RenderCellProperties = {
   corridorImportance?: number | null;
   betweennessCentrality?: number | null;
   treeCover?: number | null;
-  meanCanopy?: number | null;
-  canopyHeightIdx?: number | null;
   heatExposure?: number | null;
   meanLst?: number | null;
   lstIdx?: number | null;
@@ -159,8 +158,6 @@ function detailFromRow(
     betweennessCentrality: pct(render.betweennessCentrality),
     fragmentationIndex,
     treeCover: pct(row?.tree_cover ?? render.treeCover),
-    meanCanopy: pct(render.meanCanopy),
-    canopyHeightIdx: pct(render.canopyHeightIdx),
     heatExposure,
     meanLst: pct(render.meanLst),
     lstIdx: pct(render.lstIdx),
@@ -221,4 +218,26 @@ export async function fetchCellDetail(
   }
 
   return detailFromRow(data ?? null, render, coordinates);
+}
+
+/** Patch-level detail from aggregated park stats (biodiversity circles / park click). */
+export async function fetchParkDetail(
+  parkId: string,
+  coordinates: [number, number],
+): Promise<CellData | null> {
+  const stats = getParkStats()[parkId];
+  if (!stats) return null;
+
+  const park = getParks().find((entry) => entry.id === parkId);
+
+  return {
+    id: parkId,
+    name: park?.name ?? parkId,
+    nameJa: park?.nameJa ?? park?.name ?? parkId,
+    coordinates,
+    ...stats,
+    species: stats.species ?? [],
+    pressures: stats.pressures ?? [],
+    interventions: stats.interventions ?? [],
+  };
 }

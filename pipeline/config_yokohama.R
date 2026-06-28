@@ -199,6 +199,7 @@ RASTER_INPUT_DOWNLOADERS <- file.path(
   PIPELINE_ROOT,
   c(
     "00_download/download_worldcover.R",
+    "00_download/download_canopy_height.R",
     "00_download/download_sentinel2.R",
     "00_download/download_landsat_temp.R"
   )
@@ -241,13 +242,13 @@ LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
 CANOPY_HEIGHT_FILE <- file.path(
-  DATA_IMPORT, "lidar",
+  DATA_IMPORT, "canopy_height",
   paste0("canopy_height_", CITY_ID, ".tif")
 )
 
 LIDAR_VARIANCE_FILE <- file.path(
-  DATA_IMPORT, "lidar",
-  paste0("lidar_variance_", CITY_ID, ".tif")
+  DATA_IMPORT, "canopy_height",
+  paste0("canopy_height_variance_", CITY_ID, ".tif")
 )
 
 # ── Derived data paths ────────────────────────────────────────────────────────

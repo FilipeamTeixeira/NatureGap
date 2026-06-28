@@ -39,6 +39,7 @@ interface MapViewProps {
     cell: RenderCellProperties,
     coordinates: [number, number],
   ) => void;
+  onParkClick?: (parkId: string, coordinates: [number, number]) => void;
   flyToTarget?: { center: [number, number]; zoom: number } | null;
   dataRevision?: number;
   quickSightingsGeoJSON?: GeoJSON.FeatureCollection;
@@ -84,8 +85,7 @@ function statsProperties(stats: ParkStats | undefined) {
     corridorImportance: finiteNumber(stats?.corridorImportance),
     betweennessCentrality: finiteNumber(stats?.betweennessCentrality ?? stats?.corridorImportance),
     treeCover: finiteNumber(stats?.treeCover),
-    meanCanopy: finiteNumber(stats?.meanCanopy ?? stats?.treeCover),
-    canopyHeightIdx: finiteNumber(stats?.canopyHeightIdx ?? stats?.treeCover),
+    treeCoverNorm: finiteNumber(stats?.treeCoverNorm),
     heatExposure: finiteNumber(stats?.heatExposure),
     meanLst: finiteNumber(stats?.meanLst ?? stats?.heatExposure),
     lstIdx: finiteNumber(stats?.lstIdx ?? stats?.heatExposure),
@@ -96,7 +96,6 @@ function statsProperties(stats: ParkStats | undefined) {
     effortCorrectedRichnessNorm: finiteNumber(stats?.effortCorrectedRichnessNorm),
     expectedRichnessNorm: finiteNumber(stats?.expectedRichnessNorm),
     corridorImportanceNorm: finiteNumber(stats?.corridorImportanceNorm),
-    meanCanopyNorm: finiteNumber(stats?.meanCanopyNorm),
     meanLstNorm: finiteNumber(stats?.meanLstNorm),
     ecologicalResidualNorm: finiteNumber(stats?.ecologicalResidualNorm),
     natureGapScoreNorm: finiteNumber(stats?.natureGapScoreNorm),
@@ -349,6 +348,38 @@ async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtiles
   });
 }
 
+function waitForSourceLoaded(
+  map: maplibregl.Map,
+  sourceId: string,
+  timeoutMs = 15000,
+): Promise<boolean> {
+  if (map.getSource(sourceId) && map.isSourceLoaded(sourceId)) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      map.off('sourcedata', onSourceData);
+      resolve(false);
+    }, timeoutMs);
+
+    const onSourceData = (event: maplibregl.MapSourceDataEvent) => {
+      if (event.sourceId !== sourceId) return;
+      if (!map.isSourceLoaded(sourceId)) return;
+      window.clearTimeout(timer);
+      map.off('sourcedata', onSourceData);
+      resolve(true);
+    };
+
+    map.on('sourcedata', onSourceData);
+  });
+}
+
+async function ensureHexSourcesReady(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
+  await Promise.all(datasets.map((dataset) => waitForSourceLoaded(map, dataset.sourceId)));
+  map.triggerRepaint();
+}
+
 function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
   if (!properties) return null;
   const cellId = String(properties.cellId ?? '');
@@ -368,8 +399,6 @@ function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties'
     corridorImportance: properties.corridorImportance == null ? null : Number(properties.corridorImportance),
     betweennessCentrality: properties.betweennessCentrality == null ? null : Number(properties.betweennessCentrality),
     treeCover: properties.treeCover == null ? null : Number(properties.treeCover),
-    meanCanopy: properties.meanCanopy == null ? null : Number(properties.meanCanopy),
-    canopyHeightIdx: properties.canopyHeightIdx == null ? null : Number(properties.canopyHeightIdx),
     heatExposure: properties.heatExposure == null ? null : Number(properties.heatExposure),
     meanLst: properties.meanLst == null ? null : Number(properties.meanLst),
     lstIdx: properties.lstIdx == null ? null : Number(properties.lstIdx),
@@ -517,6 +546,7 @@ export default function MapView({
   layers,
   selectedCellId,
   onHexClick,
+  onParkClick,
   flyToTarget,
   dataRevision,
   quickSightingsGeoJSON,
@@ -529,6 +559,7 @@ export default function MapView({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const onClickRef = useRef(onHexClick);
+  const onParkClickRef = useRef(onParkClick);
   const layersAddedRef = useRef(false);
   const layersRef = useRef(layers);
   const onSurveyPointSelectRef = useRef(onSurveyPointSelect);
@@ -544,6 +575,10 @@ export default function MapView({
   useEffect(() => {
     onClickRef.current = onHexClick;
   }, [onHexClick]);
+
+  useEffect(() => {
+    onParkClickRef.current = onParkClick;
+  }, [onParkClick]);
 
   useEffect(() => {
     layersRef.current = layers;
@@ -562,6 +597,7 @@ export default function MapView({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     registerPmtilesProtocol();
+    const pmtilesDatasetsPromise = listHexPmtilesDatasets();
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -625,7 +661,7 @@ export default function MapView({
         },
       });
 
-      const pmtilesDatasets = await listHexPmtilesDatasets();
+      const pmtilesDatasets = await pmtilesDatasetsPromise;
       if (mapRef.current !== map) return;
       setHexDatasets(map, pmtilesDatasets);
 
@@ -642,7 +678,7 @@ export default function MapView({
             type: 'fill',
             source: dataset.sourceId,
             'source-layer': dataset.sourceLayer,
-            minzoom: 14,
+            minzoom: DETAIL_ZOOM,
             layout: { visibility: 'none' },
             paint: {
               'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId)),
@@ -656,7 +692,7 @@ export default function MapView({
           type: 'line',
           source: dataset.sourceId,
           'source-layer': dataset.sourceLayer,
-          minzoom: 14,
+          minzoom: DETAIL_ZOOM,
           paint: {
             'line-color': '#ffffff',
             'line-width': 0.3,
@@ -669,7 +705,7 @@ export default function MapView({
           type: 'fill',
           source: dataset.sourceId,
           'source-layer': dataset.sourceLayer,
-          minzoom: 14,
+          minzoom: DETAIL_ZOOM,
           filter: selectedHexFilter(null),
           paint: {
             'fill-color': '#1F2A1F',
@@ -678,6 +714,15 @@ export default function MapView({
           },
         });
       }
+
+      await fitMapToPmtilesDatasets(map, pmtilesDatasets);
+      if (mapRef.current !== map) return;
+      await ensureHexSourcesReady(map, pmtilesDatasets);
+      if (mapRef.current !== map) return;
+
+      setLayerVisibility(map, activeThematicLayerId(layersRef.current), layersRef.current);
+      applyLayerPaintExpressions(map);
+      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
 
       map.addLayer({
         id: CORRIDOR_LINES_LAYER_ID,
@@ -772,16 +817,11 @@ export default function MapView({
         },
       });
 
-      setLayerVisibility(map, activeThematicLayerId(layersRef.current), layersRef.current);
-      applyLayerPaintExpressions(map);
-      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
       map.on('zoom', () => {
         applyLandUseDonutZoom(map, landUseMarkersRef.current);
         setMapZoom(map.getZoom());
       });
       setMapZoom(map.getZoom());
-      await fitMapToPmtilesDatasets(map, pmtilesDatasets);
-      if (mapRef.current !== map) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addSource('ward-labels', { type: 'geojson', data: wardCentroidsGeoJSON() as any });
@@ -948,8 +988,29 @@ export default function MapView({
           ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
           : [];
         const props = renderCellProperties(hexFeatures[0]?.properties);
-        if (!props) return;
-        onClickRef.current(props, [e.lngLat.lng, e.lngLat.lat]);
+        if (props) {
+          e.preventDefault();
+          onClickRef.current(props, [e.lngLat.lng, e.lngLat.lat]);
+          return;
+        }
+        const parkId = e.features?.[0]?.properties?.parkId;
+        if (typeof parkId === 'string') {
+          e.preventDefault();
+          onParkClickRef.current?.(parkId, [e.lngLat.lng, e.lngLat.lat]);
+        }
+      });
+
+      map.on('mouseenter', BIODIVERSITY_CIRCLES_LAYER_ID, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', BIODIVERSITY_CIRCLES_LAYER_ID, () => {
+        map.getCanvas().style.cursor = '';
+      });
+      map.on('click', BIODIVERSITY_CIRCLES_LAYER_ID, (e) => {
+        const parkId = e.features?.[0]?.properties?.parkId;
+        if (typeof parkId !== 'string') return;
+        e.preventDefault();
+        onParkClickRef.current?.(parkId, [e.lngLat.lng, e.lngLat.lat]);
       });
 
       map.on('mouseenter', 'survey-points-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -1088,7 +1149,10 @@ export default function MapView({
                       } else if (s.metric === 'intervention_rank') {
                         if (isTop && s.minVal != null) formattedLabel = `${label} (~#${Math.round(s.minVal)})`;
                         else if (isBottom && s.maxVal != null) formattedLabel = `${label} (~#${Math.round(s.maxVal)})`;
-                      } else if (['habitat_quality', 'canopy_height_idx', 'lst_idx', 'betweenness_centrality'].includes(s.metric)) {
+                      } else if (s.metric === 'canopy_height_idx') {
+                        if (isTop && s.p95 != null) formattedLabel = `${label} (> ${Math.round(s.p95 * 20)} m)`;
+                        else if (isBottom && s.p05 != null) formattedLabel = `${label} (< ${Math.round(s.p05 * 20)} m)`;
+                      } else if (['habitat_quality', 'lst_idx', 'betweenness_centrality'].includes(s.metric)) {
                         if (isTop && s.p95 != null) formattedLabel = `${label} (> ${Math.round(s.p95 * 100)}%)`;
                         else if (isBottom && s.p05 != null) formattedLabel = `${label} (< ${Math.round(s.p05 * 100)}%)`;
                       } else {

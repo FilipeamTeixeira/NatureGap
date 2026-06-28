@@ -70,11 +70,10 @@ export interface CellStatsFields {
   corridorImportance: number;
   betweennessCentrality?: number;
   fragmentationIndex: number;
-  /** 0–100 tree canopy fraction (from pipeline WorldCover). */
+  /** 0–100 Meta/WRI canopy height index (0–1 scaled to percent). */
   treeCover?: number;
-  /** 0–100 mean canopy/canopy-height index for overview and detail map styling. */
-  meanCanopy?: number;
-  canopyHeightIdx?: number;
+  /** Per-city p5–p95 normalised canopy height (0–1). */
+  treeCoverNorm?: number;
   /** 0–100 heat exposure rank (from Landsat LST when available). */
   heatExposure?: number;
   meanLst?: number;
@@ -89,7 +88,6 @@ export interface CellStatsFields {
   effortCorrectedRichnessNorm?: number;
   expectedRichnessNorm?: number;
   corridorImportanceNorm?: number;
-  meanCanopyNorm?: number;
   meanLstNorm?: number;
   ecologicalResidualNorm?: number;
   natureGapScoreNorm?: number;

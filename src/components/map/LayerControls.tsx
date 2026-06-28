@@ -25,7 +25,7 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
   expected:     'Modelled richness from habitat and connectivity.',
   biodiversity: 'Effort-corrected observed species richness.',
   habitat:      'Combined habitat quality.',
-  treecover:    'Estimated canopy cover.',
+  treecover:    'Meta/WRI 1 m canopy height (m), 20 m hex mean.',
   connectivity: 'Corridor importance between habitat cells.',
   heat:         'Relative land-surface heat exposure.',
   landuse:      'Vegetated and built-up land cover.',

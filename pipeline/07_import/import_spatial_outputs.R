@@ -133,7 +133,7 @@ run_spatial_outputs_import <- function() {
 
   for (col in c(
     "habitat_quality_index", "effort_corrected_richness", "expected_richness",
-    "corridor_importance", "mean_canopy", "mean_lst",
+    "corridor_importance", "canopy_height_idx", "mean_lst",
     "ecological_residual", "nature_gap_score", "intervention_rank"
   )) {
     if (!col %in% names(green_spaces)) green_spaces[[col]] <- NA_real_
@@ -145,7 +145,7 @@ run_spatial_outputs_import <- function() {
       effort_corrected_richness_norm = norm_sequential(effort_corrected_richness),
       expected_richness_norm         = norm_sequential(expected_richness),
       corridor_importance_norm       = norm_sequential(corridor_importance),
-      mean_canopy_norm               = norm_sequential(mean_canopy),
+      mean_canopy_norm               = norm_sequential(canopy_height_idx),
       mean_lst_norm                  = norm_sequential(mean_lst),
       ecological_residual_norm       = norm_diverging(ecological_residual),
       nature_gap_score_norm          = norm_diverging(nature_gap_score),
@@ -181,7 +181,7 @@ run_spatial_outputs_import <- function() {
     list(metric = "effort_corrected_richness",        diverging = FALSE),
     list(metric = "expected_richness",               diverging = FALSE),
     list(metric = "corridor_importance",             diverging = FALSE),
-    list(metric = "mean_canopy",                     diverging = FALSE),
+    list(metric = "canopy_height_idx",                     diverging = FALSE),
     list(metric = "mean_lst",                        diverging = FALSE),
     list(metric = "ecological_residual",             diverging = TRUE),
     list(metric = "nature_gap_score",                diverging = TRUE),
@@ -192,7 +192,7 @@ run_spatial_outputs_import <- function() {
 
   hex_metric_specs <- list(
     list(metric = "ndvi_idx",              diverging = FALSE),
-    list(metric = "canopy_height_idx",     diverging = FALSE),
+    list(metric = "canopy_height_idx",              diverging = FALSE),
     list(metric = "lst_idx",              diverging = FALSE),
     list(metric = "disturbance_idx",       diverging = FALSE),
     list(metric = "betweenness_centrality",diverging = FALSE),

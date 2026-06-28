@@ -1,6 +1,6 @@
 import localGreenSpaces from '@/data/green-spaces.json';
 import localParkStats from '@/data/park-stats.json';
-import { CITY, STORAGE } from './config';
+import { STORAGE } from './config';
 import { parseGreenSpaces, parseParkStats, type ParkStats } from './data-validation';
 import {
   fetchStorageJson,

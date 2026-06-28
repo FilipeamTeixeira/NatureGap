@@ -51,9 +51,7 @@ function mergePipelineData(parts: unknown[]): unknown {
 }
 
 /**
- * Load a JSON asset from the active pipeline dataset for each city.
- * Active datasets are discovered through pipeline-export/<city>/current.json,
- * then resolved through the versioned manifest.json.
+ * Load a JSON asset from the active pipeline dataset for each city in Supabase Storage.
  */
 export async function fetchPipelineJson(
   fileName: string,

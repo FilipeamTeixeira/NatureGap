@@ -146,18 +146,6 @@ function datasetFromPointers(
   };
 }
 
-function legacyDataset(cityFolder: string): ActivePipelineDataset {
-  return {
-    cityId: cityFolder,
-    dataVersion: 'legacy',
-    sourceLayer: STORAGE.HEXGRID_SOURCE_LAYER,
-    basePath: cityFolder,
-    manifestPath: '',
-    hexgridPath: joinPath(cityFolder, STORAGE.HEXGRID_PMTILES_KEY),
-    files: {},
-  };
-}
-
 async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
   if (!supabase) return [];
 
@@ -219,27 +207,20 @@ async function listStoragePointerDatasets(): Promise<ActivePipelineDataset[]> {
   return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
 }
 
-let activeDatasetsPromise: Promise<ActivePipelineDataset[]> | null = null;
-
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
   if (!supabase) return [];
 
-  activeDatasetsPromise ??= (async () => {
-    const storageDatasets = await listStoragePointerDatasets();
-    if (storageDatasets.length > 0) return storageDatasets;
+  const storageDatasets = await listStoragePointerDatasets();
+  if (storageDatasets.length > 0) return storageDatasets;
 
-    const databaseDatasets = await listDatabaseActiveDatasets();
-    const activeDatasets = mergeDatasets([
-      ...storageDatasets,
-      ...databaseDatasets,
-    ]);
-    if (activeDatasets.length > 0) return activeDatasets;
+  return mergeDatasets(await listDatabaseActiveDatasets());
+}
 
-    const cityFolders = uniqueStrings([...STORAGE.PIPELINE_CITY_IDS]);
-    return cityFolders.map(legacyDataset);
-  })();
-
-  return activeDatasetsPromise;
+export function resolveHexgridPath(dataset: ActivePipelineDataset): string {
+  if (dataset.files['hexgrid.pmtiles']) {
+    return resolveDatasetFile(dataset, 'hexgrid.pmtiles');
+  }
+  return dataset.hexgridPath;
 }
 
 export function resolveDatasetFile(dataset: ActivePipelineDataset, fileName: string): string {

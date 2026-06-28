@@ -33,8 +33,8 @@ for (col in c(
   "observed_richness", "effort_corrected_richness", "survey_effort_units",
   "ecological_residual", "ecological_residual_normalized",
   "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
-  "betweenness_centrality", "nature_gap_score", "fragmentation_index", "impact_score", "intervention_rank",
-  "intervention_score", "path_km", "n_obs"
+  "betweenness_centrality", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
+  "impact_score", "intervention_rank", "intervention_score", "path_km", "n_obs"
 )) {
   if (!col %in% names(hex)) hex[[col]] <- NA_real_
 }
@@ -164,6 +164,7 @@ patch_base <- hex_weighted |>
     ecological_residual_std = finite_weighted_mean(ecological_residual_std, overlap_area_m2),
     corridor_importance = finite_weighted_mean(corridor_importance, overlap_area_m2),
     betweenness_centrality = finite_weighted_mean(betweenness_centrality, overlap_area_m2),
+    canopy_height_idx = finite_weighted_mean(canopy_height_idx, overlap_area_m2),
     fragmentation_index = finite_weighted_mean(fragmentation_index, overlap_area_m2),
     impact_score = finite_median(impact_score),
     patch_intervention_score = finite_weighted_mean(intervention_score, overlap_area_m2),
@@ -226,12 +227,12 @@ patch_residual_sd <- if (length(patch_finite_residuals) > 1L) {
 patch_metrics <- patch_metrics |>
   mutate(
     ecological_residual_normalized = if_else(
-      is.na(ecological_residual) || !is.finite(patch_residual_sd) || patch_residual_sd <= 0,
+      is.na(ecological_residual) | !is.finite(patch_residual_sd) | patch_residual_sd <= 0,
       NA_real_,
       (ecological_residual - patch_residual_mean) / patch_residual_sd
     ),
     bio_residual_norm = if_else(
-      is.na(ecological_residual) || !is.finite(patch_residual_max) || patch_residual_max <= 0,
+      is.na(ecological_residual) | !is.finite(patch_residual_max) | patch_residual_max <= 0,
       NA_real_,
       pmax(-1, pmin(1, ecological_residual / patch_residual_max))
     ),

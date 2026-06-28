@@ -142,6 +142,20 @@ function unitInterval(property: string): ExpressionSpecification {
   ] as ExpressionSpecification;
 }
 
+/** Tree-cover value from vector tile properties (0–1). */
+function treeCoverValueExpression(): ExpressionSpecification {
+  return [
+    'case',
+    ['has', 'canopyHeightIdx'],
+    ['to-number', ['get', 'canopyHeightIdx']],
+    ['has', 'treeCover'],
+    ['/', ['to-number', ['get', 'treeCover']], 100],
+    ['has', 'treeCoverNorm'],
+    ['to-number', ['get', 'treeCoverNorm']],
+    0,
+  ] as ExpressionSpecification;
+}
+
 function buildSequentialExpression(
   normProperty: string,
   rawProperty: string,
@@ -197,18 +211,28 @@ function buildExpectedExpression(
   ] as ExpressionSpecification;
 }
 
-/** Tree cover — use WorldCover tree fraction; LiDAR norms are flat 0.5 when absent. */
-function buildTreecoverExpression(): ExpressionSpecification {
+/** Canopy height — absolute 0–20 m index from PMTiles; treeCoverNorm for contrast. */
+function buildTreecoverExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
+  const stat = statForMetric(cityStats, 'canopy_height_idx');
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const valueExpression = treeCoverValueExpression();
+  const stretched: ExpressionSpecification = low != null && high != null && high > low
+    ? ['max', 0, ['min', 1, ['/', ['-', valueExpression, low], ['-', high, low]]]] as ExpressionSpecification
+    : valueExpression;
+
   return [
     'interpolate',
     ['linear'],
     [
-      'coalesce',
-      unitInterval('treeCover'),
-      unitInterval('tree_cover'),
-      unitInterval('canopyHeightIdx'),
-      unitInterval('meanCanopy'),
-      0,
+      'case',
+      ['has', 'canopyHeightIdx'],
+      ['to-number', ['get', 'canopyHeightIdx']],
+      ['has', 'treeCover'],
+      ['/', ['to-number', ['get', 'treeCover']], 100],
+      ['has', 'treeCoverNorm'],
+      ['to-number', ['get', 'treeCoverNorm']],
+      stretched,
     ],
     ...LAYER_RAMPS.treecover.flatMap(([value, color]) => [value, color]),
   ] as ExpressionSpecification;
@@ -245,10 +269,10 @@ function statForMetric(stats: CityLayerStats[], metric: string | undefined): Cit
   return stats.find((entry) => entry.metric === metric);
 }
 
-function landUseColorExpression(property: string): ExpressionSpecification {
+function landUseColorExpression(): ExpressionSpecification {
   return [
     'match',
-    ['coalesce', ['get', property], ['get', 'landUseClass'], ['get', 'land_use_class'], ['get', 'dominant_land_use'], 'unknown'],
+    ['coalesce', ['get', 'landUseClass'], ['get', 'land_use_class'], ['get', 'dominant_land_use'], 'unknown'],
     'tree', '#1b5e20',
     'shrub', '#4f8a3d',
     'grass', '#9ccc65',
@@ -280,13 +304,13 @@ export function patchFillColorExpression(
     case 'habitat':
       return buildSequentialExpression('habitatQualityNorm', 'habitatQualityIndex', LAYER_RAMPS.habitat, stat);
     case 'treecover':
-      return buildTreecoverExpression();
+      return buildTreecoverExpression(cityStats);
     case 'connectivity':
       return buildSequentialExpression('corridorImportanceNorm', 'corridorImportance', LAYER_RAMPS.connectivity, stat);
     case 'heat':
       return buildSequentialExpression('meanLstNorm', 'meanLst', LAYER_RAMPS.heat, stat);
     case 'landuse':
-      return landUseColorExpression('dominant_land_use');
+      return landUseColorExpression();
   }
 }
 
@@ -312,7 +336,7 @@ export function hexFillColorExpression(
   }
 
   if (layerId === 'landuse') {
-    return landUseColorExpression('land_use_class');
+    return landUseColorExpression();
   }
 
   if (layerId === 'expected') {
@@ -320,7 +344,7 @@ export function hexFillColorExpression(
   }
 
   if (layerId === 'treecover') {
-    return buildTreecoverExpression();
+    return buildTreecoverExpression(cityStats);
   }
 
   if (layerId === 'heat') {
@@ -422,15 +446,15 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     ],
   },
   treecover: {
-    title: 'Tree Cover',
+    title: 'Canopy height',
     property: 'treeCover',
     rawMetric: 'canopy_height_idx',
     legend: [
-      { color: '#0d3d12', label: 'Dense canopy' },
-      { color: '#1b5e20', label: 'High' },
-      { color: '#2e7d32', label: 'Moderate' },
-      { color: '#43a047', label: 'Sparse' },
-      { color: '#66bb6a', label: 'None' },
+      { color: '#0d3d12', label: '15–20 m' },
+      { color: '#1b5e20', label: '10–15 m' },
+      { color: '#2e7d32', label: '5–10 m' },
+      { color: '#43a047', label: '1–5 m' },
+      { color: '#66bb6a', label: '0–1 m' },
     ],
   },
   biodiversity: {

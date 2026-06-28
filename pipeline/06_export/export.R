@@ -40,7 +40,7 @@ PMTILES_REQUIRED_FIELDS <- c(
   "corridorImportance",
   "betweennessCentrality",
   "treeCover",
-  "meanCanopy",
+  "treeCoverNorm",
   "canopyHeightIdx",
   "heatExposure",
   "meanLst",
@@ -49,7 +49,6 @@ PMTILES_REQUIRED_FIELDS <- c(
   "landUseClass",
   "interventionRank",
   "ndviNorm",
-  "canopyNorm",
   "lstNorm",
   "disturbanceNorm",
   "betweennessNorm",
@@ -543,8 +542,8 @@ land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real
   second_v <- if (length(sorted) >= 2L) sorted[[2L]] else 0
 
   case_when(
-    !is.finite(max_v) ~ "unknown",
-    max_v < 0.35 ~ "mixed",
+    !is.finite(max_v) || max_v <= 0 ~ "unknown",
+    max_v < 0.50 ~ "mixed",
     (max_v - second_v) < 0.12 ~ "mixed",
     tree_v == max_v ~ "tree",
     shrub_v == max_v ~ "shrub",
@@ -554,6 +553,14 @@ land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real
     bare_v == max_v ~ "bare",
     TRUE ~ "mixed"
   )
+}
+
+land_use_mode <- function(tree, shrub, grass, water = NA_real_, built = NA_real_, bare = NA_real_) {
+  cls <- land_use_class(tree, shrub, grass, water, built, bare)
+  cls <- cls[!is.na(cls) & cls != "unknown"]
+  if (length(cls) == 0L) return("unknown")
+  tab <- sort(table(cls), decreasing = TRUE)
+  names(tab)[[1L]]
 }
 
 derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
@@ -718,9 +725,7 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     corridorImportance = pct_index(row$corridor_importance),
     betweennessCentrality = pct_index(row$betweenness_centrality),
     fragmentationIndex = pct_index(row$fragmentation_index),
-    treeCover          = pct_index(row$tree_fraction),
-    meanCanopy         = index_or_pct(row$mean_canopy),
-    canopyHeightIdx    = pct_index(row$canopy_height_idx),
+    treeCover          = pct_index(row$canopy_height_idx),
     heatExposure       = pct_index(row$lst_rank),
     meanLst            = index_or_pct(row$mean_lst),
     lstIdx             = pct_index(row$lst_idx),
@@ -779,7 +784,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     effortCorrectedRichnessNorm = round(replace_na(finite_first(patch_metrics$effort_corrected_richness_norm), 0.5), 4),
     expectedRichnessNorm = round(replace_na(finite_first(patch_metrics$expected_richness_norm), 0.5), 4),
     corridorImportanceNorm = round(replace_na(finite_first(patch_metrics$corridor_importance_norm), 0.5), 4),
-    meanCanopyNorm = round(replace_na(finite_first(patch_metrics$mean_canopy_norm), 0.5), 4),
+    treeCoverNorm = round(replace_na(finite_first(patch_metrics$tree_cover_norm), 0.5), 4),
     meanLstNorm = round(replace_na(finite_first(patch_metrics$mean_lst_norm), 0.5), 4),
     ecologicalResidualNorm = round(replace_na(finite_first(patch_metrics$ecological_residual_norm), 0), 4),
     natureGapScoreNorm = round(replace_na(finite_first(patch_metrics$nature_gap_score_norm), 0), 4),
@@ -805,20 +810,18 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
     betweennessCentrality = pct_index(if (is.finite(patch_betweenness)) patch_betweenness else finite_max(rows$betweenness_centrality)),
     fragmentationIndex = pct_index(finite_mean(rows$fragmentation_index)),
-    treeCover          = pct_index(finite_mean(rows$tree_fraction)),
-    meanCanopy         = index_or_pct(finite_mean(rows$mean_canopy)),
-    canopyHeightIdx    = pct_index(finite_mean(rows$canopy_height_idx)),
+    treeCover          = pct_index(finite_mean(rows$canopy_height_idx)),
     heatExposure       = pct_index(finite_mean(rows$lst_rank)),
     meanLst            = index_or_pct(finite_mean(rows$mean_lst)),
     lstIdx             = pct_index(finite_mean(rows$lst_idx)),
     landUseGreen       = pct_index(finite_mean(rows$green_fraction_wc)),
-    landUseClass       = unbox(land_use_class(
-      finite_mean(rows$tree_fraction),
-      finite_mean(rows$shrub_fraction),
-      finite_mean(rows$grass_fraction),
-      finite_mean(rows$water_fraction),
-      finite_mean(rows$built_fraction_wc),
-      finite_mean(rows$bare_fraction)
+    landUseClass       = unbox(land_use_mode(
+      rows$tree_fraction,
+      rows$shrub_fraction,
+      rows$grass_fraction,
+      rows$water_fraction,
+      rows$built_fraction_wc,
+      rows$bare_fraction
     )),
     interventionRank   = as.integer(if (is.finite(patch_rank)) patch_rank else finite_min(rows$intervention_rank)),
     pressures = unique(unlist(lapply(seq_len(nrow(rows)), function(i) {
@@ -873,7 +876,7 @@ if (file.exists(green_path)) {
     "survey_effort_units", "expected_richness",
     "ecological_residual", "ecological_residual_normalized",
     "data_availability_ratio", "nature_gap_score", "corridor_importance",
-    "betweenness_centrality", "intervention_rank", "mean_canopy", "mean_lst"
+    "betweenness_centrality", "intervention_rank", "canopy_height_idx", "mean_lst"
   )) {
     if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
   }
@@ -898,7 +901,7 @@ if (file.exists(green_path)) {
       effort_corrected_richness_norm = norm_sequential(effort_corrected_richness),
       expected_richness_norm         = norm_sequential(expected_richness),
       corridor_importance_norm       = norm_sequential(corridor_importance),
-      mean_canopy_norm               = norm_sequential(mean_canopy),
+      tree_cover_norm                = norm_sequential(canopy_height_idx),
       mean_lst_norm                  = norm_sequential(mean_lst),
       ecological_residual_norm       = norm_diverging(ecological_residual),
       nature_gap_score_norm          = norm_diverging(nature_gap_score),
@@ -912,7 +915,7 @@ if (file.exists(green_path)) {
       data_availability_ratio, nature_gap_score, corridor_importance,
       betweenness_centrality, intervention_rank,
       habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
-      corridor_importance_norm, mean_canopy_norm, mean_lst_norm,
+      corridor_importance_norm, tree_cover_norm, mean_lst_norm,
       ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
     )
 
@@ -940,7 +943,7 @@ if (file.exists(green_path)) {
       effort_corrected_richness_norm,
       expected_richness_norm,
       corridor_importance_norm,
-      mean_canopy_norm,
+      tree_cover_norm,
       mean_lst_norm,
       ecological_residual_norm,
       nature_gap_score_norm,
@@ -978,8 +981,7 @@ if (!"survey_effort_units" %in% names(grid_raw)) {
   )
 }
 if (!"nature_gap_score" %in% names(grid_raw)) grid_raw$nature_gap_score <- NA_real_
-if (!"mean_canopy" %in% names(grid_raw)) grid_raw$mean_canopy <- grid_raw$tree_fraction
-if (!"canopy_height_idx" %in% names(grid_raw)) grid_raw$canopy_height_idx <- NA_real_
+if (!"mean_canopy" %in% names(grid_raw)) grid_raw$mean_canopy <- grid_raw$canopy_height_idx
 if (!"mean_lst" %in% names(grid_raw)) {
   grid_raw$mean_lst <- grid_raw$lst_rank
 }
@@ -1043,7 +1045,7 @@ for (col in c(
 grid_all <- grid_all |>
   mutate(
     ndvi_norm             = norm_sequential(ndvi_mean),
-    canopy_norm           = norm_sequential(canopy_height_idx),
+    tree_cover_norm       = norm_sequential(canopy_height_idx),
     lst_norm              = norm_sequential(lst_idx),
     disturbance_norm      = norm_sequential(disturbance_index),
     betweenness_norm      = norm_sequential(betweenness_centrality),
@@ -1188,9 +1190,8 @@ hexgrid_tiles <- hexgrid_render |>
     observedRichness   = if_else(is_unsampled, 0, round(replace_na(observed_richness, 0), 1)),
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
-    treeCover          = pct_index(tree_fraction),
-    meanCanopy         = index_or_pct(mean_canopy),
-    canopyHeightIdx    = pct_index(canopy_height_idx),
+    treeCover          = pct_index(canopy_height_idx),
+    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(canopy_height_idx, 0), 4)),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
@@ -1201,7 +1202,7 @@ hexgrid_tiles <- hexgrid_render |>
     ),
     interventionRank   = as.integer(replace_na(intervention_rank, 50L)),
     ndviNorm           = if_else(is_unsampled, 0, round(replace_na(ndvi_norm, 0), 4)),
-    canopyNorm         = if_else(is_unsampled, 0, round(replace_na(canopy_norm, 0), 4)),
+    treeCoverNorm      = if_else(is_unsampled, 0, round(replace_na(tree_cover_norm, 0), 4)),
     lstNorm            = if_else(is_unsampled, 0, round(replace_na(lst_norm, 0), 4)),
     disturbanceNorm    = if_else(is_unsampled, 0, round(replace_na(disturbance_norm, 0), 4)),
     betweennessNorm    = if_else(is_unsampled, 0, round(replace_na(betweenness_norm, 0), 4)),
@@ -1345,7 +1346,7 @@ cell_detail_attrs <- grid_all |>
       character(1),
       auto_unbox = TRUE, null = "null", na = "null"
     ),
-    tree_cover = pct_index(tree_fraction),
+    tree_cover = pct_index(canopy_height_idx),
     land_use_green = pct_index(green_fraction_wc)
   )
 
