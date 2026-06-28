@@ -5,6 +5,21 @@
 import type { WardFeature } from './types';
 import { supabase } from './supabase';
 
+export interface CityLayerStats {
+  cityId: string;
+  metric: string;
+  minVal: number | null;
+  maxVal: number | null;
+  p05: number | null;
+  p10: number | null;
+  p25: number | null;
+  p50: number | null;
+  p75: number | null;
+  p90: number | null;
+  p95: number | null;
+  bound: number | null;
+}
+
 export interface GlobalStats {
   observationsToday: number;
   speciesObserved:   number;
@@ -37,10 +52,15 @@ const EMPTY_GLOBAL_STATS: GlobalStats = {
 
 let _globalStats: GlobalStats = EMPTY_GLOBAL_STATS;
 let _wards: WardFeature[] = [];
+let _cityLayerStats: CityLayerStats[] = [];
 let _initDone = false;
 
 export function getGlobalStats(): GlobalStats { return _globalStats; }
 export function getWards(): WardFeature[] { return _wards; }
+export function getCityLayerStats(cityId?: string): CityLayerStats[] {
+  if (!cityId) return _cityLayerStats;
+  return _cityLayerStats.filter((entry) => entry.cityId === cityId);
+}
 
 export function wardCentroidsGeoJSON(wards: WardFeature[] = _wards) {
   return {
@@ -81,6 +101,26 @@ export async function initData(): Promise<void> {
         nameJa:      r.name_ja,
         coordinates: [r.lng, r.lat] as [number, number],
         score:       r.score,
+      }));
+    })(),
+    (async () => {
+      const { data, error } = await supabase
+        .from('city_layer_stats')
+        .select('*');
+      if (error || !data) return;
+      _cityLayerStats = data.map((r) => ({
+        cityId: r.city_id,
+        metric: r.metric,
+        minVal: r.min_val,
+        maxVal: r.max_val,
+        p05: r.p05,
+        p10: r.p10,
+        p25: r.p25,
+        p50: r.p50,
+        p75: r.p75,
+        p90: r.p90,
+        p95: r.p95,
+        bound: r.bound,
       }));
     })(),
   ]);

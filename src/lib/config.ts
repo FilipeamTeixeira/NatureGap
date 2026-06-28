@@ -7,6 +7,8 @@
 // ── City identity ────────────────────────────────────────────────────────────
 
 export const CITY = {
+  /** Pipeline city slug — must match pipeline-export/<id>/ and city_layer_stats.city_id. */
+  id:     'yokohama-honmoku',
   name:   'Yokohama',
   nameJa: '横浜市',
   badge:  'Yokohama · Beta',
@@ -18,7 +20,8 @@ export const CITY = {
 export const MAP_CONFIG = {
   /** Initial map center — Honmoku Sancho Park centroid. */
   center:    [139.6606, 35.4255] as [number, number],
-  zoom:      17,
+  /** Overview zoom — patch fills visible below DETAIL_ZOOM (14). */
+  zoom:      12,
   minZoom:   0,
   maxZoom:   20,
   /** OpenFreeMap Positron — free, no API key, Carto-Positron-compatible style. */

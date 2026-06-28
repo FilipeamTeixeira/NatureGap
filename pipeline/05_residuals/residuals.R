@@ -1,9 +1,12 @@
 # NatureGap — Step 05: Mismatch and Intervention Layer
 # Computes the ecological residual and ranks cells for intervention.
 #
-# Ecological residual = effort-corrected richness − expected richness
-# Positive residual → more species than expected
-# Negative residual → fewer species than expected
+# Ecological residual = expected richness − effort-corrected richness
+# Positive residual → fewer species recorded than habitat suggests
+# Negative residual → more species recorded than habitat suggests
+#
+# Nature Gap score = composite headline (0.50 biodiversity + 0.30 habitat + 0.20 connectivity),
+# scaled to [-100, 100] and separate from raw ecological_residual.
 #
 # Intervention ranking:
 #   intervention_score = underperformance * corridor_importance weighting
@@ -95,17 +98,18 @@ grid <- grid |>
     ecological_residual = if_else(
       is_unsampled,
       NA_real_,
-      observed_richness - expected_richness
+      expected_richness - effort_corrected_richness
     ),
-    underperformance = pmax(0, -ecological_residual)
+    underperformance = pmax(0, ecological_residual)
   ) |>
   select(-max_path_km, -obs_is_unsampled)
 
 finite_residuals <- grid$ecological_residual[is.finite(grid$ecological_residual)]
+city_residual_max <- if (length(finite_residuals) > 0L) max(abs(finite_residuals)) else NA_real_
 city_residual_mean <- if (length(finite_residuals) > 0L) mean(finite_residuals) else NA_real_
 city_residual_sd <- if (length(finite_residuals) > 1L) stats::sd(finite_residuals) else NA_real_
 
-if (!is.finite(city_residual_sd) || city_residual_sd <= 0) {
+if (!is.finite(city_residual_max) || city_residual_max <= 0) {
   grid <- grid |>
     mutate(
       impact_score = 0,
@@ -121,11 +125,15 @@ if (!is.finite(city_residual_sd) || city_residual_sd <= 0) {
       ecological_residual_mean = city_residual_mean,
       ecological_residual_std = city_residual_sd,
       ecological_residual_normalized = if_else(
-        is.na(ecological_residual),
+        is.na(ecological_residual) || !is.finite(city_residual_sd) || city_residual_sd <= 0,
         NA_real_,
         (ecological_residual - city_residual_mean) / city_residual_sd
       ),
-      bio_residual_norm = pmax(-1, pmin(1, ecological_residual_normalized / 2)),
+      bio_residual_norm = if_else(
+        is.na(ecological_residual),
+        NA_real_,
+        pmax(-1, pmin(1, ecological_residual / city_residual_max))
+      ),
       impact_score = if_else(
         is.na(bio_residual_norm),
         NA_real_,

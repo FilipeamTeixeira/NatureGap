@@ -1,12 +1,19 @@
 import localGreenSpaces from '@/data/green-spaces.json';
 import localParkStats from '@/data/park-stats.json';
-import { STORAGE } from './config';
+import { CITY, STORAGE } from './config';
 import { parseGreenSpaces, parseParkStats, type ParkStats } from './data-validation';
+import {
+  fetchStorageJson,
+  listActivePipelineDatasets,
+  resolveDatasetFile,
+} from './pipeline-manifest';
 import { fetchPipelineJson, mergeCellChunks } from './storage-fetch';
 
 export interface GreenSpace {
   /** Stable identifier — matches hexgrid `parkId` and park-stats `id`. */
   id: string;
+  /** Pipeline city slug this park belongs to. */
+  cityId: string;
   /** English display name. */
   name: string;
   /** Japanese display name. */
@@ -31,7 +38,7 @@ function deriveId(props: Record<string, unknown>): string {
   return '';
 }
 
-function featureToGreenSpace(f: Record<string, unknown>): GreenSpace | null {
+function featureToGreenSpace(f: Record<string, unknown>, cityId: string): GreenSpace | null {
   const props = (f.properties as Record<string, unknown>) ?? {};
   const id = deriveId(props);
   if (!id || id === 'undefined') return null;
@@ -52,6 +59,7 @@ function featureToGreenSpace(f: Record<string, unknown>): GreenSpace | null {
 
   return {
     id,
+    cityId,
     name:    String(props.name    ?? id),
     nameJa:  String(props.nameJa  ?? props['name:ja'] ?? props.name ?? id),
     wardId:  String(props.wardId  ?? ''),
@@ -60,24 +68,61 @@ function featureToGreenSpace(f: Record<string, unknown>): GreenSpace | null {
   };
 }
 
+function isFeatureCollection(value: unknown): value is GeoJSON.FeatureCollection {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as GeoJSON.FeatureCollection).type === 'FeatureCollection' &&
+    Array.isArray((value as GeoJSON.FeatureCollection).features)
+  );
+}
+
+async function loadParksForCity(cityId: string): Promise<GreenSpace[]> {
+  const datasets = await listActivePipelineDatasets();
+  const dataset = datasets.find((item) => item.cityId === cityId);
+  if (dataset) {
+    const data = await fetchStorageJson(resolveDatasetFile(dataset, 'parks.geojson'));
+    if (isFeatureCollection(data)) {
+      return data.features
+        .map((feature) => featureToGreenSpace(feature as unknown as Record<string, unknown>, cityId))
+        .filter((park): park is GreenSpace => park !== null);
+    }
+  }
+
+  try {
+    const response = await fetch(`/api/vector/${encodeURIComponent(cityId)}/green-spaces`);
+    if (response.ok) {
+      const data = await response.json();
+      if (isFeatureCollection(data)) {
+        return data.features
+          .map((feature) => featureToGreenSpace(feature as unknown as Record<string, unknown>, cityId))
+          .filter((park): park is GreenSpace => park !== null);
+      }
+    }
+  } catch {
+    /* optional local fallback */
+  }
+
+  return [];
+}
+
 /**
- * Fetch latest matching parks GeoJSON from Supabase Storage.
+ * Fetch parks GeoJSON for every configured pipeline city.
  */
 export async function initParks(): Promise<void> {
   if (initParksCalled) return;
   initParksCalled = true;
 
   try {
-    const fc = await fetchPipelineJson('parks.geojson', null) as { features?: Record<string, unknown>[] } | null;
-    const parks = (fc?.features ?? [])
-      .map(featureToGreenSpace)
-      .filter((p): p is GreenSpace => p !== null);
+    const cityIds = [...STORAGE.PIPELINE_CITY_IDS];
+    const perCity = await Promise.all(cityIds.map((cityId) => loadParksForCity(cityId)));
+    const parks = perCity.flat();
     if (parks.length > 0) {
       runtimeParks = parks;
-      console.info(`[green-spaces] Loaded ${parks.length} parks from Storage`);
+      console.info(`[green-spaces] Loaded ${parks.length} parks across ${cityIds.length} cities`);
     }
   } catch (e) {
-    console.warn('[green-spaces] Failed to load parks:', e);
+    console.warn('[green-spaces] Failed to load per-city parks:', e);
   }
 
   try {

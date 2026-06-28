@@ -134,9 +134,10 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
         </li>
       </ul>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        Ecological residual = effort-corrected richness ({formatMetric(cell.observedRichness)}) −
-        expected ({cell.expectedRichness.toFixed(1)}) = {formatMetric(cell.ecologicalResidual)}.
-        {' '}Positive values mean effort-corrected richness is above the habitat expectation.
+        Ecological residual = expected richness ({cell.expectedRichness.toFixed(1)}) −
+        effort-corrected richness ({formatMetric(cell.observedRichness)}) =
+        {formatMetric(cell.ecologicalResidual)}.
+        {' '}Positive values mean fewer species are recorded than the habitat suggests.
       </p>
     </div>
   );

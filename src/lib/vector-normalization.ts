@@ -267,6 +267,15 @@ function greenSpaceProperties(props: Properties, domains: Record<string, MetricD
     meanCanopy: normalizeMetric(valueForMetric(props, ECOLOGICAL_METRICS[4]), domains.canopyHeightIdx),
     meanLst: normalizeMetric(valueForMetric(props, ECOLOGICAL_METRICS[6]), domains.lstIdx),
     landUseClass: asString(props.land_use_class ?? props.landUseClass, 'unknown'),
+    habitatQualityNorm: asNumber(props.habitatQualityNorm ?? props.habitat_quality_norm),
+    effortCorrectedRichnessNorm: asNumber(props.effortCorrectedRichnessNorm ?? props.effort_corrected_richness_norm),
+    expectedRichnessNorm: asNumber(props.expectedRichnessNorm ?? props.expected_richness_norm),
+    corridorImportanceNorm: asNumber(props.corridorImportanceNorm ?? props.corridor_importance_norm),
+    meanCanopyNorm: asNumber(props.meanCanopyNorm ?? props.mean_canopy_norm),
+    meanLstNorm: asNumber(props.meanLstNorm ?? props.mean_lst_norm),
+    ecologicalResidualNorm: asNumber(props.ecologicalResidualNorm ?? props.ecological_residual_norm),
+    natureGapScoreNorm: asNumber(props.natureGapScoreNorm ?? props.nature_gap_score_norm),
+    interventionRankNorm: asNumber(props.interventionRankNorm ?? props.intervention_rank_norm),
   };
 }
 
@@ -307,6 +316,12 @@ function hexCellProperties(props: Properties, domains: Record<string, MetricDoma
     interventionCount: countArrayOrString(interventions),
     speciesCount: countArrayOrString(props.species),
     ...speciesCounts(props.species),
+    ndviNorm: asNumber(props.ndviNorm ?? props.ndvi_norm),
+    canopyNorm: asNumber(props.canopyNorm ?? props.canopy_norm),
+    lstNorm: asNumber(props.lstNorm ?? props.lst_norm),
+    disturbanceNorm: asNumber(props.disturbanceNorm ?? props.disturbance_norm),
+    betweennessNorm: asNumber(props.betweennessNorm ?? props.betweenness_norm),
+    residualNorm: asNumber(props.residualNorm ?? props.residual_norm),
   };
 }
 

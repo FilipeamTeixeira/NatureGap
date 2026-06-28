@@ -3,9 +3,9 @@
   "cityId": "amsterdam-schimmelstraat",
   "cityName": "Amsterdam",
   "cityCountry": "The Netherlands",
-  "datasetId": "20260627T120826Z",
-  "dataVersion": "20260627T120826Z",
-  "generatedAt": "2026-06-27T12:21:56Z",
+  "datasetId": "20260628T104517Z",
+  "dataVersion": "20260628T104517Z",
+  "generatedAt": "2026-06-28T10:45:17Z",
   "cellSizeM": 20,
   "crsLocal": "EPSG:6674",
   "sourceLayer": "hexgrid",
@@ -14,17 +14,57 @@
     "parkId",
     "parkName",
     "impactScore",
+    "natureGapScore",
     "expectedRichness",
     "ecologicalResidual",
+    "ecologicalResidualNormalized",
     "habitatQuality",
     "observedRichness",
     "corridorImportance",
+    "betweennessCentrality",
     "treeCover",
+    "meanCanopy",
+    "canopyHeightIdx",
     "heatExposure",
+    "meanLst",
+    "lstIdx",
     "landUseGreen",
     "landUseClass",
-    "interventionRank"
+    "interventionRank",
+    "ndviNorm",
+    "canopyNorm",
+    "lstNorm",
+    "disturbanceNorm",
+    "betweennessNorm",
+    "residualNorm",
+    "natureGapScoreNorm",
+    "expectedNorm",
+    "interventionRankNorm",
+    "habitatQualityNorm"
   ],
+  "metricDefinitions": {
+    "observedRichness": {
+      "sourceField": "observed_richness",
+      "definition": "Effort-normalised observed richness per survey effort unit.",
+      "formula": "species_richness / survey_effort_units",
+      "surveyEffortUnits": "log1p(path_km)",
+      "missingValueRule": "Unsampled cells keep observed_richness and survey_effort_units as null; sampled cells with no observations use 0."
+    },
+    "effortCorrectedRichness": {
+      "sourceField": "effort_corrected_richness",
+      "definition": "Canonical alias of observed_richness for residual calculation and backwards-compatible consumers."
+    },
+    "ecologicalResidual": {
+      "sourceField": "ecological_residual",
+      "definition": "Raw observed_richness minus expected_richness. Preserved for backend analytics."
+    },
+    "ecologicalResidualNormalized": {
+      "sourceField": "ecological_residual_normalized",
+      "definition": "City-wise z-score of raw ecological_residual using finite sampled cells.",
+      "formula": "(ecological_residual - city_mean(ecological_residual)) / city_stddev(ecological_residual)",
+      "visualizationRule": "Map render fields clamp ecologicalResidualNormalized * 25 to [-50, 50]; raw and normalized backend values are not clamped."
+    }
+  },
   "database": {
     "datasetTable": "pipeline_datasets",
     "immutableCellTable": "pipeline_cell_attributes",
@@ -82,27 +122,27 @@
   "files": {
     "hexgrid.pmtiles": {
       "path": "hexgrid.pmtiles",
-      "bytes": 476054
+      "bytes": 651156
     },
     "parks.geojson": {
       "path": "parks.geojson",
-      "bytes": 18270
+      "bytes": 46245
     },
     "park-stats.json": {
       "path": "park-stats.json",
-      "bytes": 58758
+      "bytes": 76757
     },
     "cell_attributes.geojson": {
       "path": "cell_attributes.geojson",
-      "bytes": 9848763
+      "bytes": 11191468
     },
     "corridor-links.geojson": {
       "path": "corridor-links.geojson",
-      "bytes": 4463036
+      "bytes": 4463037
     },
     "top_interventions.json": {
       "path": "top_interventions.json",
-      "bytes": 32355
+      "bytes": 39852
     }
   }
 }

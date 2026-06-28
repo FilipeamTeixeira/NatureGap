@@ -121,33 +121,22 @@ DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 
 #START_STEP <- 1
 
-# CITY_ID      <- "yokohama-honmoku"
-# CITY_NAME    <- "Honmoku, Yokohama"
-# CITY_COUNTRY <- "Japan"
+CITY_ID      <- "yokohama-honmoku"
+CITY_NAME    <- "Honmoku, Yokohama"
+CITY_COUNTRY <- "Japan"
 
-CITY_ID      <- "amsterdam-schimmelstraat"
-CITY_NAME    <- "Amsterdam"
-CITY_COUNTRY <- "The Netherlands"
 
 # ── Spatial extent (WGS84) ────────────────────────────────────────────────────
 # BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
 # BBOX_FETCH — the window for iNaturalist / GBIF API calls.
 #              Can be wider than BBOX_CITY to capture edge observations.
 
-# BBOX_CITY <- c(
-#   xmin = 139.640415,
-#   ymin = 35.415460,
-#   xmax = 139.672859,
-#   ymax = 35.430148
-# )
-
 BBOX_CITY <- c(
-  xmin = 4.854712,
-  ymin = 52.366756,
-  xmax = 4.870934,
-  ymax = 52.372259
+  xmin = 139.640415,
+  ymin = 35.415460,
+  xmax = 139.672859,
+  ymax = 35.430148
 )
-
 
 BBOX_FETCH <- c(
   xmin = unname(BBOX_CITY["xmin"]) - 0.004,

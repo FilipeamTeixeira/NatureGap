@@ -383,12 +383,12 @@ grid_obs <- grid |>
     survey_effort_units = if_else(
       is_unsampled,
       NA_real_,
-      replace_na(survey_effort_units, log1p(replace_na(path_km, 0)))
+      coalesce(survey_effort_units, log1p(replace_na(path_km, 0)))
     ),
     observed_richness = if_else(
       is_unsampled,
       NA_real_,
-      replace_na(observed_richness, effort_corrected_richness)
+      coalesce(observed_richness, effort_corrected_richness)
     ),
     richness_corrected = effort_corrected_richness,
     n_survey_dates     = replace_na(n_survey_dates, 0L),

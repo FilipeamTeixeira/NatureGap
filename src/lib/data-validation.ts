@@ -1,4 +1,5 @@
 import type { CellStatsFields, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
+import { CITY } from './config';
 import type { GreenSpace } from './green-spaces';
 
 export type ParkStats = CellStatsFields;
@@ -109,6 +110,15 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     (value.landUseClass === undefined ||
       (typeof value.landUseClass === 'string' && LAND_USE_CLASSES.includes(value.landUseClass))) &&
     (value.interventionRank === undefined || isNumber(value.interventionRank)) &&
+    (value.habitatQualityNorm === undefined || isNumber(value.habitatQualityNorm)) &&
+    (value.effortCorrectedRichnessNorm === undefined || isNumber(value.effortCorrectedRichnessNorm)) &&
+    (value.expectedRichnessNorm === undefined || isNumber(value.expectedRichnessNorm)) &&
+    (value.corridorImportanceNorm === undefined || isNumber(value.corridorImportanceNorm)) &&
+    (value.meanCanopyNorm === undefined || isNumber(value.meanCanopyNorm)) &&
+    (value.meanLstNorm === undefined || isNumber(value.meanLstNorm)) &&
+    (value.ecologicalResidualNorm === undefined || isNumber(value.ecologicalResidualNorm)) &&
+    (value.natureGapScoreNorm === undefined || isNumber(value.natureGapScoreNorm)) &&
+    (value.interventionRankNorm === undefined || isNumber(value.interventionRankNorm)) &&
     Array.isArray(value.species) &&
     value.species.every(isSpecies) &&
     isStringArray(value.pressures) &&
@@ -162,6 +172,7 @@ export function parseGreenSpaces(value: unknown): GreenSpace[] {
 
     return {
       id: space.id,
+      cityId: typeof space.cityId === 'string' ? space.cityId : CITY.id,
       name: space.name,
       nameJa: space.nameJa,
       wardId: space.wardId,

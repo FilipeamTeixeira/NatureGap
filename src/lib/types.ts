@@ -85,6 +85,15 @@ export interface CellStatsFields {
   landUseClass?: 'tree' | 'shrub' | 'grass' | 'water' | 'built' | 'bare' | 'mixed' | 'unknown';
   /** 1-based intervention priority rank when exported for rendering. */
   interventionRank?: number;
+  habitatQualityNorm?: number;
+  effortCorrectedRichnessNorm?: number;
+  expectedRichnessNorm?: number;
+  corridorImportanceNorm?: number;
+  meanCanopyNorm?: number;
+  meanLstNorm?: number;
+  ecologicalResidualNorm?: number;
+  natureGapScoreNorm?: number;
+  interventionRankNorm?: number;
   pressures: string[];
   interventions: Intervention[];
 }

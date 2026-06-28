@@ -5,6 +5,7 @@ import { cn, formatNumber } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Layers, Info, MapPin, Search, Map as MapIcon } from 'lucide-react';
 import { getGlobalStats } from '@/lib/data';
 import { CITY } from '@/lib/config';
+import { THEMATIC_LAYER_GROUPS, LAYER_STYLE_SPECS, type HexLayerId } from '@/lib/layer-styles';
 import type { MapLayer } from '@/lib/types';
 import type { GeocodingSearchResult } from '@/lib/map-search';
 
@@ -18,8 +19,8 @@ type SearchResult =
   | { kind: 'geocode'; result: GeocodingSearchResult };
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
-  impact:       'Main score: observed nature compared with expected nature.',
-  residual:     'Where biodiversity is below or above habitat potential.',
+  impact:       'How much nature is this park missing?',
+  residual:     'Are more or fewer species being recorded here than the habitat suggests?',
   intervention: 'Cells ranked for restoration action.',
   expected:     'Modelled richness from habitat and connectivity.',
   biodiversity: 'Effort-corrected observed species richness.',
@@ -34,28 +35,14 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
   'structured-surveys': 'Protocol survey submissions.',
 };
 
-const LAYER_GROUPS = [
-  {
-    title: 'Start Here',
-    description: 'The layers most useful for first reading the map.',
-    ids: ['impact', 'residual', 'intervention'],
-  },
-  {
-    title: 'Biodiversity',
-    description: 'Observed and expected species patterns.',
-    ids: ['biodiversity', 'expected'],
-  },
-  {
-    title: 'Habitat And Stress',
-    description: 'Landscape condition and environmental pressures.',
-    ids: ['habitat', 'treecover', 'connectivity', 'heat', 'landuse'],
-  },
-  {
-    title: 'Surveys',
-    description: 'Citizen-science records and fieldwork points.',
-    ids: ['survey-points', 'quick-sightings', 'structured-surveys', 'cell-grid'],
-  },
-] as const;
+const OVERLAY_LAYER_IDS = ['cell-grid', 'survey-points', 'quick-sightings', 'structured-surveys'] as const;
+
+function layerSwatchColor(layerId: string, fallback: string): string {
+  const spec = LAYER_STYLE_SPECS[layerId as HexLayerId];
+  const legend = spec?.legend;
+  if (!legend?.length) return fallback;
+  return legend[Math.min(2, legend.length - 1)]?.color ?? fallback;
+}
 
 export default function LayerControls({
   layers,
@@ -109,7 +96,6 @@ export default function LayerControls({
     return geocodingResults.map((result) => ({ kind: 'geocode' as const, result }));
   }, [geocodingResults, query]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -128,7 +114,49 @@ export default function LayerControls({
 
   const layersById = useMemo(() => new Map(layers.map((layer) => [layer.id, layer])), [layers]);
 
-  function renderLayerButton(layer: MapLayer) {
+  function renderThematicButton(layer: MapLayer) {
+    const swatchColor = layerSwatchColor(layer.id, layer.color);
+    return (
+      <button
+        key={layer.id}
+        type="button"
+        aria-pressed={layer.enabled}
+        aria-label={`Show ${layer.label}`}
+        onClick={() => onToggle(layer.id)}
+        className={cn(
+          'w-full flex items-center gap-3 rounded-lg text-left transition-all px-3 py-2.5',
+          layer.enabled
+            ? 'bg-[#2E6F40] text-white shadow-sm'
+            : 'border border-transparent hover:bg-[#F7F8F5] hover:border-[#E4E7E1] text-[#1F2A1F]',
+          collapsed && 'justify-center px-2',
+        )}
+      >
+        <span
+          className={cn(
+            'rounded-[2px] flex-shrink-0',
+            layer.enabled && 'ring-2 ring-white',
+          )}
+          style={{
+            width: 12,
+            height: 12,
+            minWidth: 12,
+            minHeight: 12,
+            backgroundColor: swatchColor,
+            opacity: layer.enabled ? 1 : 0.7,
+          }}
+        />
+        <span className={cn(
+          'flex-1 min-w-0 text-[13px] font-medium leading-tight',
+          layer.enabled && 'text-white',
+          collapsed && 'hidden',
+        )}>
+          {layer.label}
+        </span>
+      </button>
+    );
+  }
+
+  function renderOverlayButton(layer: MapLayer) {
     return (
       <button
         key={layer.id}
@@ -210,7 +238,7 @@ export default function LayerControls({
           {collapsed ? <ChevronRight size={14} strokeWidth={1.8} /> : <ChevronLeft size={14} strokeWidth={1.8} />}
         </button>
       </div>
-      {/* Search */}
+
       <div className={cn('px-5 pt-5 pb-4 border-b border-[#E4E7E1]', collapsed && 'hidden')} ref={wrapperRef}>
         <div className="relative">
           <Search
@@ -228,7 +256,6 @@ export default function LayerControls({
             className="w-full bg-[#F7F8F5] border border-[#E4E7E1] rounded-xl pl-8 pr-3 py-2.5 text-[13px] text-[#1F2A1F] placeholder:text-[#A8B4A8] outline-none focus:border-[#2E6F40] transition-colors"
           />
 
-          {/* Results dropdown */}
           {open && results.length > 0 && (
             <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl border border-[#E4E7E1] shadow-lg overflow-hidden z-50"
                  style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -260,7 +287,6 @@ export default function LayerControls({
             </div>
           )}
 
-          {/* No results hint */}
           {open && query.trim().length > 0 && results.length === 0 && (
             <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl border border-[#E4E7E1] shadow-lg px-4 py-3 z-50">
               <p className="text-[12px] text-[#A8B4A8]">No parks or wards match &quot;{query}&quot;</p>
@@ -269,7 +295,6 @@ export default function LayerControls({
         </div>
       </div>
 
-      {/* Section header */}
       <div className={cn('pt-4 pb-3', collapsed ? 'px-0 flex justify-center' : 'px-6')}>
         <div className="flex items-center gap-2">
           <Layers size={13} className="text-[#667066]" strokeWidth={1.5} />
@@ -279,9 +304,8 @@ export default function LayerControls({
         </div>
       </div>
 
-      {/* Layer list */}
       <div className={cn('flex flex-col flex-1', collapsed ? 'gap-1 p-2' : 'gap-4 p-4')}>
-        {LAYER_GROUPS.map((group) => {
+        {THEMATIC_LAYER_GROUPS.map((group) => {
           const groupLayers = group.ids
             .map((id) => layersById.get(id))
             .filter((layer): layer is MapLayer => Boolean(layer));
@@ -290,22 +314,32 @@ export default function LayerControls({
           return (
             <section key={group.title} className="flex flex-col gap-2">
               <div className={cn('px-1', collapsed && 'hidden')}>
-                <h3 className="text-[11px] font-semibold text-[#1F2A1F] uppercase tracking-widest">
+                <h3 className="text-[11px] font-semibold text-[#667066] uppercase tracking-widest">
                   {group.title}
                 </h3>
-                <p className="text-[11px] text-[#8A958A] leading-snug mt-1">
-                  {group.description}
-                </p>
               </div>
               <div className="flex flex-col gap-1">
-                {groupLayers.map(renderLayerButton)}
+                {groupLayers.map(renderThematicButton)}
               </div>
             </section>
           );
         })}
+
+        <section className="flex flex-col gap-2">
+          <div className={cn('px-1', collapsed && 'hidden')}>
+            <h3 className="text-[11px] font-semibold text-[#667066] uppercase tracking-widest">
+              Overlays
+            </h3>
+          </div>
+          <div className="flex flex-col gap-1">
+            {OVERLAY_LAYER_IDS
+              .map((id) => layersById.get(id))
+              .filter((layer): layer is MapLayer => Boolean(layer))
+              .map(renderOverlayButton)}
+          </div>
+        </section>
       </div>
 
-      {/* Location info */}
       <div className={cn('px-6 py-4 border-t border-[#E4E7E1]', collapsed && 'hidden')}>
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={11} className="text-[#667066] flex-shrink-0" strokeWidth={1.5} />
@@ -330,12 +364,11 @@ export default function LayerControls({
         </div>
       </div>
 
-      {/* Pipeline note */}
       <div className={cn('px-6 py-4 border-t border-[#E4E7E1]', collapsed && 'hidden')}>
         <div className="flex items-start gap-2">
           <Info size={11} className="text-[#A8B4A8] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-[11px] text-[#A8B4A8] leading-relaxed">
-            Showing the current Yokohama ecology model and submitted citizen-science records.
+            Showing the current ecology model and submitted citizen-science records.
           </p>
         </div>
       </div>

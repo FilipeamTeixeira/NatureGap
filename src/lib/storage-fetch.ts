@@ -18,10 +18,30 @@ function isManifest(value: unknown): value is ChunkManifest {
   );
 }
 
+function isFeatureCollection(value: unknown): value is GeoJSON.FeatureCollection {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as GeoJSON.FeatureCollection).type === 'FeatureCollection' &&
+    Array.isArray((value as GeoJSON.FeatureCollection).features)
+  );
+}
+
+export function mergeFeatureCollections(parts: unknown[]): GeoJSON.FeatureCollection {
+  const features = parts.flatMap((part) => (
+    isFeatureCollection(part) ? part.features : []
+  ));
+  return { type: 'FeatureCollection', features };
+}
+
 function mergePipelineData(parts: unknown[]): unknown {
   const validParts = parts.filter((part) => part != null);
   if (validParts.length === 0) return null;
   if (validParts.length === 1) return validParts[0];
+
+  if (validParts.every(isFeatureCollection)) {
+    return mergeFeatureCollections(validParts);
+  }
 
   if (validParts.every((part) => typeof part === 'object' && part !== null && !Array.isArray(part))) {
     return Object.assign({}, ...validParts.map((part) => part as Record<string, unknown>));

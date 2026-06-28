@@ -160,14 +160,6 @@ patch_base <- hex_weighted |>
       species_richness[sampled_for_residual],
       overlap_area_m2[sampled_for_residual]
     ),
-    ecological_residual = finite_weighted_mean(
-      ecological_residual[sampled_for_residual],
-      overlap_area_m2[sampled_for_residual]
-    ),
-    ecological_residual_normalized = finite_weighted_mean(
-      ecological_residual_normalized[sampled_for_residual],
-      overlap_area_m2[sampled_for_residual]
-    ),
     ecological_residual_mean = finite_weighted_mean(ecological_residual_mean, overlap_area_m2),
     ecological_residual_std = finite_weighted_mean(ecological_residual_std, overlap_area_m2),
     corridor_importance = finite_weighted_mean(corridor_importance, overlap_area_m2),
@@ -205,18 +197,43 @@ patch_metrics <- patch_base |>
     observed_richness = if_else(sampled_cell_count == 0L, NA_real_, observed_richness),
     survey_effort_units = if_else(sampled_cell_count == 0L, NA_real_, survey_effort_units),
     species_richness_raw = if_else(sampled_cell_count == 0L, NA_real_, species_richness_raw),
-    ecological_residual = if_else(sampled_cell_count == 0L, NA_real_, ecological_residual),
-    ecological_residual_normalized = if_else(sampled_cell_count == 0L, NA_real_, ecological_residual_normalized),
+    ecological_residual = if_else(
+      sampled_cell_count == 0L,
+      NA_real_,
+      expected_richness - effort_corrected_richness
+    ),
     data_availability_ratio = if_else(linked_area_m2 > 0, sampled_area_m2 / linked_area_m2, NA_real_),
     fragmentation = coalesce(fragmentation_index, fragmentation)
   )
 
+patch_finite_residuals <- patch_metrics$ecological_residual[is.finite(patch_metrics$ecological_residual)]
+patch_residual_max <- if (length(patch_finite_residuals) > 0L) {
+  max(abs(patch_finite_residuals))
+} else {
+  NA_real_
+}
+patch_residual_mean <- if (length(patch_finite_residuals) > 0L) {
+  mean(patch_finite_residuals)
+} else {
+  NA_real_
+}
+patch_residual_sd <- if (length(patch_finite_residuals) > 1L) {
+  stats::sd(patch_finite_residuals)
+} else {
+  NA_real_
+}
+
 patch_metrics <- patch_metrics |>
   mutate(
-    bio_residual_norm = if_else(
-      is.na(ecological_residual_normalized),
+    ecological_residual_normalized = if_else(
+      is.na(ecological_residual) || !is.finite(patch_residual_sd) || patch_residual_sd <= 0,
       NA_real_,
-      pmax(-1, pmin(1, ecological_residual_normalized / 2))
+      (ecological_residual - patch_residual_mean) / patch_residual_sd
+    ),
+    bio_residual_norm = if_else(
+      is.na(ecological_residual) || !is.finite(patch_residual_max) || patch_residual_max <= 0,
+      NA_real_,
+      pmax(-1, pmin(1, ecological_residual / patch_residual_max))
     ),
     habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality_index, 0))),
     connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),

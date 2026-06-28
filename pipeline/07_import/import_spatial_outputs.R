@@ -65,6 +65,181 @@ run_spatial_outputs_import <- function() {
   hex_cells <- st_read(PROC_HEX_CELLS, quiet = TRUE) |>
     st_transform(4326)
 
+  # ── Per-city normalisation helpers ───────────────────────────────────────
+
+  # norm_sequential: rescales x to [0, 1] using p5/p95 as floor/ceiling.
+  # Values outside the range are clamped. If p5 == p95, returns 0.5.
+  norm_sequential <- function(x) {
+    finite_vals <- x[is.finite(x)]
+    if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+    p5  <- quantile(finite_vals, 0.05, names = FALSE)
+    p95 <- quantile(finite_vals, 0.95, names = FALSE)
+    if (!is.finite(p5) || !is.finite(p95) || p5 == p95) {
+      return(rep(0.5, length(x)))
+    }
+    pmin(1, pmax(0, (x - p5) / (p95 - p5)))
+  }
+
+  # norm_diverging: rescales x to [-1, 1], keeping 0 anchored at 0.
+  # Uses max(|p10|, |p90|) as symmetric bound. If bound == 0 or NA, returns 0.
+  norm_diverging <- function(x) {
+    finite_vals <- x[is.finite(x)]
+    if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+    p10 <- quantile(finite_vals, 0.10, names = FALSE)
+    p90 <- quantile(finite_vals, 0.90, names = FALSE)
+    bound <- max(abs(p10), abs(p90), na.rm = TRUE)
+    if (!is.finite(bound) || bound == 0) return(rep(0, length(x)))
+    pmin(1, pmax(-1, x / bound))
+  }
+
+  # norm_rank: maps intervention_rank to [0, 1] where rank 1 => 1.0.
+  norm_rank <- function(x) {
+    finite_vals <- x[is.finite(x)]
+    if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+    max_rank <- max(finite_vals)
+    min_rank <- min(finite_vals)
+    if (max_rank == min_rank) return(rep(1.0, length(x)))
+    1 - ((x - min_rank) / (max_rank - min_rank))
+  }
+
+  # Helper: compute percentile stats for a numeric vector.
+  metric_stats <- function(vals, diverging = FALSE) {
+    finite_vals <- vals[is.finite(vals)]
+    if (length(finite_vals) == 0L) {
+      return(list(
+        min_val = NA_real_, max_val = NA_real_,
+        p05 = NA_real_, p10 = NA_real_, p25 = NA_real_,
+        p50 = NA_real_, p75 = NA_real_, p90 = NA_real_, p95 = NA_real_,
+        bound = NA_real_
+      ))
+    }
+    p10 <- quantile(finite_vals, 0.10, names = FALSE)
+    p90 <- quantile(finite_vals, 0.90, names = FALSE)
+    list(
+      min_val = min(finite_vals),
+      max_val = max(finite_vals),
+      p05     = quantile(finite_vals, 0.05, names = FALSE),
+      p10     = p10,
+      p25     = quantile(finite_vals, 0.25, names = FALSE),
+      p50     = quantile(finite_vals, 0.50, names = FALSE),
+      p75     = quantile(finite_vals, 0.75, names = FALSE),
+      p90     = p90,
+      p95     = quantile(finite_vals, 0.95, names = FALSE),
+      bound   = if (diverging) max(abs(p10), abs(p90), na.rm = TRUE) else NA_real_
+    )
+  }
+
+  # ── Green-space _norm columns ─────────────────────────────────────────────
+
+  for (col in c(
+    "habitat_quality_index", "effort_corrected_richness", "expected_richness",
+    "corridor_importance", "mean_canopy", "mean_lst",
+    "ecological_residual", "nature_gap_score", "intervention_rank"
+  )) {
+    if (!col %in% names(green_spaces)) green_spaces[[col]] <- NA_real_
+  }
+
+  green_spaces <- green_spaces |>
+    mutate(
+      habitat_quality_norm           = norm_sequential(habitat_quality_index),
+      effort_corrected_richness_norm = norm_sequential(effort_corrected_richness),
+      expected_richness_norm         = norm_sequential(expected_richness),
+      corridor_importance_norm       = norm_sequential(corridor_importance),
+      mean_canopy_norm               = norm_sequential(mean_canopy),
+      mean_lst_norm                  = norm_sequential(mean_lst),
+      ecological_residual_norm       = norm_diverging(ecological_residual),
+      nature_gap_score_norm          = norm_diverging(nature_gap_score),
+      intervention_rank_norm         = norm_rank(intervention_rank)
+    )
+
+  # ── Hex-cell _norm columns ────────────────────────────────────────────────
+
+  for (col in c(
+    "ndvi_idx", "canopy_height_idx", "lst_idx",
+    "disturbance_idx", "betweenness_centrality", "ecological_residual", "nature_gap_score"
+  )) {
+    if (!col %in% names(hex_cells)) hex_cells[[col]] <- NA_real_
+  }
+
+  hex_cells <- hex_cells |>
+    mutate(
+      ndvi_norm             = norm_sequential(ndvi_idx),
+      canopy_norm           = norm_sequential(canopy_height_idx),
+      lst_norm              = norm_sequential(lst_idx),
+      disturbance_norm      = norm_sequential(disturbance_idx),
+      betweenness_norm      = norm_sequential(betweenness_centrality),
+      residual_norm         = norm_diverging(ecological_residual),
+      nature_gap_score_norm = norm_diverging(nature_gap_score)
+    )
+
+  # ── Compute city_layer_stats rows ─────────────────────────────────────────
+
+  gs_df <- st_drop_geometry(green_spaces)
+
+  patch_metric_specs <- list(
+    list(metric = "habitat_quality_index",           diverging = FALSE),
+    list(metric = "effort_corrected_richness",        diverging = FALSE),
+    list(metric = "expected_richness",               diverging = FALSE),
+    list(metric = "corridor_importance",             diverging = FALSE),
+    list(metric = "mean_canopy",                     diverging = FALSE),
+    list(metric = "mean_lst",                        diverging = FALSE),
+    list(metric = "ecological_residual",             diverging = TRUE),
+    list(metric = "nature_gap_score",                diverging = TRUE),
+    list(metric = "intervention_rank",               diverging = FALSE)
+  )
+
+  hex_df <- st_drop_geometry(hex_cells)
+
+  hex_metric_specs <- list(
+    list(metric = "ndvi_idx",              diverging = FALSE),
+    list(metric = "canopy_height_idx",     diverging = FALSE),
+    list(metric = "lst_idx",              diverging = FALSE),
+    list(metric = "disturbance_idx",       diverging = FALSE),
+    list(metric = "betweenness_centrality",diverging = FALSE),
+    list(metric = "ecological_residual",   diverging = TRUE),
+    list(metric = "nature_gap_score",      diverging = TRUE)
+  )
+
+  stats_rows <- bind_rows(
+    lapply(patch_metric_specs, function(spec) {
+      vals <- as.numeric(gs_df[[spec$metric]])
+      s <- metric_stats(vals, diverging = spec$diverging)
+      tibble(
+        city_id  = CITY_ID,
+        metric   = spec$metric,
+        min_val  = s$min_val,
+        max_val  = s$max_val,
+        p05      = s$p05,
+        p10      = s$p10,
+        p25      = s$p25,
+        p50      = s$p50,
+        p75      = s$p75,
+        p90      = s$p90,
+        p95      = s$p95,
+        bound    = s$bound
+      )
+    }),
+    lapply(hex_metric_specs, function(spec) {
+      metric_key <- paste0("hex:", spec$metric)
+      vals <- as.numeric(hex_df[[spec$metric]])
+      s <- metric_stats(vals, diverging = spec$diverging)
+      tibble(
+        city_id  = CITY_ID,
+        metric   = metric_key,
+        min_val  = s$min_val,
+        max_val  = s$max_val,
+        p05      = s$p05,
+        p10      = s$p10,
+        p25      = s$p25,
+        p50      = s$p50,
+        p75      = s$p75,
+        p90      = s$p90,
+        p95      = s$p95,
+        bound    = s$bound
+      )
+    })
+  )
+
   graph <- readRDS(PROC_CONNECTIVITY_GRAPH)
 
   if (!inherits(graph, "igraph")) {
@@ -150,7 +325,10 @@ run_spatial_outputs_import <- function() {
 
   for (col in c(
     "habitat_quality_index", "effort_corrected_richness", "expected_richness",
-    "ecological_residual", "nature_gap_score", "corridor_importance", "intervention_rank"
+    "ecological_residual", "nature_gap_score", "corridor_importance", "intervention_rank",
+    "habitat_quality_norm", "effort_corrected_richness_norm", "expected_richness_norm",
+    "corridor_importance_norm", "mean_canopy_norm", "mean_lst_norm",
+    "ecological_residual_norm", "nature_gap_score_norm", "intervention_rank_norm"
   )) {
     if (!col %in% names(green_spaces)) green_spaces[[col]] <- NA_real_
   }
@@ -167,7 +345,10 @@ run_spatial_outputs_import <- function() {
     select(
       city_id, dataset_id, green_space_id, generated_at, name, name_ja, ward_id,
       habitat_quality_index, effort_corrected_richness, expected_richness,
-      ecological_residual, nature_gap_score, corridor_importance, intervention_rank
+      ecological_residual, nature_gap_score, corridor_importance, intervention_rank,
+      habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
+      corridor_importance_norm, mean_canopy_norm, mean_lst_norm,
+      ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
     )
 
   hex_import <- hex_cells |>
@@ -185,7 +366,8 @@ run_spatial_outputs_import <- function() {
       city_id, dataset_id, cell_id, green_space_id,
       habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
       disturbance_idx, land_use_class, betweenness_centrality,
-      intervention_rank, ecological_residual, nature_gap_score
+      intervention_rank, ecological_residual, nature_gap_score,
+      ndvi_norm, canopy_norm, lst_norm, disturbance_norm, betweenness_norm, residual_norm, nature_gap_score_norm
     )
 
   temp_suffix <- paste0("_", as.integer(runif(1, 1e6, 9e6)))
@@ -214,12 +396,18 @@ run_spatial_outputs_import <- function() {
         city_id, dataset_id, green_space_id, generated_at, name, name_ja,
         ward_id, geometry, habitat_quality_index, effort_corrected_richness,
         expected_richness, ecological_residual, nature_gap_score, corridor_importance,
-        intervention_rank, is_active
+        intervention_rank, is_active,
+        habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
+        corridor_importance_norm, mean_canopy_norm, mean_lst_norm,
+        ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
       )
       select city_id, dataset_id, green_space_id, generated_at, name, name_ja,
              ward_id, extensions.st_multi(geom)::geometry(MultiPolygon, 4326),
              habitat_quality_index, effort_corrected_richness, expected_richness,
-             ecological_residual, nature_gap_score, corridor_importance, intervention_rank, true
+             ecological_residual, nature_gap_score, corridor_importance, intervention_rank, true,
+             habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
+             corridor_importance_norm, mean_canopy_norm, mean_lst_norm,
+             ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
       from %s
       on conflict (city_id, green_space_id) do update set
         dataset_id = excluded.dataset_id,
@@ -235,7 +423,16 @@ run_spatial_outputs_import <- function() {
         nature_gap_score = excluded.nature_gap_score,
         corridor_importance = excluded.corridor_importance,
         intervention_rank = excluded.intervention_rank,
-        is_active = true
+        is_active = true,
+        habitat_quality_norm = excluded.habitat_quality_norm,
+        effort_corrected_richness_norm = excluded.effort_corrected_richness_norm,
+        expected_richness_norm = excluded.expected_richness_norm,
+        corridor_importance_norm = excluded.corridor_importance_norm,
+        mean_canopy_norm = excluded.mean_canopy_norm,
+        mean_lst_norm = excluded.mean_lst_norm,
+        ecological_residual_norm = excluded.ecological_residual_norm,
+        nature_gap_score_norm = excluded.nature_gap_score_norm,
+        intervention_rank_norm = excluded.intervention_rank_norm
       ",
       q_green
     ))
@@ -246,13 +443,15 @@ run_spatial_outputs_import <- function() {
         city_id, dataset_id, cell_id, green_space_id, geometry,
         habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
         disturbance_idx, land_use_class, betweenness_centrality,
-        intervention_rank, ecological_residual, nature_gap_score
+        intervention_rank, ecological_residual, nature_gap_score,
+        ndvi_norm, canopy_norm, lst_norm, disturbance_norm, betweenness_norm, residual_norm, nature_gap_score_norm
       )
       select city_id, dataset_id, cell_id, nullif(green_space_id, ''),
              geom::geometry(Polygon, 4326),
              habitat_quality, ndvi_idx, canopy_height_idx, lst_idx,
              disturbance_idx, land_use_class, betweenness_centrality,
-             intervention_rank, ecological_residual, nature_gap_score
+             intervention_rank, ecological_residual, nature_gap_score,
+             ndvi_norm, canopy_norm, lst_norm, disturbance_norm, betweenness_norm, residual_norm, nature_gap_score_norm
       from %s
       on conflict (city_id, dataset_id, cell_id) do update set
         green_space_id = excluded.green_space_id,
@@ -266,7 +465,14 @@ run_spatial_outputs_import <- function() {
         betweenness_centrality = excluded.betweenness_centrality,
         intervention_rank = excluded.intervention_rank,
         ecological_residual = excluded.ecological_residual,
-        nature_gap_score = excluded.nature_gap_score
+        nature_gap_score = excluded.nature_gap_score,
+        ndvi_norm = excluded.ndvi_norm,
+        canopy_norm = excluded.canopy_norm,
+        lst_norm = excluded.lst_norm,
+        disturbance_norm = excluded.disturbance_norm,
+        betweenness_norm = excluded.betweenness_norm,
+        residual_norm = excluded.residual_norm,
+        nature_gap_score_norm = excluded.nature_gap_score_norm
       ",
       q_hex
     ))
@@ -287,6 +493,38 @@ run_spatial_outputs_import <- function() {
       q_links
     ))
   })
+
+  # ── Write city_layer_stats (upsert, outside main transaction) ────────────
+
+  if (nrow(stats_rows) > 0L) {
+    tmp_stats <- paste0("tmp_city_layer_stats", temp_suffix)
+    DBI::dbWriteTable(con, DBI::Id(schema = "public", table = tmp_stats), stats_rows, overwrite = TRUE)
+    on.exit(DBI::dbExecute(con, sprintf("drop table if exists public.%s",
+      DBI::dbQuoteIdentifier(con, tmp_stats))), add = TRUE)
+
+    DBI::dbExecute(con, sprintf(
+      "
+      insert into public.city_layer_stats
+        (city_id, metric, min_val, max_val, p05, p10, p25, p50, p75, p90, p95, bound)
+      select city_id, metric, min_val, max_val, p05, p10, p25, p50, p75, p90, p95, bound
+      from public.%s
+      on conflict (city_id, metric) do update set
+        min_val = excluded.min_val,
+        max_val = excluded.max_val,
+        p05     = excluded.p05,
+        p10     = excluded.p10,
+        p25     = excluded.p25,
+        p50     = excluded.p50,
+        p75     = excluded.p75,
+        p90     = excluded.p90,
+        p95     = excluded.p95,
+        bound   = excluded.bound
+      ",
+      DBI::dbQuoteIdentifier(con, tmp_stats)
+    ))
+    cat(sprintf("Written city_layer_stats: %d metric rows for city %s\n",
+                nrow(stats_rows), CITY_ID))
+  }
 
   cat(sprintf(
     "Spatial PostgreSQL import complete: %d green spaces, %d hex cells, %d corridor links\n",

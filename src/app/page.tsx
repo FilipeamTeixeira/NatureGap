@@ -122,7 +122,7 @@ export default function Page() {
     setSelectedWard(null);
     setSelectedCell(null);
     setSelectedSurveyPoint(null);
-    setFlyToTarget({ center, zoom: 15 });
+    setFlyToTarget({ center, zoom: 13 });
   };
 
   const handleClosePanel = () => {

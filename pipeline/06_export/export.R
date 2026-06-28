@@ -47,7 +47,17 @@ PMTILES_REQUIRED_FIELDS <- c(
   "lstIdx",
   "landUseGreen",
   "landUseClass",
-  "interventionRank"
+  "interventionRank",
+  "ndviNorm",
+  "canopyNorm",
+  "lstNorm",
+  "disturbanceNorm",
+  "betweennessNorm",
+  "residualNorm",
+  "natureGapScoreNorm",
+  "expectedNorm",
+  "interventionRankNorm",
+  "habitatQualityNorm"
 )
 
 validate_render_fields <- function(value) {
@@ -323,7 +333,11 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       ),
       ecologicalResidual = list(
         sourceField = "ecological_residual",
-        definition = "Raw observed_richness minus expected_richness. Preserved for backend analytics."
+        definition = "Raw expected_richness minus effort_corrected_richness. Separate from nature_gap_score."
+      ),
+      natureGapScore = list(
+        sourceField = "nature_gap_score",
+        definition = "Composite headline: 0.50 biodiversity residual + 0.30 habitat deficit + 0.20 connectivity deficit, scaled to [-100, 100]."
       ),
       ecologicalResidualNormalized = list(
         sourceField = "ecological_residual_normalized",
@@ -417,6 +431,38 @@ make_slug <- function(value) {
     stringr::str_replace_all("(^-|-$)", "")
 }
 
+# ── Per-city normalisation helpers (for export) ────────────────────────────────
+
+norm_sequential <- function(x) {
+  finite_vals <- x[is.finite(x)]
+  if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+  p5  <- quantile(finite_vals, 0.05, names = FALSE)
+  p95 <- quantile(finite_vals, 0.95, names = FALSE)
+  if (!is.finite(p5) || !is.finite(p95) || p5 == p95) {
+    return(rep(0.5, length(x)))
+  }
+  pmin(1, pmax(0, (x - p5) / (p95 - p5)))
+}
+
+norm_diverging <- function(x) {
+  finite_vals <- x[is.finite(x)]
+  if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+  p10 <- quantile(finite_vals, 0.10, names = FALSE)
+  p90 <- quantile(finite_vals, 0.90, names = FALSE)
+  bound <- max(abs(p10), abs(p90), na.rm = TRUE)
+  if (!is.finite(bound) || bound == 0) return(rep(0, length(x)))
+  pmin(1, pmax(-1, x / bound))
+}
+
+norm_rank <- function(x) {
+  finite_vals <- x[is.finite(x)]
+  if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
+  max_rank <- max(finite_vals)
+  min_rank <- min(finite_vals)
+  if (max_rank == min_rank) return(rep(1.0, length(x)))
+  1 - ((x - min_rank) / (max_rank - min_rank))
+}
+
 # ── Shared helpers for JSON export ───────────────────────────────────────────
 
 score_status <- function(score) {
@@ -491,11 +537,15 @@ land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real
   water_v <- replace_na(water, -Inf)
   built_v <- replace_na(built, -Inf)
   bare_v <- replace_na(bare, -Inf)
-  max_v <- pmax(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
+  fractions <- c(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
+  max_v <- max(fractions)
+  sorted <- sort(fractions[fractions > -Inf], decreasing = TRUE)
+  second_v <- if (length(sorted) >= 2L) sorted[[2L]] else 0
 
   case_when(
     !is.finite(max_v) ~ "unknown",
-    max_v <= 0 ~ "unknown",
+    max_v < 0.35 ~ "mixed",
+    (max_v - second_v) < 0.12 ~ "mixed",
     tree_v == max_v ~ "tree",
     shrub_v == max_v ~ "shrub",
     grass_v == max_v ~ "grass",
@@ -523,7 +573,7 @@ derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
   if (replace_na(n_survey_dates, 0L) < 2L && replace_na(n_obs, 0L) > 0L) {
     pressures <- c(pressures, "Low survey effort — fewer than 2 distinct survey dates")
   }
-  if (!is.na(ecological_residual) && ecological_residual < -20) {
+  if (!is.na(ecological_residual) && ecological_residual > 20) {
     pressures <- c(
       pressures,
       sprintf(
@@ -725,6 +775,15 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     maxExpectedRichness  = as.integer(max_expected),
     ecologicalResidual   = if (is.finite(patch_residual)) round(patch_residual, 1) else if (any(sampled)) round(finite_mean(rows$ecological_residual[sampled]), 1) else NA_real_,
     ecologicalResidualNormalized = if (is.finite(patch_residual_normalized)) round(patch_residual_normalized, 4) else if (any(sampled)) round(finite_mean(rows$ecological_residual_normalized[sampled]), 4) else NA_real_,
+    habitatQualityNorm = round(replace_na(finite_first(patch_metrics$habitat_quality_norm), 0.5), 4),
+    effortCorrectedRichnessNorm = round(replace_na(finite_first(patch_metrics$effort_corrected_richness_norm), 0.5), 4),
+    expectedRichnessNorm = round(replace_na(finite_first(patch_metrics$expected_richness_norm), 0.5), 4),
+    corridorImportanceNorm = round(replace_na(finite_first(patch_metrics$corridor_importance_norm), 0.5), 4),
+    meanCanopyNorm = round(replace_na(finite_first(patch_metrics$mean_canopy_norm), 0.5), 4),
+    meanLstNorm = round(replace_na(finite_first(patch_metrics$mean_lst_norm), 0.5), 4),
+    ecologicalResidualNorm = round(replace_na(finite_first(patch_metrics$ecological_residual_norm), 0), 4),
+    natureGapScoreNorm = round(replace_na(finite_first(patch_metrics$nature_gap_score_norm), 0), 4),
+    interventionRankNorm = round(replace_na(finite_first(patch_metrics$intervention_rank_norm), 0.5), 4),
     dataAvailabilityRatio = if (is.finite(patch_data_availability)) round(patch_data_availability, 4) else if (nrow(rows) > 0) round(sum(sampled, na.rm = TRUE) / nrow(rows), 4) else NA_real_,
     nObs                 = as.integer(sum(replace_na(rows$n_obs, 0L))),
     nSurveyDates         = as.integer(max(replace_na(rows$n_survey_dates, 0L))),
@@ -814,7 +873,7 @@ if (file.exists(green_path)) {
     "survey_effort_units", "expected_richness",
     "ecological_residual", "ecological_residual_normalized",
     "data_availability_ratio", "nature_gap_score", "corridor_importance",
-    "betweenness_centrality", "intervention_rank"
+    "betweenness_centrality", "intervention_rank", "mean_canopy", "mean_lst"
   )) {
     if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
   }
@@ -834,13 +893,27 @@ if (file.exists(green_path)) {
       ),
       wardId = coalesce(as.character(wardId), NA_character_)
     ) |>
+    mutate(
+      habitat_quality_norm           = norm_sequential(habitat_quality_index),
+      effort_corrected_richness_norm = norm_sequential(effort_corrected_richness),
+      expected_richness_norm         = norm_sequential(expected_richness),
+      corridor_importance_norm       = norm_sequential(corridor_importance),
+      mean_canopy_norm               = norm_sequential(mean_canopy),
+      mean_lst_norm                  = norm_sequential(mean_lst),
+      ecological_residual_norm       = norm_diverging(ecological_residual),
+      nature_gap_score_norm          = norm_diverging(nature_gap_score),
+      intervention_rank_norm         = norm_rank(intervention_rank)
+    ) |>
     select(
       id, name, nameJa, wardId,
       habitat_quality_index, observed_richness, effort_corrected_richness,
       survey_effort_units, expected_richness,
       ecological_residual, ecological_residual_normalized,
       data_availability_ratio, nature_gap_score, corridor_importance,
-      betweenness_centrality, intervention_rank
+      betweenness_centrality, intervention_rank,
+      habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
+      corridor_importance_norm, mean_canopy_norm, mean_lst_norm,
+      ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
     )
 
   park_lookup <- green |>
@@ -862,7 +935,16 @@ if (file.exists(green_path)) {
       nature_gap_score,
       corridor_importance,
       betweenness_centrality,
-      intervention_rank
+      intervention_rank,
+      habitat_quality_norm,
+      effort_corrected_richness_norm,
+      expected_richness_norm,
+      corridor_importance_norm,
+      mean_canopy_norm,
+      mean_lst_norm,
+      ecological_residual_norm,
+      nature_gap_score_norm,
+      intervention_rank_norm
     )
 
 } else {
@@ -947,6 +1029,31 @@ n_green  <- sum(replace_na(grid$habitat_quality, 0) > 0)
 cat(sprintf("  → %d / %d cells retained (habitat_quality > 0)\n", n_green, n_total))
 
 grid_all <- grid |> mutate(cell_id = paste0(CITY_ID, "-", cell_id))
+
+# (Helpers defined globally above)
+
+for (col in c(
+  "ndvi_mean", "canopy_height_idx", "lst_idx",
+  "disturbance_index", "betweenness_centrality", "ecological_residual", "nature_gap_score",
+  "expected_richness", "intervention_rank", "habitat_quality"
+)) {
+  if (!col %in% names(grid_all)) grid_all[[col]] <- NA_real_
+}
+
+grid_all <- grid_all |>
+  mutate(
+    ndvi_norm             = norm_sequential(ndvi_mean),
+    canopy_norm           = norm_sequential(canopy_height_idx),
+    lst_norm              = norm_sequential(lst_idx),
+    disturbance_norm      = norm_sequential(disturbance_index),
+    betweenness_norm      = norm_sequential(betweenness_centrality),
+    residual_norm         = norm_diverging(ecological_residual),
+    nature_gap_score_norm = norm_diverging(nature_gap_score),
+    expected_richness_norm = norm_sequential(expected_richness),
+    intervention_rank_norm = norm_rank(intervention_rank),
+    habitat_quality_norm  = norm_sequential(habitat_quality)
+  )
+
 grid <- grid_all |> filter(habitat_quality > 0)
 
 # ── Assign each cell to its canonical green-space patch ─────────────────────
@@ -1092,7 +1199,17 @@ hexgrid_tiles <- hexgrid_render |>
       tree_fraction, shrub_fraction, grass_fraction,
       water_fraction, built_fraction_wc, bare_fraction
     ),
-    interventionRank   = as.integer(replace_na(intervention_rank, 50L))
+    interventionRank   = as.integer(replace_na(intervention_rank, 50L)),
+    ndviNorm           = if_else(is_unsampled, 0, round(replace_na(ndvi_norm, 0), 4)),
+    canopyNorm         = if_else(is_unsampled, 0, round(replace_na(canopy_norm, 0), 4)),
+    lstNorm            = if_else(is_unsampled, 0, round(replace_na(lst_norm, 0), 4)),
+    disturbanceNorm    = if_else(is_unsampled, 0, round(replace_na(disturbance_norm, 0), 4)),
+    betweennessNorm    = if_else(is_unsampled, 0, round(replace_na(betweenness_norm, 0), 4)),
+    residualNorm       = if_else(is_unsampled, 0, round(replace_na(residual_norm, 0), 4)),
+    natureGapScoreNorm = if_else(is_unsampled, 0, round(replace_na(nature_gap_score_norm, 0), 4)),
+    expectedNorm       = if_else(is_unsampled, 0, round(replace_na(expected_richness_norm, 0), 4)),
+    interventionRankNorm = if_else(is_unsampled, 0, round(replace_na(intervention_rank_norm, 0), 4)),
+    habitatQualityNorm = if_else(is_unsampled, 0, round(replace_na(habitat_quality_norm, 0), 4))
   )
 
 hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")

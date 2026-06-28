@@ -1,4 +1,5 @@
 import type { ExpressionSpecification } from 'maplibre-gl';
+import type { CityLayerStats } from './data';
 import type { LayerId } from './types';
 
 export interface LayerLegendItem {
@@ -10,6 +11,8 @@ export interface LayerStyleSpec {
   title: string;
   /** Vector tile feature property for data-driven colouring. */
   property?: string;
+  /** Raw metric name in city_layer_stats for legend bounds lookup. */
+  rawMetric?: string;
   legend: LayerLegendItem[];
 }
 
@@ -30,37 +33,52 @@ export const LAYER_DRAW_ORDER = [
 export type HexLayerId = (typeof LAYER_DRAW_ORDER)[number];
 export const THEMATIC_LAYER_IDS = LAYER_DRAW_ORDER;
 
-export const HEX_OVERLAY_LAYER_IDS = [
-  'impact',
-  'expected',
-  'residual',
-  'intervention',
-  'habitat',
-  'treecover',
-  'biodiversity',
-  'connectivity',
-  'heat',
-  'landuse',
-] as const satisfies readonly HexLayerId[];
+/** MapLibre layer IDs — must match the visualisation spec exactly. */
+export const PATCH_OUTLINE_LAYER_ID = 'patch-outline-always';
+export const HEX_OUTLINE_LAYER_ID = 'hex-outline-always';
+export const CORRIDOR_LINES_LAYER_ID = 'corridor-lines';
+export const INTERVENTION_RANK_BADGES_LAYER_ID = 'intervention-rank-badges';
+export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
+export const BIODIVERSITY_CIRCLES_LAYER_ID = 'biodiversity-circles';
 
-export function hasHexOverlay(layerId: HexLayerId): boolean {
-  return (HEX_OVERLAY_LAYER_IDS as readonly HexLayerId[]).includes(layerId);
-}
+export type PatchFillLayerId = Exclude<HexLayerId, 'biodiversity'>;
 
-/** Saturated ramps — even low values stay visible on the light basemap. */
-const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'landuse'>, [number, string][]> = {
-  expected:     [[0, '#deebf7'], [25, '#9ecae1'], [50, '#4292c6'], [75, '#08519c'], [100, '#08306b']],
-  residual:     [[-50, '#C95B4B'], [-20, '#E8A44C'], [0, '#B8C9AE'], [20, '#73A56D'], [50, '#2E6F40']],
-  intervention: [[1, '#4a148c'], [5, '#6a1b9a'], [10, '#8e24aa'], [20, '#ab47bc'], [50, '#d8a7df']],
-  habitat:      [[0, '#8ecf9a'], [25, '#52a868'], [50, '#3d8b57'], [75, '#2E6F40'], [100, '#1a4a28']],
-  treecover:    [[0, '#66bb6a'], [25, '#43a047'], [50, '#2e7d32'], [75, '#1b5e20'], [100, '#0d3d12']],
-  biodiversity: [[0, '#42a5f5'], [5, '#1e88e5'], [15, '#1565c0'], [30, '#0d47a1'], [50, '#002171']],
-  connectivity: [[0, '#ab47bc'], [25, '#8e24aa'], [50, '#7b1fa2'], [75, '#6a1b9a'], [100, '#4a148c']],
-  heat:         [[0, '#4575b4'], [25, '#74add1'], [50, '#fdae61'], [75, '#f46d43'], [100, '#a50026']],
+export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
+  impact: 'nature-gap-patch-fill',
+  expected: 'expected-richness-patch-fill',
+  residual: 'ecological-residual-patch-fill',
+  intervention: 'intervention-patch-fill',
+  habitat: 'habitat-quality-patch-fill',
+  treecover: 'tree-cover-patch-fill',
+  connectivity: 'connectivity-patch-fill',
+  heat: 'heat-exposure-patch-fill',
+  landuse: 'land-use-patch-fill',
 };
 
+export const HEX_FILL_LAYER_IDS: Partial<Record<HexLayerId, string>> = {
+  impact: 'nature-gap-hex-fill',
+  expected: 'expected-richness-hex-fill',
+  residual: 'ecological-residual-hex-fill',
+  intervention: 'intervention-hex-fill',
+  habitat: 'habitat-quality-hex-fill',
+  treecover: 'tree-cover-hex-fill',
+  connectivity: 'connectivity-hex-fill',
+  heat: 'heat-exposure-hex-fill',
+  landuse: 'land-use-hex-fill',
+};
+
+export const PATCH_FILL_LAYER_ORDER = LAYER_DRAW_ORDER.filter(
+  (id): id is PatchFillLayerId => id !== 'biodiversity',
+);
+
+export function hasHexOverlay(layerId: HexLayerId): boolean {
+  return layerId in HEX_FILL_LAYER_IDS;
+}
+
 export function hexFillLayerId(layerId: HexLayerId): string {
-  return `hex-fill-${layerId}`;
+  const id = HEX_FILL_LAYER_IDS[layerId];
+  if (!id) throw new Error(`Layer ${layerId} has no hex fill`);
+  return id;
 }
 
 export function getEnabledLayerIds(layers: { id: LayerId; enabled: boolean }[]): HexLayerId[] {
@@ -72,74 +90,280 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
   return getEnabledLayerIds(layers)[0] ?? 'impact';
 }
 
-/** Build MapLibre fill-color expression for a data layer. */
-export function hexFillColorExpression(layerId: HexLayerId): ExpressionSpecification {
-  if (layerId === 'residual') {
-    return [
-      'interpolate',
-      ['linear'],
-      ['max', -50, ['min', 50, ['*', ['coalesce', ['get', 'ecologicalResidualNormalized'], 0], 25]]],
-      -50, '#C95B4B',
-      -20, '#E8A44C',
-      0, '#B8C9AE',
-      20, '#73A56D',
-      50, '#2E6F40',
-    ] as ExpressionSpecification;
-  }
+const DIVERGING_STOPS: [number, string][] = [
+  [-1, '#C95B4B'],
+  [-0.4, '#E8A44C'],
+  [0, '#B8C9AE'],
+  [0.4, '#73A56D'],
+  [1, '#2E6F40'],
+];
 
-  if (layerId === 'impact') {
-    return [
-      'interpolate',
-      ['linear'],
-      ['coalesce', ['get', 'natureGapScore'], 0],
-      -50, '#C95B4B',
-      -20, '#E8A44C',
-      0, '#B8C9AE',
-      20, '#73A56D',
-      50, '#2E6F40',
-    ] as ExpressionSpecification;
-  }
+/** Saturated ramps — even low values stay visible on the light basemap. */
+const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'residual' | 'landuse'>, [number, string][]> = {
+  expected:     [[0, '#deebf7'], [0.25, '#9ecae1'], [0.5, '#4292c6'], [0.75, '#08519c'], [1, '#08306b']],
+  intervention: [[0, '#d8a7df'], [0.3, '#ab47bc'], [0.6, '#8e24aa'], [0.8, '#6a1b9a'], [1, '#4a148c']],
+  habitat:      [[0, '#8ecf9a'], [0.25, '#52a868'], [0.5, '#3d8b57'], [0.75, '#2E6F40'], [1, '#1a4a28']],
+  treecover:    [[0, '#66bb6a'], [0.25, '#43a047'], [0.5, '#2e7d32'], [0.75, '#1b5e20'], [1, '#0d3d12']],
+  biodiversity: [[0, '#42a5f5'], [5, '#1e88e5'], [15, '#1565c0'], [30, '#0d47a1'], [50, '#002171']],
+  connectivity: [[0, '#ab47bc'], [0.25, '#8e24aa'], [0.5, '#7b1fa2'], [0.75, '#6a1b9a'], [1, '#4a148c']],
+  heat:         [[0, '#4575b4'], [0.25, '#74add1'], [0.5, '#fdae61'], [0.75, '#f46d43'], [1, '#a50026']],
+};
 
-  if (layerId === 'landuse') {
-    return [
-      'match',
-      ['coalesce', ['get', 'landUseClass'], 'unknown'],
-      'tree', '#1b5e20',
-      'shrub', '#4f8a3d',
-      'grass', '#9ccc65',
-      'water', '#4575b4',
-      'built', '#b87f4f',
-      'bare', '#d8c7a3',
-      'mixed', '#8e7cc3',
-      '#c9c9c9',
-    ] as ExpressionSpecification;
-  }
-
-  const spec = LAYER_STYLE_SPECS[layerId];
-  const ramp = LAYER_RAMPS[layerId];
-  if (!spec.property) {
-    return ['literal', '#B8C9AE'] as ExpressionSpecification;
-  }
+function buildDivergingExpression(
+  normProperty: string,
+  rawProperty: string,
+  stat: CityLayerStats | undefined,
+): ExpressionSpecification {
+  const bound = stat?.bound;
+  const valueExpression: ExpressionSpecification = bound != null && bound > 0
+    ? [
+        'coalesce',
+        ['get', normProperty],
+        ['/', ['get', rawProperty], bound],
+        0,
+      ] as ExpressionSpecification
+    : ['coalesce', ['get', normProperty], 0] as ExpressionSpecification;
 
   return [
     'interpolate',
     ['linear'],
-    ['coalesce', ['get', spec.property], 0],
+    valueExpression,
+    ...DIVERGING_STOPS.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
+/** Map a 0–1 float or 0–100 pct_index integer to the unit interval. */
+function unitInterval(property: string): ExpressionSpecification {
+  return [
+    'case',
+    ['>', ['coalesce', ['get', property], -1], 1],
+    ['/', ['coalesce', ['get', property], 0], 100],
+    ['coalesce', ['get', property], 0],
+  ] as ExpressionSpecification;
+}
+
+function buildSequentialExpression(
+  normProperty: string,
+  rawProperty: string,
+  ramp: [number, string][],
+  stat: CityLayerStats | undefined,
+  rawIsPercentIndex = false,
+): ExpressionSpecification {
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const rawValue: ExpressionSpecification = rawIsPercentIndex
+    ? unitInterval(rawProperty)
+    : ['coalesce', ['get', rawProperty], 0] as ExpressionSpecification;
+  const valueExpression: ExpressionSpecification = low != null && high != null && high > low
+    ? [
+        'coalesce',
+        ['get', normProperty],
+        [
+          'max',
+          0,
+          ['min', 1, ['/', ['-', rawValue, low], ['-', high, low]]],
+        ],
+        rawValue,
+        0,
+      ] as ExpressionSpecification
+    : ['coalesce', ['get', normProperty], rawValue, 0] as ExpressionSpecification;
+
+  return [
+    'interpolate',
+    ['linear'],
+    valueExpression,
     ...ramp.flatMap(([value, color]) => [value, color]),
   ] as ExpressionSpecification;
 }
 
-/** Opacity per layer — thinner when stacked so blends stay readable. */
-export function hexFillOpacity(enabledCount: number): number {
-  if (enabledCount <= 1) return 0.78;
-  if (enabledCount === 2) return 0.58;
-  return 0.48;
+/** Expected richness — patch and hex export different norm property names. */
+function buildExpectedExpression(
+  cityStats: CityLayerStats[] = [],
+  ramp: [number, string][],
+): ExpressionSpecification {
+  const stat = statForMetric(cityStats, 'expected_richness');
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const rawValue = unitInterval('expectedRichness');
+  const fromRaw: ExpressionSpecification = low != null && high != null && high > low
+    ? ['max', 0, ['min', 1, ['/', ['-', rawValue, low], ['-', high, low]]]] as ExpressionSpecification
+    : rawValue;
+
+  return [
+    'interpolate',
+    ['linear'],
+    ['coalesce', ['get', 'expectedRichnessNorm'], ['get', 'expectedNorm'], fromRaw, 0],
+    ...ramp.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
+/** Tree cover — use WorldCover tree fraction; LiDAR norms are flat 0.5 when absent. */
+function buildTreecoverExpression(): ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    [
+      'coalesce',
+      unitInterval('treeCover'),
+      unitInterval('tree_cover'),
+      unitInterval('canopyHeightIdx'),
+      unitInterval('meanCanopy'),
+      0,
+    ],
+    ...LAYER_RAMPS.treecover.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
+/**
+ * Heat hex — lst_idx is a coolness index (1 − rank) in the pipeline.
+ * Use heatExposure (lst_rank) so higher values render hotter/redder.
+ */
+function buildHeatHexExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
+  const stat = statForMetric(cityStats, 'lst_idx');
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const meanLstValue: ExpressionSpecification = low != null && high != null && high > low
+    ? ['max', 0, ['min', 1, ['/', ['-', unitInterval('meanLst'), low], ['-', high, low]]]] as ExpressionSpecification
+    : unitInterval('meanLst');
+
+  return [
+    'interpolate',
+    ['linear'],
+    [
+      'coalesce',
+      unitInterval('heatExposure'),
+      meanLstValue,
+      ['-', 1, ['coalesce', ['get', 'lstNorm'], 0]],
+      0,
+    ],
+    ...LAYER_RAMPS.heat.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
+function statForMetric(stats: CityLayerStats[], metric: string | undefined): CityLayerStats | undefined {
+  if (!metric) return undefined;
+  return stats.find((entry) => entry.metric === metric);
+}
+
+function landUseColorExpression(property: string): ExpressionSpecification {
+  return [
+    'match',
+    ['coalesce', ['get', property], ['get', 'landUseClass'], ['get', 'land_use_class'], ['get', 'dominant_land_use'], 'unknown'],
+    'tree', '#1b5e20',
+    'shrub', '#4f8a3d',
+    'grass', '#9ccc65',
+    'water', '#4575b4',
+    'built', '#b87f4f',
+    'bare', '#d8c7a3',
+    'mixed', '#8e7cc3',
+    '#c9c9c9',
+  ] as ExpressionSpecification;
+}
+
+/** Patch-level fill colour (zoom ≤ 13). */
+export function patchFillColorExpression(
+  layerId: PatchFillLayerId,
+  cityStats: CityLayerStats[] = [],
+): ExpressionSpecification {
+  const spec = LAYER_STYLE_SPECS[layerId];
+  const stat = statForMetric(cityStats, spec.rawMetric);
+
+  switch (layerId) {
+    case 'impact':
+      return buildDivergingExpression('natureGapScoreNorm', 'natureGapScore', stat);
+    case 'residual':
+      return buildDivergingExpression('ecologicalResidualNorm', 'ecologicalResidual', stat);
+    case 'expected':
+      return buildExpectedExpression(cityStats, LAYER_RAMPS.expected);
+    case 'intervention':
+      return buildSequentialExpression('interventionRankNorm', 'interventionRank', LAYER_RAMPS.intervention, stat);
+    case 'habitat':
+      return buildSequentialExpression('habitatQualityNorm', 'habitatQualityIndex', LAYER_RAMPS.habitat, stat);
+    case 'treecover':
+      return buildTreecoverExpression();
+    case 'connectivity':
+      return buildSequentialExpression('corridorImportanceNorm', 'corridorImportance', LAYER_RAMPS.connectivity, stat);
+    case 'heat':
+      return buildSequentialExpression('meanLstNorm', 'meanLst', LAYER_RAMPS.heat, stat);
+    case 'landuse':
+      return landUseColorExpression('dominant_land_use');
+  }
+}
+
+/** Hex-level fill colour (zoom ≥ 14). */
+export function hexFillColorExpression(
+  layerId: HexLayerId,
+  cityStats: CityLayerStats[] = [],
+): ExpressionSpecification {
+  if (layerId === 'impact') {
+    return buildDivergingExpression(
+      'natureGapScoreNorm',
+      'natureGapScore',
+      statForMetric(cityStats, 'nature_gap_score'),
+    );
+  }
+
+  if (layerId === 'residual') {
+    return buildDivergingExpression(
+      'residualNorm',
+      'ecologicalResidual',
+      statForMetric(cityStats, 'ecological_residual'),
+    );
+  }
+
+  if (layerId === 'landuse') {
+    return landUseColorExpression('land_use_class');
+  }
+
+  if (layerId === 'expected') {
+    return buildExpectedExpression(cityStats, LAYER_RAMPS.expected);
+  }
+
+  if (layerId === 'treecover') {
+    return buildTreecoverExpression();
+  }
+
+  if (layerId === 'heat') {
+    return buildHeatHexExpression(cityStats);
+  }
+
+  const spec = LAYER_STYLE_SPECS[layerId];
+  const ramp = LAYER_RAMPS[layerId as keyof typeof LAYER_RAMPS];
+  if (!spec.property || !ramp) {
+    return ['literal', '#B8C9AE'] as ExpressionSpecification;
+  }
+
+  const rawPropertyByLayer: Partial<Record<HexLayerId, string>> = {
+    intervention: 'interventionRank',
+    habitat: 'habitatQuality',
+    connectivity: 'betweennessCentrality',
+  };
+
+  return buildSequentialExpression(
+    spec.property,
+    rawPropertyByLayer[layerId] ?? spec.property,
+    ramp,
+    statForMetric(cityStats, spec.rawMetric),
+  );
+}
+
+export function hexFillOpacityForLayer(layerId: HexLayerId): number {
+  if (layerId === 'impact') return 0.5;
+  return 0.78;
+}
+
+export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | ExpressionSpecification {
+  if (layerId === 'connectivity') {
+    return ['interpolate', ['linear'], ['zoom'], 13, 0.7, 14, 0.2] as ExpressionSpecification;
+  }
+  return 0.7;
 }
 
 export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   impact: {
     title: 'Nature Gap',
-    property: 'natureGapScore',
+    property: 'natureGapScoreNorm',
+    rawMetric: 'nature_gap_score',
     legend: [
       { color: '#2E6F40', label: 'Strong surplus' },
       { color: '#73A56D', label: 'Surplus' },
@@ -150,7 +374,9 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   expected: {
     title: 'Expected Richness',
-    property: 'expectedRichness',
+    property: 'expectedNorm',
+    rawMetric: 'expected_richness',
+    // Patch uses expectedRichnessNorm; hex tiles export expectedNorm — coalesce both in expressions.
     legend: [
       { color: '#08306b', label: 'Very high' },
       { color: '#08519c', label: 'High' },
@@ -161,18 +387,20 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   residual: {
     title: 'Ecological Residual',
-    property: 'ecologicalResidualNormalized',
+    property: 'residualNorm',
+    rawMetric: 'ecological_residual',
     legend: [
-      { color: '#C95B4B', label: 'Strong pressure' },
-      { color: '#E8A44C', label: 'Pressure' },
+      { color: '#2E6F40', label: 'Far fewer recorded' },
+      { color: '#73A56D', label: 'Fewer recorded' },
       { color: '#B8C9AE', label: 'Near expected' },
-      { color: '#73A56D', label: 'Refuge' },
-      { color: '#2E6F40', label: 'Strong refuge' },
+      { color: '#E8A44C', label: 'More recorded' },
+      { color: '#C95B4B', label: 'Far more recorded' },
     ],
   },
   intervention: {
     title: 'Intervention Ranking',
-    property: 'interventionRank',
+    property: 'interventionRankNorm',
+    rawMetric: 'intervention_rank',
     legend: [
       { color: '#4a148c', label: 'Top priority' },
       { color: '#6a1b9a', label: 'High' },
@@ -183,7 +411,8 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   habitat: {
     title: 'Habitat Quality',
-    property: 'habitatQuality',
+    property: 'habitatQualityNorm',
+    rawMetric: 'habitat_quality',
     legend: [
       { color: '#1a4a28', label: 'High' },
       { color: '#2E6F40', label: 'Good' },
@@ -194,7 +423,8 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   treecover: {
     title: 'Tree Cover',
-    property: 'canopyHeightIdx',
+    property: 'treeCover',
+    rawMetric: 'canopy_height_idx',
     legend: [
       { color: '#0d3d12', label: 'Dense canopy' },
       { color: '#1b5e20', label: 'High' },
@@ -205,7 +435,8 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   biodiversity: {
     title: 'Biodiversity (observed)',
-    property: 'observedRichness',
+    property: 'effortCorrectedRichness',
+    rawMetric: 'effort_corrected_richness',
     legend: [
       { color: '#002171', label: 'Very high' },
       { color: '#0d47a1', label: 'High' },
@@ -216,7 +447,8 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   connectivity: {
     title: 'Connectivity',
-    property: 'betweennessCentrality',
+    property: 'betweennessNorm',
+    rawMetric: 'betweenness_centrality',
     legend: [
       { color: '#4a148c', label: 'Critical corridor' },
       { color: '#6a1b9a', label: 'High' },
@@ -227,7 +459,8 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   heat: {
     title: 'Heat Exposure',
-    property: 'lstIdx',
+    property: 'lstNorm',
+    rawMetric: 'lst_idx',
     legend: [
       { color: '#a50026', label: 'Very hot' },
       { color: '#f46d43', label: 'Hot' },
@@ -249,3 +482,19 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     ],
   },
 };
+
+/** Layer switcher groups in the visualisation spec. */
+export const THEMATIC_LAYER_GROUPS = [
+  {
+    title: 'Overview',
+    ids: ['impact', 'residual', 'intervention'] as const satisfies readonly HexLayerId[],
+  },
+  {
+    title: 'Biodiversity',
+    ids: ['biodiversity', 'expected'] as const satisfies readonly HexLayerId[],
+  },
+  {
+    title: 'Habitat',
+    ids: ['habitat', 'treecover', 'connectivity', 'heat', 'landuse'] as const satisfies readonly HexLayerId[],
+  },
+] as const;
