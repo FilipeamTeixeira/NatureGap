@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Leaf, LogOut, User } from 'lucide-react';
-import { CITY } from '@/lib/config';
+import { cityMeta } from '@/lib/config';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 const NAV_LINKS = [
@@ -16,10 +16,13 @@ const NAV_LINKS = [
 
 interface NavbarProps {
   activePath: string;
+  /** cityId of whatever's currently selected/displayed — drives the badge label. */
+  cityId?: string;
 }
 
-export default function Navbar({ activePath }: NavbarProps) {
+export default function Navbar({ activePath, cityId }: NavbarProps) {
   const { profile, user, loading, signOut } = useAuth();
+  const city = cityMeta(cityId);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -70,7 +73,7 @@ export default function Navbar({ activePath }: NavbarProps) {
 
       <div className="flex items-center gap-3 flex-shrink-0">
         <span className="text-[11px] font-medium text-[#2E6F40] bg-[#DDEAD8] px-2.5 py-1 rounded-full">
-          {CITY.badge}
+          {city.badge}
         </span>
         {!loading && !user ? (
           <Link

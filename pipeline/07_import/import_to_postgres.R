@@ -68,6 +68,19 @@ if (is.null(data_version) || !grepl("^[0-9]{8}T[0-9]{6}Z$", data_version)) {
   stop(sprintf("Invalid DATA_VERSION: %s", data_version %||% "<null>"), call. = FALSE)
 }
 
+# Idempotency guard: export.R now triggers this import inline right after
+# writing current.json, and run_pipeline.R's own 07_import step may also
+# source this file immediately afterwards. Both may legitimately fire in the
+# same R session — only run the DB promotion once per city/dataset per session.
+import_done_key <- paste0(".naturegap_postgres_import_done__", CITY_ID)
+if (identical(mget(import_done_key, envir = .GlobalEnv, ifnotfound = list(NULL))[[1]], data_version)) {
+  message(sprintf(
+    "PostgreSQL import already completed for %s / %s in this session; skipping duplicate run.",
+    CITY_ID, data_version
+  ))
+  return(invisible(NULL))
+}
+
 version_dir <- file.path(export_root, data_version)
 manifest_path <- file.path(version_dir, "manifest.json")
 cell_path <- file.path(version_dir, "cell_attributes.geojson")
@@ -183,6 +196,7 @@ if (is.null(result)) return(invisible(NULL))
 
 cat("PostgreSQL import complete:\n")
 cat(as.character(result$result[[1]]), "\n")
+assign(import_done_key, data_version, envir = .GlobalEnv)
 }
 
 run_postgres_import()

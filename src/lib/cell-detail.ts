@@ -1,10 +1,12 @@
-import { MAX_EXPECTED_RICHNESS } from './config';
+import { MAX_EXPECTED_RICHNESS, CITY } from './config';
 import { getParkStats, getParks } from './green-spaces';
 import { supabase } from './supabase';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 
 export type RenderCellProperties = {
   cellId: string;
+  /** Pipeline city slug this feature belongs to — present on hex-tile properties. */
+  cityId?: string;
   parkId?: string;
   parkName?: string;
   impactScore?: number;
@@ -129,6 +131,7 @@ function detailFromRow(
 
   return {
     id: render.cellId,
+    cityId: render.cityId ?? CITY.id,
     name: displayName,
     nameJa: displayName,
     coordinates,
@@ -232,6 +235,7 @@ export async function fetchParkDetail(
 
   return {
     id: parkId,
+    cityId: park?.cityId ?? CITY.id,
     name: park?.name ?? parkId,
     nameJa: park?.nameJa ?? park?.name ?? parkId,
     coordinates,

@@ -12,6 +12,7 @@ import { initParks } from '@/lib/green-spaces';
 import { initData } from '@/lib/data';
 import { fetchCellDetail, fetchParkDetail, type RenderCellProperties } from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
+import { CITY } from '@/lib/config';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -51,6 +52,7 @@ export default function Page() {
     () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'impact',
     [layers],
   );
+  const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? CITY.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -151,19 +153,21 @@ export default function Page() {
 
   return (
     <div className="h-full flex flex-col">
-      <Navbar activePath="/" />
+      <Navbar activePath="/" cityId={currentCityId} />
 
       <div className="flex flex-1 min-h-0">
         <LayerControls
           layers={layers}
           onToggle={toggleLayer}
           onPlaceSelect={handlePlaceSelect}
+          cityId={currentCityId}
         />
 
         <div className="flex-1 relative min-w-0">
           <MapView
             layers={layers}
             selectedCellId={selectedCell?.id ?? null}
+            displayCityId={currentCityId}
             onHexClick={handleHexClick}
             onParkClick={handleParkClick}
             flyToTarget={flyToTarget}

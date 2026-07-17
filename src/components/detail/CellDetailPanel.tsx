@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SCORE_THRESHOLDS, CITY, MAX_EXPECTED_RICHNESS } from '@/lib/config';
+import { SCORE_THRESHOLDS, cityMeta, MAX_EXPECTED_RICHNESS } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
 import ScoreGauge from './ScoreGauge';
@@ -197,7 +197,7 @@ export default function CellDetailPanel({
           <div className="flex-1 min-w-0 pr-3">
             <h2 className="font-semibold text-[#1F2A1F] text-[18px] leading-tight">{cell.name}</h2>
             <p className="text-[13px] text-[#667066] mt-0.5">
-              {cell.nameJa} · {CITY.name}
+              {cell.nameJa} · {cityMeta(cell.cityId).name}
             </p>
           </div>
           <button

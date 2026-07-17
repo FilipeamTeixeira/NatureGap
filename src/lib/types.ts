@@ -98,6 +98,8 @@ export interface CellStatsFields {
 
 export interface CellData extends CellStatsFields {
   id: string;
+  /** Pipeline city slug this cell belongs to — matches CITIES in lib/config.ts. */
+  cityId: string;
   name: string;
   nameJa: string;
   coordinates: [number, number];
@@ -105,6 +107,8 @@ export interface CellData extends CellStatsFields {
 
 export interface WardFeature {
   id: string;
+  /** Pipeline city slug this ward belongs to — matches CITIES in lib/config.ts. */
+  cityId: string;
   name: string;
   nameJa: string;
   coordinates: [number, number];

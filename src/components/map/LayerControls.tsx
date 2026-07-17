@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn, formatNumber } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Layers, Info, MapPin, Search, Map as MapIcon } from 'lucide-react';
 import { getGlobalStats } from '@/lib/data';
-import { CITY } from '@/lib/config';
+import { cityMeta } from '@/lib/config';
 import { THEMATIC_LAYER_GROUPS, LAYER_STYLE_SPECS, type HexLayerId } from '@/lib/layer-styles';
 import type { MapLayer } from '@/lib/types';
 import type { GeocodingSearchResult } from '@/lib/map-search';
@@ -13,6 +13,8 @@ interface LayerControlsProps {
   layers: MapLayer[];
   onToggle: (id: string) => void;
   onPlaceSelect?: (center: [number, number]) => void;
+  /** cityId of whatever's currently selected/displayed — drives the location label. */
+  cityId?: string;
 }
 
 type SearchResult =
@@ -48,7 +50,9 @@ export default function LayerControls({
   layers,
   onToggle,
   onPlaceSelect,
+  cityId,
 }: LayerControlsProps) {
+  const city = cityMeta(cityId);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([]);
@@ -344,7 +348,7 @@ export default function LayerControls({
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={11} className="text-[#667066] flex-shrink-0" strokeWidth={1.5} />
           <span className="text-[10px] font-semibold text-[#667066] uppercase tracking-widest">
-            {CITY.name}, {CITY.country}
+            {city.name}, {city.country}
           </span>
         </div>
         <div className="flex flex-col gap-2.5">

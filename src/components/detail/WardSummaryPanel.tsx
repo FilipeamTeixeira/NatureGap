@@ -2,7 +2,7 @@
 
 import { ArrowLeft, X } from 'lucide-react';
 import { cn, getScoreLabel } from '@/lib/utils';
-import { SCORE_THRESHOLDS, CITY } from '@/lib/config';
+import { SCORE_THRESHOLDS, cityMeta } from '@/lib/config';
 import type { WardFeature } from '@/lib/types';
 import ScoreGauge from './ScoreGauge';
 
@@ -28,7 +28,7 @@ export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProp
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="font-semibold text-[#1F2A1F] text-[15px] leading-tight">{ward.name} Ward</h2>
-            <p className="text-[12px] text-[#667066] mt-0.5">{ward.nameJa} · {CITY.name}</p>
+            <p className="text-[12px] text-[#667066] mt-0.5">{ward.nameJa} · {cityMeta(ward.cityId).name}</p>
           </div>
           <button
             onClick={onClose}

@@ -26,7 +26,7 @@ import {
   LAYER_STYLE_SPECS,
   PATCH_FILL_LAYER_IDS,
   PATCH_FILL_LAYER_ORDER,
-  patchFillColorExpression,
+  patchFillColorExpressionForCities,
   patchFillOpacityExpression,
   PATCH_OUTLINE_LAYER_ID,
   THEMATIC_LAYER_IDS,
@@ -35,6 +35,8 @@ import {
 interface MapViewProps {
   layers: MapLayer[];
   selectedCellId: string | null;
+  /** cityId of whatever's currently selected/displayed — drives the legend's numeric ranges. */
+  displayCityId?: string;
   onHexClick: (
     cell: RenderCellProperties,
     coordinates: [number, number],
@@ -227,12 +229,13 @@ function activeThematicLayerId(layers: MapLayer[]): HexLayerId {
 }
 
 function applyLayerPaintExpressions(map: maplibregl.Map) {
-  const defaultCityStats = getCityLayerStats(CITY.id);
+  const allCityStats = getCityLayerStats();
+  const cityIds = Array.from(new Set(allCityStats.map((stat) => stat.cityId)));
   try {
     for (const layerId of PATCH_FILL_LAYER_ORDER) {
       const layer = PATCH_FILL_LAYER_IDS[layerId];
       if (!map.getLayer(layer)) continue;
-      map.setPaintProperty(layer, 'fill-color', patchFillColorExpression(layerId, defaultCityStats));
+      map.setPaintProperty(layer, 'fill-color', patchFillColorExpressionForCities(layerId, cityIds, allCityStats));
     }
 
     for (const dataset of getHexDatasets(map)) {
@@ -348,36 +351,14 @@ async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtiles
   });
 }
 
-function waitForSourceLoaded(
-  map: maplibregl.Map,
-  sourceId: string,
-  timeoutMs = 15000,
-): Promise<boolean> {
-  if (map.getSource(sourceId) && map.isSourceLoaded(sourceId)) {
-    return Promise.resolve(true);
+function refreshHexLayers(map: maplibregl.Map, layers: MapLayer[]) {
+  try {
+    setLayerVisibility(map, activeThematicLayerId(layers), layers);
+    applyLayerPaintExpressions(map);
+    map.triggerRepaint();
+  } catch {
+    /* style not ready */
   }
-
-  return new Promise((resolve) => {
-    const timer = window.setTimeout(() => {
-      map.off('sourcedata', onSourceData);
-      resolve(false);
-    }, timeoutMs);
-
-    const onSourceData = (event: maplibregl.MapSourceDataEvent) => {
-      if (event.sourceId !== sourceId) return;
-      if (!map.isSourceLoaded(sourceId)) return;
-      window.clearTimeout(timer);
-      map.off('sourcedata', onSourceData);
-      resolve(true);
-    };
-
-    map.on('sourcedata', onSourceData);
-  });
-}
-
-async function ensureHexSourcesReady(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
-  await Promise.all(datasets.map((dataset) => waitForSourceLoaded(map, dataset.sourceId)));
-  map.triggerRepaint();
 }
 
 function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
@@ -387,6 +368,7 @@ function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties'
 
   return {
     cellId,
+    cityId: properties.cityId != null ? String(properties.cityId) : undefined,
     parkId: properties.parkId != null ? String(properties.parkId) : undefined,
     parkName: properties.parkName != null ? String(properties.parkName) : undefined,
     impactScore: Number(properties.impactScore ?? 0),
@@ -545,6 +527,7 @@ function syncLandUseDonutMarkers(
 export default function MapView({
   layers,
   selectedCellId,
+  displayCityId,
   onHexClick,
   onParkClick,
   flyToTarget,
@@ -629,6 +612,8 @@ export default function MapView({
         /* Optional export: keep the line layer empty until corridor-links.geojson exists. */
       });
 
+      const initialCityStats = getCityLayerStats();
+      const initialCityIds = Array.from(new Set(initialCityStats.map((stat) => stat.cityId)));
       for (const layerId of PATCH_FILL_LAYER_ORDER) {
         map.addLayer({
           id: PATCH_FILL_LAYER_IDS[layerId],
@@ -637,7 +622,7 @@ export default function MapView({
           maxzoom: DETAIL_ZOOM,
           layout: { visibility: 'none' },
           paint: {
-            'fill-color': patchFillColorExpression(layerId, getCityLayerStats(CITY.id)),
+            'fill-color': patchFillColorExpressionForCities(layerId, initialCityIds, initialCityStats),
             'fill-opacity': patchFillOpacityExpression(layerId),
           },
         });
@@ -661,68 +646,86 @@ export default function MapView({
         },
       });
 
-      const pmtilesDatasets = await pmtilesDatasetsPromise;
-      if (mapRef.current !== map) return;
-      setHexDatasets(map, pmtilesDatasets);
+      layersAddedRef.current = true;
+      refreshHexLayers(map, layersRef.current);
 
-      for (const dataset of pmtilesDatasets) {
-        map.addSource(dataset.sourceId, {
-          type: 'vector',
-          url: `pmtiles://${dataset.publicUrl}`,
-        });
+      void (async () => {
+        const pmtilesDatasets = await pmtilesDatasetsPromise;
+        if (mapRef.current !== map) return;
+        if (pmtilesDatasets.length === 0) {
+          console.warn('[MapView] No hexgrid PMTiles datasets available.');
+          return;
+        }
 
-        for (const layerId of LAYER_DRAW_ORDER) {
-          if (!hasHexOverlay(layerId)) continue;
+        setHexDatasets(map, pmtilesDatasets);
+
+        for (const dataset of pmtilesDatasets) {
+          map.addSource(dataset.sourceId, {
+            type: 'vector',
+            url: `pmtiles://${dataset.publicUrl}`,
+          });
+
+          for (const layerId of LAYER_DRAW_ORDER) {
+            if (!hasHexOverlay(layerId)) continue;
+            map.addLayer({
+              id: hexFillLayerIdForDataset(dataset.sourceId, layerId),
+              type: 'fill',
+              source: dataset.sourceId,
+              'source-layer': dataset.sourceLayer,
+              minzoom: DETAIL_ZOOM,
+              layout: { visibility: 'none' },
+              paint: {
+                'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId)),
+                'fill-opacity': hexFillOpacityForLayer(layerId),
+              },
+            });
+          }
+
           map.addLayer({
-            id: hexFillLayerIdForDataset(dataset.sourceId, layerId),
+            id: hexOutlineLayerId(dataset.sourceId),
+            type: 'line',
+            source: dataset.sourceId,
+            'source-layer': dataset.sourceLayer,
+            minzoom: DETAIL_ZOOM,
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': 0.3,
+              'line-opacity': 0.4,
+            },
+          });
+
+          map.addLayer({
+            id: hexSelectedLayerId(dataset.sourceId),
             type: 'fill',
             source: dataset.sourceId,
             'source-layer': dataset.sourceLayer,
             minzoom: DETAIL_ZOOM,
-            layout: { visibility: 'none' },
+            filter: selectedHexFilter(null),
             paint: {
-              'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId)),
-              'fill-opacity': hexFillOpacityForLayer(layerId),
+              'fill-color': '#1F2A1F',
+              'fill-opacity': 0.25,
+              'fill-outline-color': '#1F2A1F',
             },
           });
         }
 
-        map.addLayer({
-          id: hexOutlineLayerId(dataset.sourceId),
-          type: 'line',
-          source: dataset.sourceId,
-          'source-layer': dataset.sourceLayer,
-          minzoom: DETAIL_ZOOM,
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 0.3,
-            'line-opacity': 0.4,
-          },
+        await fitMapToPmtilesDatasets(map, pmtilesDatasets);
+        if (mapRef.current !== map) return;
+        refreshHexLayers(map, layersRef.current);
+        syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
+
+        const onHexSourceData = (event: maplibregl.MapSourceDataEvent) => {
+          if (!pmtilesDatasets.some((dataset) => dataset.sourceId === event.sourceId)) return;
+          if (!map.isSourceLoaded(event.sourceId)) return;
+          refreshHexLayers(map, layersRef.current);
+        };
+        map.on('sourcedata', onHexSourceData);
+
+        map.once('idle', () => {
+          if (mapRef.current !== map) return;
+          refreshHexLayers(map, layersRef.current);
         });
-
-        map.addLayer({
-          id: hexSelectedLayerId(dataset.sourceId),
-          type: 'fill',
-          source: dataset.sourceId,
-          'source-layer': dataset.sourceLayer,
-          minzoom: DETAIL_ZOOM,
-          filter: selectedHexFilter(null),
-          paint: {
-            'fill-color': '#1F2A1F',
-            'fill-opacity': 0.25,
-            'fill-outline-color': '#1F2A1F',
-          },
-        });
-      }
-
-      await fitMapToPmtilesDatasets(map, pmtilesDatasets);
-      if (mapRef.current !== map) return;
-      await ensureHexSourcesReady(map, pmtilesDatasets);
-      if (mapRef.current !== map) return;
-
-      setLayerVisibility(map, activeThematicLayerId(layersRef.current), layersRef.current);
-      applyLayerPaintExpressions(map);
-      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
+      })();
 
       map.addLayer({
         id: CORRIDOR_LINES_LAYER_ID,
@@ -911,8 +914,6 @@ export default function MapView({
 
       applyCitizenLayerVisibility(map, layersRef.current);
 
-      layersAddedRef.current = true;
-
       map.on('mouseenter', 'park-area', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'park-area', () => {
         map.getCanvas().style.cursor = '';
@@ -1082,8 +1083,7 @@ export default function MapView({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     centroidSrc?.setData(parkCentroidsGeoJSON() as any);
     try {
-      setLayerVisibility(map, activeThematicLayerId(layersRef.current), layersRef.current);
-      applyLayerPaintExpressions(map);
+      refreshHexLayers(map, layersRef.current);
       syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
     } catch { /* ignore */ }
   }, [dataRevision]);
@@ -1132,7 +1132,7 @@ export default function MapView({
                 {legend.legend.map(({ color, label }, i, arr) => {
                   let formattedLabel = label;
                   if (legend.rawMetric) {
-                    const statsList = getCityLayerStats(CITY.id);
+                    const statsList = getCityLayerStats(displayCityId ?? CITY.id);
                     const stats = statsList.filter(s => s.metric === legend.rawMetric);
                     if (stats.length === 1) {
                       const s = stats[0];

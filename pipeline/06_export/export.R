@@ -407,6 +407,20 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
 
   cat(sprintf("Written: %s\n", manifest_path))
   cat(sprintf("Written: %s\n", CURRENT_POINTER_PATH))
+
+  # Promote this dataset in pipeline_datasets as part of the same publish
+  # operation that declares it "current" — current.json and the DB's active-
+  # dataset row must never drift apart by being updated independently.
+  import_script <- here::here("07_import", "import_to_postgres.R")
+  if (file.exists(import_script)) {
+    source(import_script, local = FALSE)
+  } else {
+    warning(
+      "07_import/import_to_postgres.R not found; pipeline_datasets was NOT updated for this publish.",
+      call. = FALSE
+    )
+  }
+
   invisible(list(manifest = manifest_path, current = CURRENT_POINTER_PATH, files = files))
 }
 

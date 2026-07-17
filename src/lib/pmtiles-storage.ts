@@ -16,12 +16,9 @@ function sourceId(datasetId: string): string {
   return `hexgrid-${datasetId.replace(/[^a-z0-9_-]/gi, '-')}`;
 }
 
-function hexgridPmtilesApiUrl(cityId: string): string {
-  return `${window.location.origin}/api/hexgrid-pmtiles/${encodeURIComponent(cityId)}`;
-}
-
 export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
-  if (!supabase || typeof window === 'undefined') return [];
+  if (!supabase) return [];
+  const client = supabase;
 
   const datasets = await listActivePipelineDatasets();
   if (datasets.length === 0) {
@@ -31,6 +28,10 @@ export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
 
   return datasets.map((dataset) => {
     const objectPath = resolveHexgridPath(dataset);
+    const { data } = client.storage
+      .from(STORAGE.PIPELINE_BUCKET)
+      .getPublicUrl(objectPath);
+
     const datasetId = `${dataset.cityId}-${dataset.dataVersion}`;
 
     return {
@@ -38,7 +39,7 @@ export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
       cityId: dataset.cityId,
       dataVersion: dataset.dataVersion,
       storagePath: `${STORAGE.PIPELINE_BUCKET}/${objectPath}`,
-      publicUrl: hexgridPmtilesApiUrl(dataset.cityId),
+      publicUrl: data.publicUrl,
       sourceId: sourceId(datasetId),
       sourceLayer: dataset.sourceLayer,
     };

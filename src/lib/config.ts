@@ -15,6 +15,39 @@ export const CITY = {
   country: 'Japan',
 } as const;
 
+// ── Multi-city registry ──────────────────────────────────────────────────────
+//
+// CITY above stays as the default/fallback city. Anything that displays the
+// name of whatever's actually on screen (a selected cell, a selected ward,
+// the sidebar location label) should look itself up here by cityId instead.
+
+export interface CityMeta {
+  name: string;
+  nameJa: string;
+  badge: string;
+  country: string;
+}
+
+export const CITIES: Record<string, CityMeta> = {
+  'yokohama-honmoku': {
+    name:   'Yokohama',
+    nameJa: '横浜市',
+    badge:  'Yokohama · Beta',
+    country: 'Japan',
+  },
+  'amsterdam-schimmelstraat': {
+    name:   'Amsterdam',
+    nameJa: 'Amsterdam',
+    badge:  'Amsterdam · Beta',
+    country: 'Netherlands',
+  },
+};
+
+/** Looks up display metadata for a cityId, falling back to the default CITY. */
+export function cityMeta(cityId: string | null | undefined): CityMeta {
+  return (cityId && CITIES[cityId]) || CITIES[CITY.id];
+}
+
 // ── Map defaults ─────────────────────────────────────────────────────────────
 
 export const MAP_CONFIG = {

@@ -314,6 +314,36 @@ export function patchFillColorExpression(
   }
 }
 
+/**
+ * Patch-level fill colour across every city sharing the 'parks' source.
+ * Dispatches per-feature on cityId so each city's polygons are coloured
+ * against that city's own stat range, instead of one hardcoded default.
+ */
+export function patchFillColorExpressionForCities(
+  layerId: PatchFillLayerId,
+  cityIds: string[],
+  allCityStats: CityLayerStats[],
+): ExpressionSpecification {
+  if (cityIds.length === 0) return patchFillColorExpression(layerId, []);
+  if (cityIds.length === 1) {
+    return patchFillColorExpression(layerId, allCityStats.filter((s) => s.cityId === cityIds[0]));
+  }
+
+  const [fallbackCityId, ...matchedCityIds] = cityIds;
+  const cases = matchedCityIds.flatMap((cityId) => [
+    cityId,
+    patchFillColorExpression(layerId, allCityStats.filter((s) => s.cityId === cityId)),
+  ]);
+  const fallback = patchFillColorExpression(layerId, allCityStats.filter((s) => s.cityId === fallbackCityId));
+
+  return [
+    'match',
+    ['get', 'cityId'],
+    ...cases,
+    fallback,
+  ] as unknown as ExpressionSpecification;
+}
+
 /** Hex-level fill colour (zoom ≥ 14). */
 export function hexFillColorExpression(
   layerId: HexLayerId,

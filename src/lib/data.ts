@@ -93,10 +93,11 @@ export async function initData(): Promise<void> {
     (async () => {
       const { data, error } = await supabase
         .from('wards')
-        .select('id, name, name_ja, lng, lat, score');
+        .select('id, city_id, name, name_ja, lng, lat, score');
       if (error || !data || data.length === 0) return;
       _wards = data.map((r) => ({
         id:          r.id,
+        cityId:      r.city_id,
         name:        r.name,
         nameJa:      r.name_ja,
         coordinates: [r.lng, r.lat] as [number, number],

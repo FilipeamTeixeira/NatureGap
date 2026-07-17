@@ -1,7 +1,6 @@
 import Navbar from '@/components/layout/Navbar';
 import { Calendar, MapPin, Users } from 'lucide-react';
 import { fetchEvents } from '@/lib/data';
-import { CITY } from '@/lib/config';
 
 const TYPE_COLOR: Record<string, string> = {
   'Guided walk':     'text-[#2E6F40] bg-[#DDEAD8]',
@@ -23,7 +22,7 @@ export default async function CommunityPage() {
             Community
           </h1>
           <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">
-            Local events and citizen science opportunities in {CITY.name}. Each event ties directly
+            Local events and citizen science opportunities near you. Each event ties directly
             to high-priority map cells.
           </p>
 
