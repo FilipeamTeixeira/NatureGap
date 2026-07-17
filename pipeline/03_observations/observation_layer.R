@@ -355,7 +355,7 @@ richness_corrected <- richness |>
   left_join(taxon_counts, by = "cell_id") |>
   mutate(
     path_km            = replace_na(path_km, 0),
-    is_unsampled       = path_km <= 0,
+    is_unsampled       = path_km < 0.05,
     survey_effort_units = if_else(is_unsampled, NA_real_, log1p(path_km)),
     effort_corrected_richness = if_else(
       is_unsampled,
@@ -371,7 +371,7 @@ richness_corrected <- richness |>
 grid_obs <- grid |>
   left_join(richness_corrected |> select(-path_km), by = "cell_id") |>
   mutate(
-    is_unsampled        = replace_na(path_km <= 0, TRUE),
+    is_unsampled        = replace_na(path_km < 0.05, TRUE),
     n_obs              = replace_na(n_obs, 0L),
     raw_species_count  = if_else(is_unsampled, NA_real_, replace_na(raw_species_count, 0)),
     species_richness   = if_else(is_unsampled, NA_real_, replace_na(species_richness, 0)),

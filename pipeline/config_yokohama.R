@@ -199,7 +199,6 @@ RASTER_INPUT_DOWNLOADERS <- file.path(
   PIPELINE_ROOT,
   c(
     "00_download/download_worldcover.R",
-    "00_download/download_canopy_height.R",
     "00_download/download_sentinel2.R",
     "00_download/download_landsat_temp.R"
   )
@@ -246,11 +245,6 @@ CANOPY_HEIGHT_FILE <- file.path(
   paste0("canopy_height_", CITY_ID, ".tif")
 )
 
-LIDAR_VARIANCE_FILE <- file.path(
-  DATA_IMPORT, "canopy_height",
-  paste0("canopy_height_variance_", CITY_ID, ".tif")
-)
-
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
 # data/raw/ is shared for source rasters; city-specific outputs live under
@@ -271,7 +265,6 @@ RAW_IMPERVIOUS <- file.path(DATA_RAW, "impervious.tif")
 RAW_NDVI       <- file.path(DATA_RAW, "ndvi.tif")
 RAW_LST        <- file.path(DATA_RAW, "lst.tif")
 RAW_CANOPY_HEIGHT <- file.path(DATA_RAW, "canopy_height.tif")
-RAW_LIDAR_VARIANCE <- file.path(DATA_RAW, "lidar_variance.tif")
 RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
 RAW_SUPABASE_OBS <- file.path(DATA_RAW, "supabase_observations.gpkg")

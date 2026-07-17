@@ -9,6 +9,18 @@ if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 HABITAT_THRESHOLD <- 0.40
 
+# ── Patch-level expected richness (species-area power law) ────────────────────
+# expected_richness = SPECIES_AREA_C * patch_area_m2 ^ SPECIES_AREA_Z * quality_modifier
+#
+# SPECIES_AREA_Z and SPECIES_AREA_C are documented ASSUMPTIONS, not calibrated
+# values and not sourced to a specific citation. Z is set within the general
+# 0.2–0.3 species-area range; C is chosen so expected_richness lands in a
+# plausible range across the real park-area distribution in both cities
+# (~20 m^2 to ~3.4e5 m^2). See docs/methodology.md §6. These should be revisited
+# once a proper literature review / calibration is done.
+SPECIES_AREA_Z <- 0.25
+SPECIES_AREA_C <- 12
+
 required_files <- c(PROC_GREEN_SPACES, PROC_GRID_RESID)
 missing_files <- required_files[!file.exists(required_files)]
 if (length(missing_files) > 0L) {
@@ -34,7 +46,8 @@ for (col in c(
   "ecological_residual", "ecological_residual_normalized",
   "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
   "betweenness_centrality", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
-  "impact_score", "intervention_rank", "intervention_score", "path_km", "n_obs"
+  "impact_score", "intervention_rank", "intervention_score", "path_km", "n_obs",
+  "accessibility_component"
 )) {
   if (!col %in% names(hex)) hex[[col]] <- NA_real_
 }
@@ -143,7 +156,7 @@ patch_base <- hex_weighted |>
   group_by(green_space_id) |>
   summarise(
     habitat_quality_index = finite_weighted_mean(habitat_quality, overlap_area_m2),
-    expected_richness = finite_weighted_mean(expected_richness, overlap_area_m2),
+    accessibility = finite_weighted_mean(accessibility_component, overlap_area_m2),
     observed_richness = finite_weighted_mean(
       observed_richness[sampled_for_residual],
       overlap_area_m2[sampled_for_residual]
@@ -194,6 +207,21 @@ patch_metrics <- patch_base |>
   left_join(patch_fragmentation, by = "green_space_id") |>
   left_join(patch_area, by = "green_space_id") |>
   mutate(
+    # quality_modifier: area-weighted mean of the patch's intensive quality
+    # metrics (habitat quality, corridor importance, accessibility), clamped to
+    # [0, 1]. Averaging IS appropriate here — these are intensive properties, not
+    # counts — unlike richness, which must scale with total patch area below.
+    quality_modifier = pmin(1, pmax(0, replace_na(
+      rowMeans(
+        cbind(habitat_quality_index, corridor_importance, accessibility),
+        na.rm = TRUE
+      ),
+      0
+    ))),
+    # Species-area power law computed once per patch from total area (see the
+    # SPECIES_AREA_* assumptions above), replacing the previous area-weighted
+    # average of the flat per-hex ceiling, which did not scale with patch size.
+    expected_richness = SPECIES_AREA_C * (patch_area_m2 ^ SPECIES_AREA_Z) * quality_modifier,
     effort_corrected_richness = if_else(sampled_cell_count == 0L, NA_real_, effort_corrected_richness),
     observed_richness = if_else(sampled_cell_count == 0L, NA_real_, observed_richness),
     survey_effort_units = if_else(sampled_cell_count == 0L, NA_real_, survey_effort_units),

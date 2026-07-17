@@ -123,7 +123,6 @@ function detailFromRow(
   const habitatQuality = pct(row?.habitat_quality ?? render.habitatQuality);
   const corridorImportance = pct(row?.corridor_importance ?? render.corridorImportance);
   const heatExposure = pct(row?.heat_exposure ?? render.heatExposure);
-  const fragmentationIndex = pct(row?.fragmentation);
   const habitatPotentialValue = row?.habitat_potential;
   const displayName = render.parkName && render.parkName !== 'city-green'
     ? render.parkName
@@ -159,7 +158,6 @@ function detailFromRow(
     species: speciesArray(row?.species),
     corridorImportance,
     betweennessCentrality: pct(render.betweennessCentrality),
-    fragmentationIndex,
     treeCover: pct(row?.tree_cover ?? render.treeCover),
     heatExposure,
     meanLst: pct(render.meanLst),

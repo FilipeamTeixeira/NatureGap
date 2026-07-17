@@ -99,7 +99,6 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     isNumber(value.taxonomicDiversity) &&
     isNumber(value.corridorImportance) &&
     (value.betweennessCentrality === undefined || isNumber(value.betweennessCentrality)) &&
-    isNumber(value.fragmentationIndex) &&
     (value.treeCover === undefined || isNumber(value.treeCover)) &&
     (value.treeCoverNorm === undefined || isNumber(value.treeCoverNorm)) &&
     (value.heatExposure === undefined || isNumber(value.heatExposure)) &&

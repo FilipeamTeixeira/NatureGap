@@ -1,9 +1,13 @@
 import { handleOptions, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { assertRole, requireAuth } from '../_shared/auth.ts';
+import { createFlag } from '../_shared/domain.ts';
 import { optionalObject, readJson, requiredObject, requiredUuid, validateHabitatIndicators } from '../_shared/validation.ts';
 
 const MINIMUM_DURATION_SECONDS = 15 * 60;
 const NOMINAL_DURATION_SECONDS = 15 * 60;
+// Surveys shorter than this are auto-flagged so a verifier scrutinises the
+// duration, matching the "under-10-minute" plausibility check in the redesign.
+const SHORT_DURATION_FLAG_SECONDS = 10 * 60;
 
 Deno.serve(async (req) => {
   const options = handleOptions(req);
@@ -45,8 +49,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const status = durationSeconds < NOMINAL_DURATION_SECONDS ? 'flagged_review' : 'submitted';
-
+    // Submission enters the review pipeline at pending_verification; a verifier
+    // (taxonomist) must sign off before an admin can approve it into a dataset.
     const { data, error } = await auth.serviceClient
       .from('structured_surveys')
       .update({
@@ -54,13 +58,23 @@ Deno.serve(async (req) => {
         duration_seconds: durationSeconds,
         habitat_indicators: habitatIndicators,
         observer_metadata: observerMetadata,
-        status,
+        status: 'pending_verification',
       })
       .eq('id', surveyId)
       .select('id, survey_point_id, cell_id, started_at, submitted_at, duration_seconds, status, habitat_indicators')
       .single();
 
     if (error) throw error;
+
+    if (durationSeconds < SHORT_DURATION_FLAG_SECONDS) {
+      await createFlag(
+        auth.serviceClient,
+        'structured_survey',
+        surveyId,
+        `Survey duration under ${Math.round(SHORT_DURATION_FLAG_SECONDS / 60)} minutes (${durationSeconds}s)`,
+        survey.user_id,
+      );
+    }
 
     return jsonResponse({
       structured_survey: data,

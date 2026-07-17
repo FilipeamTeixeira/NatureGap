@@ -63,13 +63,49 @@ export interface ObservationHistoryItem {
   detail: string;
 }
 
-export interface QuickSightingInput {
+export type ReviewStatus =
+  | 'submitted'
+  | 'pending_verification'
+  | 'verified'
+  | 'approved'
+  | 'rejected'
+  | 'flagged_review';
+
+export type SurveyReviewDecision = 'advance' | 'reject';
+export type SuggestionDecision = 'approved' | 'rejected' | 'needs_revision';
+
+export interface ReviewSurveyRecord {
+  id: string;
   taxon_group: TaxonGroup;
-  species_id?: string | null;
-  photo_url?: string | null;
-  lng: number;
-  lat: number;
-  gps_accuracy_m: number;
+  species_label: string | null;
+  count: number;
+  notes: string | null;
+}
+
+export interface ReviewSurveyItem {
+  id: string;
+  status: ReviewStatus;
+  survey_point_id: string;
+  cell_id: string | null;
+  started_at: string;
+  submitted_at: string | null;
+  duration_seconds: number;
+  habitat_indicators: Record<string, unknown>;
+  records: ReviewSurveyRecord[];
+  flags: { reason: string; outcome: string }[];
+}
+
+export interface PendingSurveyPoint {
+  id: string;
+  coordinates: [number, number];
+  created_at: string;
+}
+
+export interface PendingSuggestion {
+  id: string;
+  type: SuggestionType;
+  payload: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface HabitatIndicators {
@@ -246,13 +282,6 @@ export async function fetchObservationHistory(): Promise<ObservationHistoryItem[
     .slice(0, 20);
 }
 
-export async function submitQuickSighting(input: QuickSightingInput) {
-  return invokeFunction<{ quick_sighting: { id: string; status: string; cell_id: string | null } }>(
-    'submit-quick-sighting',
-    { ...input, timestamp: new Date().toISOString() },
-  );
-}
-
 export async function uploadCitizenPhoto(file: File, folder: string): Promise<string> {
   if (!supabase) throw new Error('Supabase is not configured');
   const { data: userData } = await supabase.auth.getUser();
@@ -298,6 +327,146 @@ export async function submitSuggestion(input: SuggestionInput) {
     'submit-suggestion',
     { type: input.type, payload: input.payload },
   );
+}
+
+// ── Survey point registration (surveyor) ────────────────────────────────────
+
+export async function registerSurveyPoint(lng: number, lat: number, cityId?: string) {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) throw new Error('Sign in to register a survey point');
+
+  const payload: Record<string, unknown> = {
+    geometry: `SRID=4326;POINT(${lng} ${lat})`,
+    status: 'pending',
+    suggested_by: user.id,
+  };
+  if (cityId) payload.city_id = cityId;
+
+  const { data, error } = await supabase
+    .from('survey_points')
+    .insert(payload)
+    .select('id, status')
+    .single();
+  if (error) throw error;
+  return data as { id: string; status: string };
+}
+
+// ── Review queue (verifier + approver) ──────────────────────────────────────
+
+function speciesLabel(reference: unknown): string | null {
+  if (!reference || typeof reference !== 'object') return null;
+  const ref = reference as { common_name?: string; scientific_name?: string };
+  if (ref.common_name && ref.scientific_name) return `${ref.common_name} (${ref.scientific_name})`;
+  return ref.scientific_name ?? ref.common_name ?? null;
+}
+
+export async function fetchSurveysForReview(
+  status: 'pending_verification' | 'verified',
+): Promise<ReviewSurveyItem[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('structured_surveys')
+    .select(
+      'id, status, survey_point_id, cell_id, started_at, submitted_at, duration_seconds, habitat_indicators, ' +
+        'survey_records(id, taxon_group, count, notes, species_reference(common_name, scientific_name))',
+    )
+    .eq('status', status)
+    .order('submitted_at', { ascending: true })
+    .limit(200);
+  if (error || !data) return [];
+
+  // The nested relational select is not statically typed by supabase-js, so the
+  // rows come back untyped and are normalised explicitly below.
+  const rows = data as unknown as Record<string, unknown>[];
+  const ids = rows.map((row) => row.id as string);
+  const flagsByRecord = new Map<string, { reason: string; outcome: string }[]>();
+  if (ids.length > 0) {
+    const { data: flagRows } = await supabase
+      .from('flags')
+      .select('record_id, reason, outcome')
+      .eq('record_type', 'structured_survey')
+      .in('record_id', ids);
+    for (const flag of flagRows ?? []) {
+      const list = flagsByRecord.get(flag.record_id) ?? [];
+      list.push({ reason: flag.reason, outcome: flag.outcome });
+      flagsByRecord.set(flag.record_id, list);
+    }
+  }
+
+  return rows.map((row) => ({
+    id: row.id as string,
+    status: row.status as ReviewStatus,
+    survey_point_id: row.survey_point_id as string,
+    cell_id: (row.cell_id as string | null) ?? null,
+    started_at: row.started_at as string,
+    submitted_at: (row.submitted_at as string | null) ?? null,
+    duration_seconds: Number(row.duration_seconds ?? 0),
+    habitat_indicators: (row.habitat_indicators ?? {}) as Record<string, unknown>,
+    records: ((row.survey_records ?? []) as Record<string, unknown>[]).map((record) => ({
+      id: record.id as string,
+      taxon_group: record.taxon_group as TaxonGroup,
+      species_label: speciesLabel(record.species_reference),
+      count: Number(record.count ?? 0),
+      notes: (record.notes as string | null) ?? null,
+    })),
+    flags: flagsByRecord.get(row.id as string) ?? [],
+  }));
+}
+
+export async function fetchPendingSurveyPoints(): Promise<PendingSurveyPoint[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('survey_points')
+    .select('id, geometry, created_at')
+    .eq('status', 'pending')
+    .limit(200);
+  if (error || !data) return [];
+  return data.flatMap((row) => {
+    const coordinates = parsePoint(row.geometry);
+    return coordinates ? [{ id: row.id, coordinates, created_at: row.created_at }] : [];
+  }) as PendingSurveyPoint[];
+}
+
+export async function fetchPendingSuggestions(): Promise<PendingSuggestion[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('suggestions')
+    .select('id, type, payload, created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (error || !data) return [];
+  return data as PendingSuggestion[];
+}
+
+export async function reviewSurvey(surveyId: string, decision: SurveyReviewDecision, note?: string) {
+  return invokeFunction<{ structured_survey: { id: string; status: string }; stage: string }>(
+    'review-survey',
+    { survey_id: surveyId, decision, ...(note ? { note } : {}) },
+  );
+}
+
+export async function reviewSuggestion(suggestionId: string, status: SuggestionDecision) {
+  return invokeFunction<{ suggestion: { id: string; status: string } }>(
+    'review-suggestion',
+    { suggestion_id: suggestionId, status },
+  );
+}
+
+export async function reviewSurveyPoint(pointId: string, decision: SurveyReviewDecision) {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) throw new Error('Sign in to review survey points');
+
+  const patch =
+    decision === 'advance'
+      ? { status: 'approved', approved_by: user.id }
+      : { status: 'rejected' };
+  const { error } = await supabase.from('survey_points').update(patch).eq('id', pointId);
+  if (error) throw error;
 }
 
 export function surveyPointsGeoJSON(points: SurveyPointFeature[]): GeoJSON.FeatureCollection {

@@ -12,7 +12,7 @@ const PRINCIPLES = [
   },
   {
     title: 'Graph-theoretic interventions',
-    body: 'Restoration recommendations are ranked by betweenness centrality in the habitat connectivity graph. "Restore this corridor" means it measurably reduces fragmentation more than any other candidate cell.',
+    body: 'Restoration recommendations are ranked by betweenness centrality in the habitat connectivity graph. "Restore this corridor" means it sits on more of the shortest habitat paths than any other candidate cell — improving connectivity most efficiently.',
   },
   {
     title: 'Fully open source',

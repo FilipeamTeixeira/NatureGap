@@ -15,7 +15,6 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 | **Residual analysis** | Compares expected biodiversity (habitat model) with observed (citizen science), cell by cell |
 | **Effort correction** | Species richness corrected by accessible pedestrian path length on the 20m hex grid |
 | **Graph-theoretic corridors** | Betweenness centrality drives intervention ranking — "restoring *this* cell reduces fragmentation most efficiently" |
-| **LiDAR canopy** | Uses actual canopy height (Yokohama open LiDAR) rather than spectral greenness alone |
 | **Fully open source** | Methodology, pipeline, and application code are all public |
 
 ---
@@ -24,7 +23,7 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 
 ```
 /pipeline        # R scripts: data ingestion → modelling → export
-  /01_ingest     # iNaturalist, GBIF, OSM, Sentinel-2, Landsat, LiDAR
+  /01_ingest     # iNaturalist, GBIF, OSM, Sentinel-2, Landsat
   /02_habitat    # Habitat quality index per 20m hex cell
   /03_observations  # Effort-corrected species richness per cell
   /04_connectivity  # Landscape connectivity graph (igraph)
@@ -61,7 +60,7 @@ npm start
 
 ```r
 install.packages(c(
-  "sf", "terra", "stars", "lidR",
+  "sf", "terra", "stars",
   "landscapemetrics", "igraph", "gdistance",
   "rgbif", "rinat", "osmdata",
   "tidyverse", "vegan", "here", "jsonlite"
@@ -88,7 +87,6 @@ Rscript pipeline/06_export/export.R
 | OpenStreetMap | Green spaces, path network | Free via `osmdata` |
 | Copernicus / Sentinel-2 | NDVI | Free (registration required) |
 | Landsat 8/9 | Land surface temperature | Free via USGS EarthExplorer |
-| Yokohama LiDAR | Canopy height model | [Yokohama Open Data](https://data.city.yokohama.lg.jp/) |
 
 ---
 
@@ -126,7 +124,6 @@ Contributions welcome. Please read [`/docs/contributing.md`](docs/contributing.m
 
 Areas especially needing help:
 - Second city implementation (European city)
-- LiDAR processing pipeline documentation
 - Habitat model calibration against independent biodiversity surveys
 - Mobile observation quick-log feature
 

@@ -30,6 +30,7 @@ import {
   patchFillOpacityExpression,
   PATCH_OUTLINE_LAYER_ID,
   THEMATIC_LAYER_IDS,
+  UNSAMPLED_FILL_COLOR,
 } from '@/lib/layer-styles';
 
 interface MapViewProps {
@@ -79,6 +80,7 @@ function statsProperties(stats: ParkStats | undefined) {
     ecologicalResidual: finiteNumber(stats?.ecologicalResidual),
     ecologicalResidualNormalized: finiteNumber(stats?.ecologicalResidualNormalized),
     dataAvailabilityRatio: finiteNumber(stats?.dataAvailabilityRatio),
+    isUnsampled: stats?.isUnsampled === true,
     habitatQuality: finiteNumber(stats?.habitatQuality),
     habitatQualityIndex: finiteNumber(stats?.habitatQualityIndex),
     observedRichness: finiteNumber(stats?.observedRichness),
@@ -768,14 +770,19 @@ export default function MapView({
             75, 24,
           ],
           'circle-color': [
-            'interpolate',
-            ['linear'],
-            ['coalesce', ['get', 'taxonomicDiversity'], 0],
-            0, '#42a5f5',
-            0.5, '#1565c0',
-            1.5, '#002171',
+            'case',
+            ['==', ['get', 'isUnsampled'], true],
+            UNSAMPLED_FILL_COLOR,
+            [
+              'interpolate',
+              ['linear'],
+              ['coalesce', ['get', 'taxonomicDiversity'], 0],
+              0, '#42a5f5',
+              0.5, '#1565c0',
+              1.5, '#002171',
+            ],
           ],
-          'circle-opacity': 0.78,
+          'circle-opacity': ['case', ['==', ['get', 'isUnsampled'], true], 0.5, 0.78],
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': 2,
         },

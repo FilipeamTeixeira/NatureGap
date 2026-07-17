@@ -69,7 +69,6 @@ export interface CellStatsFields {
   species: Species[];
   corridorImportance: number;
   betweennessCentrality?: number;
-  fragmentationIndex: number;
   /** 0–100 Meta/WRI canopy height index (0–1 scaled to percent). */
   treeCover?: number;
   /** Per-city p5–p95 normalised canopy height (0–1). */

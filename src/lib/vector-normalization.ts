@@ -274,6 +274,7 @@ function greenSpaceProperties(props: Properties, domains: Record<string, MetricD
     ecologicalResidualNorm: asNumber(props.ecologicalResidualNorm ?? props.ecological_residual_norm),
     natureGapScoreNorm: asNumber(props.natureGapScoreNorm ?? props.nature_gap_score_norm),
     interventionRankNorm: asNumber(props.interventionRankNorm ?? props.intervention_rank_norm),
+    isUnsampled: asBoolean(props.is_unsampled ?? props.isUnsampled),
   };
 }
 

@@ -121,9 +121,9 @@ DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 
 #START_STEP <- 1
 
-CITY_ID      <- "yokohama-honmoku"
-CITY_NAME    <- "Honmoku, Yokohama"
-CITY_COUNTRY <- "Japan"
+CITY_ID      <- "amsterdam-schimmelstraat"
+CITY_NAME    <- "Amsterdam"
+CITY_COUNTRY <- "The Netherlands"
 
 
 # ── Spatial extent (WGS84) ────────────────────────────────────────────────────
@@ -132,10 +132,10 @@ CITY_COUNTRY <- "Japan"
 #              Can be wider than BBOX_CITY to capture edge observations.
 
 BBOX_CITY <- c(
-  xmin = 139.640415,
-  ymin = 35.415460,
-  xmax = 139.672859,
-  ymax = 35.430148
+  xmin = 4.854712,
+  ymin = 52.366756,
+  xmax = 4.870934,
+  ymax = 52.372259
 )
 
 BBOX_FETCH <- c(
@@ -169,12 +169,13 @@ OSM_SKIP_IF_EXISTS   <- TRUE
 # ── Local projection ──────────────────────────────────────────────────────────
 # Use a metre-based CRS for your analysis area:
 #   Japan          EPSG:6674  (JGD2011 / Japan Plane Rectangular CS VI)
+#   Netherlands    EPSG:28992 (Amersfoort / RD New)
 #   Western Europe EPSG:3035  (ETRS89-LAEA)
 #   UK             EPSG:27700 (British National Grid)
 #   US (general)   EPSG:5070  (Albers Equal-Area Conic)
-#   UTM zones      EPSG:32600 + zone number (e.g. 32654 for Yokohama)
+#   UTM zones      EPSG:32600 + zone number (e.g. 32631 for Amsterdam)
 
-CRS_LOCAL <- "EPSG:6674"
+CRS_LOCAL <- "EPSG:28992"
 
 # ── Grid resolution ───────────────────────────────────────────────────────────
 # Primary spatial unit. All modelling, analysis, storage, and display use this
@@ -212,7 +213,7 @@ WC_FILE <- file.path(
 # EMC-BUILT (Copernicus impervious surface fraction):
 #   Download manually: https://human-settlement.emergency.copernicus.eu/
 #   File name expected by the pipeline: EMC_CITY_ID.tif
-#   Example: EMC_yokohama-honmoku.tif
+#   Example: EMC_amsterdam-schimmelstraat.tif
 
 EMC_FILE <- file.path(
   PIPELINE_ROOT, "data", "raw", "emc_built",

@@ -269,6 +269,26 @@ function statForMetric(stats: CityLayerStats[], metric: string | undefined): Cit
   return stats.find((entry) => entry.metric === metric);
 }
 
+/**
+ * Flat grey for cells/parks with no recorded observations — distinct from the
+ * diverging ramp's neutral midpoint (#B8C9AE) so "not enough data yet" never
+ * reads as "biodiversity roughly matches habitat potential".
+ */
+export const UNSAMPLED_FILL_COLOR = '#C9CDC5';
+
+const UNSAMPLED_AWARE_LAYERS = new Set(['impact', 'residual', 'intervention']);
+
+/** Render observed-richness-dependent layers as flat grey when the feature is unsampled. */
+function withUnsampledFallback(layerId: string, expression: ExpressionSpecification): ExpressionSpecification {
+  if (!UNSAMPLED_AWARE_LAYERS.has(layerId)) return expression;
+  return [
+    'case',
+    ['==', ['get', 'isUnsampled'], true],
+    UNSAMPLED_FILL_COLOR,
+    expression,
+  ] as ExpressionSpecification;
+}
+
 function landUseColorExpression(): ExpressionSpecification {
   return [
     'match',
@@ -294,13 +314,13 @@ export function patchFillColorExpression(
 
   switch (layerId) {
     case 'impact':
-      return buildDivergingExpression('natureGapScoreNorm', 'natureGapScore', stat);
+      return withUnsampledFallback(layerId, buildDivergingExpression('natureGapScoreNorm', 'natureGapScore', stat));
     case 'residual':
-      return buildDivergingExpression('ecologicalResidualNorm', 'ecologicalResidual', stat);
+      return withUnsampledFallback(layerId, buildDivergingExpression('ecologicalResidualNorm', 'ecologicalResidual', stat));
     case 'expected':
       return buildExpectedExpression(cityStats, LAYER_RAMPS.expected);
     case 'intervention':
-      return buildSequentialExpression('interventionRankNorm', 'interventionRank', LAYER_RAMPS.intervention, stat);
+      return withUnsampledFallback(layerId, buildSequentialExpression('interventionRankNorm', 'interventionRank', LAYER_RAMPS.intervention, stat));
     case 'habitat':
       return buildSequentialExpression('habitatQualityNorm', 'habitatQualityIndex', LAYER_RAMPS.habitat, stat);
     case 'treecover':
@@ -350,19 +370,19 @@ export function hexFillColorExpression(
   cityStats: CityLayerStats[] = [],
 ): ExpressionSpecification {
   if (layerId === 'impact') {
-    return buildDivergingExpression(
+    return withUnsampledFallback(layerId, buildDivergingExpression(
       'natureGapScoreNorm',
       'natureGapScore',
       statForMetric(cityStats, 'nature_gap_score'),
-    );
+    ));
   }
 
   if (layerId === 'residual') {
-    return buildDivergingExpression(
+    return withUnsampledFallback(layerId, buildDivergingExpression(
       'residualNorm',
       'ecologicalResidual',
       statForMetric(cityStats, 'ecological_residual'),
-    );
+    ));
   }
 
   if (layerId === 'landuse') {
@@ -393,12 +413,12 @@ export function hexFillColorExpression(
     connectivity: 'betweennessCentrality',
   };
 
-  return buildSequentialExpression(
+  return withUnsampledFallback(layerId, buildSequentialExpression(
     spec.property,
     rawPropertyByLayer[layerId] ?? spec.property,
     ramp,
     statForMetric(cityStats, spec.rawMetric),
-  );
+  ));
 }
 
 export function hexFillOpacityForLayer(layerId: HexLayerId): number {

@@ -604,9 +604,8 @@ derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
       )
     )
   }
-  if (!is.na(fragmentation_index) && fragmentation_index > 0.5) {
-    pressures <- c(pressures, "High habitat fragmentation — relatively isolated from neighbouring patches")
-  }
+  # fragmentation_index is a not-yet-computed placeholder (always null); it must
+  # not drive a user-facing pressure until it is actually implemented.
   if (!is.na(corridor_importance) && corridor_importance > 0.25) {
     pressures <- c(pressures, "Lies on an important habitat connectivity corridor")
   }
@@ -804,6 +803,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     natureGapScoreNorm = round(replace_na(finite_first(patch_metrics$nature_gap_score_norm), 0), 4),
     interventionRankNorm = round(replace_na(finite_first(patch_metrics$intervention_rank_norm), 0.5), 4),
     dataAvailabilityRatio = if (is.finite(patch_data_availability)) round(patch_data_availability, 4) else if (nrow(rows) > 0) round(sum(sampled, na.rm = TRUE) / nrow(rows), 4) else NA_real_,
+    isUnsampled          = !any(sampled, na.rm = TRUE),
     nObs                 = as.integer(sum(replace_na(rows$n_obs, 0L))),
     nSurveyDates         = as.integer(max(replace_na(rows$n_survey_dates, 0L))),
     status               = unbox(score_status(aggregate_nature_gap)),
@@ -919,7 +919,8 @@ if (file.exists(green_path)) {
       mean_lst_norm                  = norm_sequential(mean_lst),
       ecological_residual_norm       = norm_diverging(ecological_residual),
       nature_gap_score_norm          = norm_diverging(nature_gap_score),
-      intervention_rank_norm         = norm_rank(intervention_rank)
+      intervention_rank_norm         = norm_rank(intervention_rank),
+      is_unsampled                   = is.na(data_availability_ratio) | data_availability_ratio <= 0
     ) |>
     select(
       id, name, nameJa, wardId,
@@ -930,7 +931,8 @@ if (file.exists(green_path)) {
       betweenness_centrality, intervention_rank,
       habitat_quality_norm, effort_corrected_richness_norm, expected_richness_norm,
       corridor_importance_norm, tree_cover_norm, mean_lst_norm,
-      ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm
+      ecological_residual_norm, nature_gap_score_norm, intervention_rank_norm,
+      is_unsampled
     )
 
   park_lookup <- green |>
@@ -961,7 +963,8 @@ if (file.exists(green_path)) {
       mean_lst_norm,
       ecological_residual_norm,
       nature_gap_score_norm,
-      intervention_rank_norm
+      intervention_rank_norm,
+      is_unsampled
     )
 
 } else {

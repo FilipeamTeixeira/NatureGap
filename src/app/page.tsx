@@ -197,6 +197,7 @@ export default function Page() {
             selectedSurveyPoint={selectedSurveyPoint}
             onSelectSurveyPoint={setSelectedSurveyPoint}
             onRefreshMapData={refreshCitizenData}
+            cityId={currentCityId}
           />
         )}
       </div>

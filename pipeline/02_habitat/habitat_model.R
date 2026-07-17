@@ -285,8 +285,6 @@ grid$canopy_height_idx <- NA_real_
 grid$lst_rank  <- NA_real_
 grid$lst_idx <- NA_real_
 grid$lst_celsius <- NA_real_
-grid$lidar_variance <- NA_real_
-grid$lidar_variance_idx <- NA_real_
 
 if (file.exists(RAW_NDVI)) {
   cat("Extracting NDVI per cell...\n")
@@ -312,9 +310,6 @@ if (!is.na(canopy_path)) {
   canopy_mean <- terra::extract(canopy, vect(grid), fun = mean, na.rm = TRUE)
   grid$canopy_height_m <- replace_na(canopy_mean[[2]], NA_real_)
   grid$canopy_height_idx <- fixed_rescale01(pmin(grid$canopy_height_m, 20), 0, 20)
-
-  canopy_var <- terra::extract(canopy, vect(grid), fun = stats::var, na.rm = TRUE)
-  grid$lidar_variance <- replace_na(canopy_var[[2]], NA_real_)
 } else {
   message("Meta/WRI canopy height raster not found — canopy_height_idx set to NA.")
 }
@@ -328,12 +323,6 @@ if (file.exists(RAW_LST)) {
   grid$lst_idx <- 1 - grid$lst_rank
 } else {
   message("LST raster not found — lst_idx set to NA.")
-}
-
-grid$lidar_variance_idx <- if (all(is.na(grid$lidar_variance))) {
-  rep(NA_real_, nrow(grid))
-} else {
-  rescale01(grid$lidar_variance)
 }
 
 grid <- grid |>
@@ -401,11 +390,7 @@ grid <- grid |>
       0.60 * rescale01(path_density) +
         0.40 * rescale01(amenity_proximity)
     ),
-    disturbance_idx = if_else(
-      is.na(lidar_variance_idx),
-      NA_real_,
-      (osm_disturbance_idx + lidar_variance_idx) / 2
-    ),
+    disturbance_idx = osm_disturbance_idx,
     disturbance_index = disturbance_idx,
     water_proximity = rescale01(
       0.70 * water_prox +
@@ -417,10 +402,9 @@ grid <- grid |>
 
 grid <- grid |>
   mutate(
-    habitat_quality = 0.35 * replace_na(ndvi_idx, 0) +
-                      0.30 * replace_na(canopy_height_idx, 0) +
-                      0.20 * replace_na(lst_idx, 0) +
-                      0.15 * (1 - replace_na(disturbance_idx, 1))
+    habitat_quality = 0.50 * replace_na(ndvi_idx, 0) +
+                      0.286 * replace_na(lst_idx, 0) +
+                      0.214 * (1 - replace_na(disturbance_idx, 1))
   )
 
 cat(sprintf(

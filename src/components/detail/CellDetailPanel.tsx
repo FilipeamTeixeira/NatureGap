@@ -105,6 +105,24 @@ function ecologicalStatus(score: number): string {
   return 'Performing as expected';
 }
 
+const UNSAMPLED_MESSAGE = 'Not enough observation data yet';
+
+/**
+ * Distinct "no data" state for observation-dependent metrics (Nature Gap,
+ * Ecological Residual, Observed Biodiversity, Intervention Priority) so an
+ * unsampled cell never reads as a genuinely neutral score.
+ */
+function UnsampledNotice({ detail }: { detail?: string }) {
+  return (
+    <div className="bg-[#F0F0EE] rounded-xl p-4 border border-dashed border-[#D1D8CE]">
+      <p className="text-[12px] font-semibold text-[#667066]">{UNSAMPLED_MESSAGE}</p>
+      {detail && (
+        <p className="text-[11px] text-[#A8B4A8] mt-1 leading-relaxed">{detail}</p>
+      )}
+    </div>
+  );
+}
+
 function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
   const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
   return (
@@ -213,12 +231,14 @@ export default function CellDetailPanel({
           <span
             className={cn(
               'text-[11px] font-semibold px-3 py-1 rounded-full inline-block',
-              isUnder
-                ? 'bg-[#FDF0E4] text-[#C97A2A]'
-                : 'bg-[#DDEAD8] text-[#2E6F40]',
+              cell.isUnsampled
+                ? 'bg-[#F0F0EE] text-[#667066]'
+                : isUnder
+                  ? 'bg-[#FDF0E4] text-[#C97A2A]'
+                  : 'bg-[#DDEAD8] text-[#2E6F40]',
             )}
           >
-            {ecologicalStatus(cell.impactScore)}
+            {cell.isUnsampled ? 'Not enough data yet' : ecologicalStatus(cell.impactScore)}
           </span>
           <span
             className={cn(
@@ -259,61 +279,71 @@ export default function CellDetailPanel({
               <Card>
                 <CardTitle>Ecological residual</CardTitle>
                 <CardSubtitle>Biodiversity-specific metric</CardSubtitle>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-[#F7F8F5] rounded-xl p-4">
-                    <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
-                      {formatMetric(cell.ecologicalResidual)}
+                {cell.isUnsampled ? (
+                  <UnsampledNotice detail="Ecological residual compares observed to expected richness — it can't be computed until this cell has recorded observations." />
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-[#F7F8F5] rounded-xl p-4">
+                        <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
+                          {formatMetric(cell.ecologicalResidual)}
+                        </div>
+                        <div className="text-[11px] text-[#667066] mt-1.5">Residual</div>
+                      </div>
+                      <div className="bg-[#F7F8F5] rounded-xl p-4">
+                        <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
+                          {cell.nSurveyDates}
+                        </div>
+                        <div className="text-[11px] text-[#667066] mt-1.5">Survey visits</div>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-[#667066] mt-1.5">Residual</div>
-                  </div>
-                  <div className="bg-[#F7F8F5] rounded-xl p-4">
-                    <div className="text-[32px] font-semibold text-[#1F2A1F] leading-none">
-                      {cell.nSurveyDates}
+                    <p className="text-[12px] text-[#667066] leading-relaxed">
+                      Ecological residual is corrected richness minus expected richness. Positive
+                      values indicate more species than expected; negative values indicate fewer.
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="bg-[#F7F8F5] rounded-xl p-3">
+                        <div className="text-[18px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(1)}</div>
+                        <div className="text-[10px] text-[#667066]">Expected richness</div>
+                      </div>
+                      <div className="bg-[#F7F8F5] rounded-xl p-3">
+                        <div className="text-[18px] font-semibold text-[#1F2A1F]">{formatMetric(cell.effortCorrectedRichness ?? cell.observedRichness)}</div>
+                        <div className="text-[10px] text-[#667066]">Corrected richness</div>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-[#667066] mt-1.5">Survey visits</div>
-                  </div>
-                </div>
-                <p className="text-[12px] text-[#667066] leading-relaxed">
-                  Ecological residual is corrected richness minus expected richness. Positive
-                  values indicate more species than expected; negative values indicate fewer.
-                </p>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="bg-[#F7F8F5] rounded-xl p-3">
-                    <div className="text-[18px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(1)}</div>
-                    <div className="text-[10px] text-[#667066]">Expected richness</div>
-                  </div>
-                  <div className="bg-[#F7F8F5] rounded-xl p-3">
-                    <div className="text-[18px] font-semibold text-[#1F2A1F]">{formatMetric(cell.effortCorrectedRichness ?? cell.observedRichness)}</div>
-                    <div className="text-[10px] text-[#667066]">Corrected richness</div>
-                  </div>
-                </div>
+                  </>
+                )}
               </Card>
             ) : (
               <Card>
                 <CardTitle>Nature Gap</CardTitle>
                 <CardSubtitle>Composite ecological condition</CardSubtitle>
-                <div className="flex items-center gap-5">
-                  <ScoreGauge score={cell.impactScore} />
-                  <div className="flex-1">
-                    <p className="text-[12px] text-[#667066] leading-relaxed">
-                      Nature Gap combines biodiversity residual, habitat quality, and corridor
-                      connectivity into the public headline score.
-                    </p>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <div className="bg-[#F7F8F5] rounded-xl p-3">
-                        <div className="text-[16px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(0)}</div>
-                        <div className="text-[10px] text-[#667066]">Expected richness</div>
+                {cell.isUnsampled ? (
+                  <UnsampledNotice detail="Nature Gap combines biodiversity residual, habitat quality, and corridor connectivity — the biodiversity component needs recorded observations first." />
+                ) : (
+                  <div className="flex items-center gap-5">
+                    <ScoreGauge score={cell.impactScore} />
+                    <div className="flex-1">
+                      <p className="text-[12px] text-[#667066] leading-relaxed">
+                        Nature Gap combines biodiversity residual, habitat quality, and corridor
+                        connectivity into the public headline score.
+                      </p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="bg-[#F7F8F5] rounded-xl p-3">
+                          <div className="text-[16px] font-semibold text-[#1F2A1F]">{cell.expectedRichness.toFixed(0)}</div>
+                          <div className="text-[10px] text-[#667066]">Expected richness</div>
+                        </div>
+                        <div className="bg-[#F7F8F5] rounded-xl p-3">
+                          <div className="text-[16px] font-semibold text-[#1F2A1F]">{formatMetric(cell.observedRichness)}</div>
+                          <div className="text-[10px] text-[#667066]">Observed richness</div>
+                        </div>
                       </div>
-                      <div className="bg-[#F7F8F5] rounded-xl p-3">
-                        <div className="text-[16px] font-semibold text-[#1F2A1F]">{formatMetric(cell.observedRichness)}</div>
-                        <div className="text-[10px] text-[#667066]">Observed richness</div>
+                      <div className="mt-3 text-[11px] text-[#667066]">
+                        Intervention priority {cell.interventionRank ?? 'unranked'}
                       </div>
-                    </div>
-                    <div className="mt-3 text-[11px] text-[#667066]">
-                      Intervention priority {cell.interventionRank ?? 'unranked'}
                     </div>
                   </div>
-                </div>
+                )}
                 <div className="mt-4 flex gap-2">
                   <button
                     type="button"
@@ -337,12 +367,14 @@ export default function CellDetailPanel({
               <CardTitle>Biodiversity</CardTitle>
               <CardSubtitle>Observed vs expected (effort-corrected index)</CardSubtitle>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
+                <div className={cn('rounded-xl p-4', cell.isUnsampled ? 'bg-[#F0F0EE]' : 'bg-[#F7F8F5]')}>
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {formatMetric(cell.observedRichness)}
+                    {cell.isUnsampled ? '—' : formatMetric(cell.observedRichness)}
                   </div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Observed (corrected)</div>
-                  <div className="text-[10px] text-[#A8B4A8] mt-1">{cell.speciesRichnessRaw} raw taxa</div>
+                  <div className="text-[10px] text-[#A8B4A8] mt-1">
+                    {cell.isUnsampled ? UNSAMPLED_MESSAGE : `${cell.speciesRichnessRaw} raw taxa`}
+                  </div>
                 </div>
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
                   <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
@@ -372,7 +404,6 @@ export default function CellDetailPanel({
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
                   { label: 'Corridor importance', value: cell.corridorImportance, inverted: false },
-                  { label: 'Fragmentation index', value: cell.fragmentationIndex, inverted: true },
                 ].map(({ label, value, inverted }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-2">
@@ -420,19 +451,25 @@ export default function CellDetailPanel({
             <Card>
               <CardTitle>Observed richness</CardTitle>
               <CardSubtitle>From iNaturalist + GBIF records in this cell</CardSubtitle>
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {formatMetric(cell.observedRichness)}
+              {cell.isUnsampled ? (
+                <UnsampledNotice detail="No accessible pedestrian path length or recorded observations yet — this cell is marked unsampled rather than zero-richness." />
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div className="bg-[#F7F8F5] rounded-xl p-4">
+                      <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                        {formatMetric(cell.observedRichness)}
+                      </div>
+                      <div className="text-[11px] text-[#667066] mt-1.5">Effort-corrected index</div>
+                    </div>
+                    <div className="bg-[#F7F8F5] rounded-xl p-4">
+                      <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.nObs}</div>
+                      <div className="text-[11px] text-[#667066] mt-1.5">Total records</div>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Effort-corrected index</div>
-                </div>
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">{cell.nObs}</div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Total records</div>
-                </div>
-              </div>
-              <ObservedRichnessExplainer cell={cell} />
+                  <ObservedRichnessExplainer cell={cell} />
+                </>
+              )}
             </Card>
 
             <Card>
@@ -477,20 +514,24 @@ export default function CellDetailPanel({
             <Card>
               <CardTitle>Diversity indices</CardTitle>
               <CardSubtitle>From pipeline observation layer</CardSubtitle>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.taxonomicDiversity.toFixed(1)}
+              {cell.isUnsampled ? (
+                <UnsampledNotice />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#F7F8F5] rounded-xl p-4">
+                    <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                      {cell.taxonomicDiversity.toFixed(1)}
+                    </div>
+                    <div className="text-[11px] text-[#667066] mt-1.5">Shannon diversity</div>
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Shannon diversity</div>
-                </div>
-                <div className="bg-[#F7F8F5] rounded-xl p-4">
-                  <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                    {cell.observerEffortScore.toFixed(1)}
+                  <div className="bg-[#F7F8F5] rounded-xl p-4">
+                    <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
+                      {cell.observerEffortScore.toFixed(1)}
+                    </div>
+                    <div className="text-[11px] text-[#667066] mt-1.5">Records / km path</div>
                   </div>
-                  <div className="text-[11px] text-[#667066] mt-1.5">Records / km path</div>
                 </div>
-              </div>
+              )}
             </Card>
           </div>
         )}
@@ -504,7 +545,6 @@ export default function CellDetailPanel({
                 {[
                   { label: 'Habitat quality', value: cell.habitatQuality, inverted: false },
                   { label: 'Corridor importance', value: cell.corridorImportance, inverted: false },
-                  { label: 'Fragmentation index', value: cell.fragmentationIndex, inverted: true },
                 ].map(({ label, value, inverted }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-2">

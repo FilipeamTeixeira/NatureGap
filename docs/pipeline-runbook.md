@@ -103,3 +103,51 @@ The full run:
 5. Updates local `pipeline-export/<city>/current.json`.
 
 Approved observations only affect R outputs after a full pipeline refresh.
+
+## Scheduled Dataset Refresh (periodic, versioned, verify-then-promote)
+
+Scores update on a **fixed schedule**, not continuously. This keeps every
+published version dated and reproducible, and puts a human checkpoint before
+anything new goes live. The infrastructure already exists — `public.pipeline_datasets`
+(one `is_active` row per city) and `public.promote_pipeline_dataset(city_id,
+dataset_id)` (admin-only). This section documents how to use it deliberately.
+
+### Cadence
+
+- Run the full pipeline **quarterly** (matching the recommended species-reference
+  reseed cadence). Do not pursue live/continuous updates.
+
+### Before every scheduled run
+
+- Confirm `SUPABASE_OBSERVATIONS_ENABLED="1"` in the run's environment. If it is
+  unset or `"0"`, approved structured surveys are **not** pulled and no
+  citizen-submitted data reaches the run — regardless of how much the feature
+  has been used. This must be set deliberately for scheduled runs (see
+  `.env.example`).
+
+### What each scheduled run does (one combined pass)
+
+1. Re-pull GBIF and iNaturalist records fresh for the run.
+2. Pull every structured survey that reached **`approved`** status since the last
+   run (requires `SUPABASE_OBSERVATIONS_ENABLED="1"`).
+3. Recompute every score from this single combined snapshot.
+4. Write the result as a **new row in `pipeline_datasets`** with a fresh
+   `dataset_id`, leaving **`is_active = FALSE`**. Nothing is published yet.
+
+### Publishing (manual promotion step)
+
+5. An **Approver/Admin** spot-checks the new dataset's numbers against the
+   previous active version (a handful of parks; confirm nothing looks broken),
+   then promotes it:
+
+   ```sql
+   select public.promote_pipeline_dataset('<city_id>', '<new_dataset_id>');
+   ```
+
+   This flips `is_active` to TRUE for that `dataset_id` (and FALSE for the prior
+   one) — the actual "publish" step. This is the same Approver role that signs
+   off on the structured surveys feeding the run: publishing a dataset and
+   approving its input surveys are the same kind of decision.
+
+Datasets are immutable and never hard-deleted; superseded versions simply stop
+being active.

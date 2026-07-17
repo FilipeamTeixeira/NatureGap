@@ -185,9 +185,12 @@ Limitations:
 
 ## 6. Expected Richness
 
-Expected richness is computed in `pipeline/05_residuals/residuals.R`.
+Expected richness is modelled at two levels.
 
-Current formula:
+### 6.1 Per-hex expected index (`pipeline/05_residuals/residuals.R`)
+
+A relative, index-like value per 20 m hex, used only for the hex-level map
+layers and the per-hex ecological residual:
 
 ```text
 expected_richness_i =
@@ -204,14 +207,45 @@ Where:
 - `accessibility_component_i = log1p(path_km_i) / log1p(max_path_km)`
   clamped to `[0, 1]`
 
-Expected richness is model output only. It is an index-like estimate for
-relative comparison, not a calibrated species distribution model and not field
-observation data.
+This is a within-city relative index for hex comparison, not a species count and
+not calibrated per city.
+
+### 6.2 Patch (park) expected richness (`pipeline/05_patch/patch_aggregation.R`)
+
+Per-park expected richness must scale with total park area — larger areas
+support more species (the species-area relationship), all else equal. It is
+therefore computed **once per patch** from total patch area using a power law,
+not by averaging the per-hex index (an area-weighted average does not scale with
+size, so a small park and a large park of similar per-hex quality would
+otherwise get nearly the same expected richness):
+
+```text
+expected_richness_patch =
+  SPECIES_AREA_C * (patch_area_m2 ^ SPECIES_AREA_Z) * quality_modifier
+```
+
+Where:
+
+- `patch_area_m2` is the park's total area.
+- `quality_modifier` is the area-weighted mean of `habitat_quality_index`,
+  `corridor_importance`, and accessibility across the park's hexes, clamped to
+  `[0, 1]`. Averaging is appropriate here because these are intensive
+  properties, not counts.
+- `SPECIES_AREA_Z = 0.25` is the species-area exponent. **This value is an
+  assumption informed by general species-area relationship literature, not
+  calibrated to Yokohama or Amsterdam specifically, and not sourced to a
+  specific citation.** It is set within the commonly cited 0.2–0.3 range pending
+  a proper literature review / local calibration.
+- `SPECIES_AREA_C = 12` is a scaling constant chosen so `expected_richness`
+  lands in a plausible range across the actual park-area distribution in both
+  cities (roughly 20 m² to 3.4×10⁵ m²). It is a tuning constant, not a
+  measured quantity.
 
 Limitations:
 
-- The relationship is linear and provisional.
-- `MAX_EXPECTED_RICHNESS` is not calibrated per city.
+- `SPECIES_AREA_Z` and `SPECIES_AREA_C` are documented assumptions, not
+  calibrated or cited values.
+- `MAX_EXPECTED_RICHNESS` (per-hex index) is not calibrated per city.
 - Regional species-pool constraints are not yet modelled.
 
 ## 7. Ecological Residual
@@ -292,18 +326,15 @@ Graph construction:
 
 Metrics:
 
-- `corridor_importance`: normalised betweenness centrality
-- `fragmentation_index`: neighbourhood habitat fragmentation
-- `node_importance`: graph node importance
-- `connectivity_score`: combined connectivity indicator
+- `corridor_importance`: normalised betweenness centrality — the only
+  connectivity metric currently computed, and the value used for intervention
+  ranking.
 
-Conceptual connectivity score:
-
-```text
-0.60 * corridor_importance
-+ 0.25 * node_importance
-+ 0.15 * (1 - fragmentation_index)
-```
+`fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`, and
+`patch_size_distribution` exist as placeholder fields in the pipeline but are
+**not yet computed** (they are always null). They are intentionally not surfaced
+in any user-facing metric, layer, or score until they are actually implemented
+(see the connectivity backlog). Do not treat them as real values.
 
 Limitations:
 
@@ -423,6 +454,7 @@ Every pipeline run should record:
 - bbox
 - `CELL_SIZE`
 - `MAX_EXPECTED_RICHNESS`
+- `SPECIES_AREA_Z` and `SPECIES_AREA_C` (patch expected-richness assumptions)
 - source data dates or versions
 - PMTiles source-layer name
 - exported `cell_id` count
