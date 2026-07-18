@@ -3,9 +3,9 @@
   "cityId": "porto-center",
   "cityName": "Porto",
   "cityCountry": "Portugal",
-  "datasetId": "20260718T110756Z",
-  "dataVersion": "20260718T110756Z",
-  "generatedAt": "2026-07-18T11:07:56Z",
+  "datasetId": "20260718T193111Z",
+  "dataVersion": "20260718T193111Z",
+  "generatedAt": "2026-07-18T19:31:11Z",
   "cellSizeM": 20,
   "crsLocal": "EPSG:3763",
   "sourceLayer": "hexgrid",
@@ -107,8 +107,8 @@
     }
   },
   "counts": {
-    "renderCells": 951,
-    "parks": 35
+    "renderCells": 11454,
+    "parks": 2298
   },
   "pmtiles": {
     "path": "hexgrid.pmtiles",
@@ -116,36 +116,60 @@
     "minZoom": 0,
     "maxZoom": 18,
     "bounds": [
-      4.8531,
-      52.3661,
-      4.8711,
-      52.3741
+      -8.6538,
+      41.1403,
+      -8.5717,
+      41.1774
     ]
   },
   "files": {
     "hexgrid.pmtiles": {
       "path": "hexgrid.pmtiles",
-      "bytes": 547147
+      "bytes": 6540940
     },
     "parks.geojson": {
       "path": "parks.geojson",
-      "bytes": 43720
+      "bytes": 3077889
     },
     "park-stats.json": {
       "path": "park-stats.json",
-      "bytes": 76652
+      "bytes": 3740959
     },
-    "cell_attributes.geojson": {
-      "path": "cell_attributes.geojson",
-      "bytes": 5920790
+    "cell_attributes.manifest.json": {
+      "path": "cell_attributes.manifest.json",
+      "bytes": 165
     },
-    "corridor-links.geojson": {
-      "path": "corridor-links.geojson",
-      "bytes": 2404275
+    "corridor-links.manifest.json": {
+      "path": "corridor-links.manifest.json",
+      "bytes": 93
     },
     "top_interventions.json": {
       "path": "top_interventions.json",
-      "bytes": 4015
+      "bytes": 41900
+    },
+    "cell_attributes-part-001.geojson": {
+      "path": "cell_attributes-part-001.geojson",
+      "bytes": 41300648
+    },
+    "cell_attributes-part-002.geojson": {
+      "path": "cell_attributes-part-002.geojson",
+      "bytes": 41355997
+    },
+    "cell_attributes-part-003.geojson": {
+      "path": "cell_attributes-part-003.geojson",
+      "bytes": 41378285
+    },
+    "cell_attributes-part-004.geojson": {
+      "path": "cell_attributes-part-004.geojson",
+      "bytes": 41179142
+    },
+    "corridor-links-part-001.geojson": {
+      "path": "corridor-links-part-001.geojson",
+      "bytes": 35073311
+    },
+    "corridor-links-part-002.geojson": {
+      "path": "corridor-links-part-002.geojson",
+      "bytes": 35202570
     }
   }
 }

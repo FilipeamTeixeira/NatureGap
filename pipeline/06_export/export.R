@@ -738,7 +738,7 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     corridorImportance = pct_index(row$corridor_importance),
     betweennessCentrality = pct_index(row$betweenness_centrality),
     fragmentationIndex = pct_index(row$fragmentation_index),
-    treeCover          = pct_index(row$canopy_height_idx),
+    treeCover          = pct_index(row$tree_fraction),
     heatExposure       = pct_index(row$lst_rank),
     meanLst            = index_or_pct(row$mean_lst),
     lstIdx             = pct_index(row$lst_idx),
@@ -824,7 +824,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
     betweennessCentrality = pct_index(if (is.finite(patch_betweenness)) patch_betweenness else finite_max(rows$betweenness_centrality)),
     fragmentationIndex = pct_index(finite_mean(rows$fragmentation_index)),
-    treeCover          = pct_index(finite_mean(rows$canopy_height_idx)),
+    treeCover          = pct_index(finite_mean(rows$tree_fraction)),
     heatExposure       = pct_index(finite_mean(rows$lst_rank)),
     meanLst            = index_or_pct(finite_mean(rows$mean_lst)),
     lstIdx             = pct_index(finite_mean(rows$lst_idx)),
@@ -896,7 +896,7 @@ if (file.exists(green_path)) {
     "survey_effort_units", "expected_richness",
     "ecological_residual", "ecological_residual_normalized",
     "data_availability_ratio", "nature_gap_score", "corridor_importance",
-    "betweenness_centrality", "intervention_rank", "canopy_height_idx", "mean_lst"
+    "betweenness_centrality", "intervention_rank", "tree_fraction", "canopy_height_idx", "mean_lst"
   )) {
     if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
   }
@@ -921,7 +921,7 @@ if (file.exists(green_path)) {
       effort_corrected_richness_norm = norm_sequential(effort_corrected_richness),
       expected_richness_norm         = norm_sequential(expected_richness),
       corridor_importance_norm       = norm_sequential(corridor_importance),
-      tree_cover_norm                = norm_sequential(canopy_height_idx),
+      tree_cover_norm                = norm_sequential(tree_fraction),
       mean_lst_norm                  = norm_sequential(mean_lst),
       ecological_residual_norm       = norm_diverging(ecological_residual),
       nature_gap_score_norm          = norm_diverging(nature_gap_score),
@@ -1068,7 +1068,7 @@ for (col in c(
 grid_all <- grid_all |>
   mutate(
     ndvi_norm             = norm_sequential(ndvi_mean),
-    tree_cover_norm       = norm_sequential(canopy_height_idx),
+    tree_cover_norm       = norm_sequential(tree_fraction),
     # lst_rank is the heat rank (hot = high), matching heatExposure's sign.
     # lst_idx = 1 - lst_rank is a coolness index used intentionally in
     # habitat_quality; do not normalize the heat display field from it.
@@ -1216,8 +1216,8 @@ hexgrid_tiles <- hexgrid_render |>
     observedRichness   = if_else(is_unsampled, 0, round(replace_na(observed_richness, 0), 1)),
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
-    treeCover          = pct_index(canopy_height_idx),
-    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(canopy_height_idx, 0), 4)),
+    treeCover          = pct_index(tree_fraction),
+    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(tree_fraction, 0), 4)),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
@@ -1372,7 +1372,7 @@ cell_detail_attrs <- grid_all |>
       character(1),
       auto_unbox = TRUE, null = "null", na = "null"
     ),
-    tree_cover = pct_index(canopy_height_idx),
+    tree_cover = pct_index(tree_fraction),
     land_use_green = pct_index(green_fraction_wc)
   )
 

@@ -41,6 +41,7 @@ if (!"path_km" %in% names(grid)) {
 inat_raw <- st_read(RAW_INAT, quiet = TRUE)
 if (nrow(inat_raw) == 0L) {
   inat_std <- inat_raw |>
+    st_transform(st_crs(grid)) |>
     mutate(
       taxon_name = character(),
       observed_on = as.Date(character()),
@@ -73,6 +74,7 @@ st_geometry(inat_std) <- "geometry"
 gbif_raw <- st_read(RAW_GBIF, quiet = TRUE)
 if (nrow(gbif_raw) == 0L) {
   gbif_std <- gbif_raw |>
+    st_transform(st_crs(grid)) |>
     mutate(
       taxon_name = character(),
       iconic_taxon_name = character(),

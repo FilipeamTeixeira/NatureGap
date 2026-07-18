@@ -12,14 +12,9 @@ HABITAT_THRESHOLD <- 0.40
 # ── Patch-level expected richness (species-area power law) ────────────────────
 # expected_richness = SPECIES_AREA_C * patch_area_m2 ^ SPECIES_AREA_Z * quality_modifier
 #
-# SPECIES_AREA_Z and SPECIES_AREA_C are documented ASSUMPTIONS, not calibrated
-# values and not sourced to a specific citation. Z is set within the general
-# 0.2–0.3 species-area range; C is chosen so expected_richness lands in a
-# plausible range across the real park-area distribution in both cities
-# (~20 m^2 to ~3.4e5 m^2). See docs/methodology.md §6. These should be revisited
-# once a proper literature review / calibration is done.
-SPECIES_AREA_Z <- 0.25
-SPECIES_AREA_C <- 12
+# SPECIES_AREA_Z and SPECIES_AREA_C are defined in config.R and shared with the
+# hex-scale model in residuals.R (same model, different area input). They are
+# documented ASSUMPTIONS, not calibrated values. See docs/methodology.md §6.
 
 required_files <- c(PROC_GREEN_SPACES, PROC_GRID_RESID)
 missing_files <- required_files[!file.exists(required_files)]
@@ -45,7 +40,7 @@ for (col in c(
   "observed_richness", "effort_corrected_richness", "survey_effort_units",
   "ecological_residual", "ecological_residual_normalized",
   "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
-  "betweenness_centrality", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
+  "betweenness_centrality", "tree_fraction", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
   "impact_score", "intervention_rank", "intervention_score", "path_km", "n_obs",
   "accessibility_component"
 )) {
@@ -177,6 +172,7 @@ patch_base <- hex_weighted |>
     ecological_residual_std = finite_weighted_mean(ecological_residual_std, overlap_area_m2),
     corridor_importance = finite_weighted_mean(corridor_importance, overlap_area_m2),
     betweenness_centrality = finite_weighted_mean(betweenness_centrality, overlap_area_m2),
+    tree_fraction = finite_weighted_mean(tree_fraction, overlap_area_m2),
     canopy_height_idx = finite_weighted_mean(canopy_height_idx, overlap_area_m2),
     fragmentation_index = finite_weighted_mean(fragmentation_index, overlap_area_m2),
     impact_score = finite_median(impact_score),

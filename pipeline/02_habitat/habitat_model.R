@@ -4,7 +4,6 @@
 #
 # Primary data sources (from step 01):
 #   data/raw/ndvi.tif           — Sentinel-2 NDVI
-#   data/raw/canopy_height.tif  — Meta/WRI 1 m canopy height, metres
 #   data/raw/lst.tif            — Landsat surface temperature
 #   data/raw/osm_paths.gpkg
 #
@@ -297,23 +296,9 @@ if (file.exists(RAW_NDVI)) {
   message("NDVI raster not found — ndvi_idx set to NA.")
 }
 
-canopy_path <- if (file.exists(RAW_CANOPY_HEIGHT)) {
-  RAW_CANOPY_HEIGHT
-} else if (exists("CANOPY_HEIGHT_FILE") && file.exists(CANOPY_HEIGHT_FILE)) {
-  CANOPY_HEIGHT_FILE
-} else {
-  NA_character_
-}
-
-if (!is.na(canopy_path)) {
-  cat("Extracting Meta/WRI canopy height per cell...\n")
-  canopy <- rast(canopy_path) |> project(CRS_LOCAL, method = "bilinear")
-  canopy_mean <- terra::extract(canopy, vect(grid), fun = mean, na.rm = TRUE)
-  grid$canopy_height_m <- replace_na(canopy_mean[[2]], NA_real_)
-  grid$canopy_height_idx <- fixed_rescale01(pmin(grid$canopy_height_m, 20), 0, 20)
-} else {
-  message("Meta/WRI canopy height raster not found — canopy_height_idx set to NA.")
-}
+# Tree cover is now derived from tree_fraction (ESA WorldCover, computed above),
+# so the Meta/WRI canopy-height raster is no longer ingested. canopy_height_idx
+# and canopy_height_m remain as NA columns for backward compatibility only.
 
 if (file.exists(RAW_LST)) {
   cat("Extracting LST per cell...\n")

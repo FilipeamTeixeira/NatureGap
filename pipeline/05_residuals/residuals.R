@@ -62,11 +62,12 @@ if (!"betweenness_centrality" %in% names(grid)) {
 }
 
 # ── 2. Expected richness model ────────────────────────────────────────────────
-# Uses existing habitat proxies, connectivity metrics, and path accessibility.
+# Uses existing habitat proxies, connectivity metrics, and path accessibility,
+# scaled by the same species-area power law used at patch level
+# (patch_aggregation.R), with each hex's own area (CELL_SIZE^2) as the area input.
+# SPECIES_AREA_C / SPECIES_AREA_Z come from config.R.
 # Unsampled cells still receive an expected richness estimate, but their
 # observed/corrected richness and residual stay NA and are excluded from ranking.
-
-if (!exists("MAX_EXPECTED_RICHNESS")) MAX_EXPECTED_RICHNESS <- 350L
 
 grid <- grid |>
   mutate(
@@ -90,7 +91,7 @@ grid <- grid |>
       0,
       pmin(1, log1p(path_km) / log1p(max_path_km))
     ),
-    expected_richness = MAX_EXPECTED_RICHNESS * (
+    expected_richness = SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (
       0.65 * habitat_component +
       0.20 * connectivity_component +
       0.15 * accessibility_component

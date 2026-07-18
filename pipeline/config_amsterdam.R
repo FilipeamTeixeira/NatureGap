@@ -190,6 +190,14 @@ CELL_SIZE <- 20   # metres
 
 MAX_EXPECTED_RICHNESS <- 350L
 
+# Species-area power law parameters, shared by patch_aggregation.R (patch scale)
+# and residuals.R (hex scale) so both use one model with different area inputs.
+# ASSUMPTIONS, not calibrated: Z sits within the general 0.2–0.3 species-area
+# range; C is chosen so expected_richness lands in a plausible range across the
+# real park-area distribution (~20 m² to ~3.4e5 m²). See docs/methodology.md §6.
+SPECIES_AREA_Z <- 0.25
+SPECIES_AREA_C <- 12
+
 # ── Input raster files ────────────────────────────────────────────────────────
 # Raster inputs are downloaded/prepared by the scripts listed below before
 # ingest reads them. Shared raster inputs live under pipeline/data/raw/.
@@ -241,11 +249,6 @@ LST_BAND_PATTERN  <- "(^[Ll][Ss][Tt]_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
-CANOPY_HEIGHT_FILE <- file.path(
-  DATA_IMPORT, "canopy_height",
-  paste0("canopy_height_", CITY_ID, ".tif")
-)
-
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
 # data/raw/ is shared for source rasters; city-specific outputs live under
@@ -265,7 +268,6 @@ RAW_LANDCOVER  <- file.path(DATA_RAW, "landcover.tif")
 RAW_IMPERVIOUS <- file.path(DATA_RAW, "impervious.tif")
 RAW_NDVI       <- file.path(DATA_RAW, "ndvi.tif")
 RAW_LST        <- file.path(DATA_RAW, "lst.tif")
-RAW_CANOPY_HEIGHT <- file.path(DATA_RAW, "canopy_height.tif")
 RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
 RAW_SUPABASE_OBS <- file.path(DATA_RAW, "supabase_observations.gpkg")
