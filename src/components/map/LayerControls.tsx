@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn, formatNumber } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Layers, Info, MapPin, Search, Map as MapIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crosshair, Layers, Info, MapPin, Search, Map as MapIcon } from 'lucide-react';
 import { getGlobalStats } from '@/lib/data';
 import { cityMeta } from '@/lib/config';
 import { THEMATIC_LAYER_GROUPS, LAYER_STYLE_SPECS, type HexLayerId } from '@/lib/layer-styles';
@@ -13,6 +13,7 @@ interface LayerControlsProps {
   layers: MapLayer[];
   onToggle: (id: string) => void;
   onPlaceSelect?: (center: [number, number]) => void;
+  onLocateMe?: (center: [number, number]) => void;
   /** cityId of whatever's currently selected/displayed — drives the location label. */
   cityId?: string;
 }
@@ -33,11 +34,10 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
   landuse:      'Vegetated and built-up land cover.',
   'cell-grid': 'Show the 20m hex grid.',
   'survey-points': 'Approved places for structured surveys.',
-  'quick-sightings': 'Recent quick observations.',
   'structured-surveys': 'Protocol survey submissions.',
 };
 
-const OVERLAY_LAYER_IDS = ['cell-grid', 'survey-points', 'quick-sightings', 'structured-surveys'] as const;
+const OVERLAY_LAYER_IDS = ['cell-grid', 'survey-points', 'structured-surveys'] as const;
 
 function layerSwatchColor(layerId: string, fallback: string): string {
   const spec = LAYER_STYLE_SPECS[layerId as HexLayerId];
@@ -50,6 +50,7 @@ export default function LayerControls({
   layers,
   onToggle,
   onPlaceSelect,
+  onLocateMe,
   cityId,
 }: LayerControlsProps) {
   const city = cityMeta(cityId);
@@ -58,6 +59,8 @@ export default function LayerControls({
   const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,6 +117,26 @@ export default function LayerControls({
     setQuery('');
     setOpen(false);
     onPlaceSelect?.(result.result.center);
+  }
+
+  function handleLocateMe() {
+    if (!('geolocation' in navigator)) {
+      setLocateError('Location is not available in this browser');
+      return;
+    }
+    setLocating(true);
+    setLocateError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        onLocateMe?.([position.coords.longitude, position.coords.latitude]);
+      },
+      (error) => {
+        setLocating(false);
+        setLocateError(error.message || 'Unable to detect your location');
+      },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 12000 },
+    );
   }
 
   const layersById = useMemo(() => new Map(layers.map((layer) => [layer.id, layer])), [layers]);
@@ -257,8 +280,18 @@ export default function LayerControls({
             onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
             onFocus={() => { if (query) setOpen(true); }}
             onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
-            className="w-full bg-[#F7F8F5] border border-[#E4E7E1] rounded-xl pl-8 pr-3 py-2.5 text-[13px] text-[#1F2A1F] placeholder:text-[#A8B4A8] outline-none focus:border-[#2E6F40] transition-colors"
+            className="w-full bg-[#F7F8F5] border border-[#E4E7E1] rounded-xl pl-8 pr-9 py-2.5 text-[13px] text-[#1F2A1F] placeholder:text-[#A8B4A8] outline-none focus:border-[#2E6F40] transition-colors"
           />
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={locating}
+            aria-label="Center map on my location"
+            title="Center map on my location"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center text-[#667066] hover:bg-[#F0F2EE] disabled:opacity-50"
+          >
+            <Crosshair size={14} strokeWidth={1.7} className={locating ? 'animate-pulse' : undefined} />
+          </button>
 
           {open && results.length > 0 && (
             <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl border border-[#E4E7E1] shadow-lg overflow-hidden z-50"
@@ -297,6 +330,9 @@ export default function LayerControls({
             </div>
           )}
         </div>
+        {locateError && (
+          <p className="text-[11px] text-[#9B4A1A] mt-2">{locateError}</p>
+        )}
       </div>
 
       <div className={cn('pt-4 pb-3', collapsed ? 'px-0 flex justify-center' : 'px-6')}>

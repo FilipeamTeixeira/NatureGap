@@ -36,14 +36,6 @@ export interface SurveyPointFeature {
   coordinates: [number, number];
 }
 
-export interface QuickSightingFeature {
-  id: string;
-  taxon_group: TaxonGroup;
-  status: string;
-  gps_accuracy_m: number;
-  coordinates: [number, number];
-}
-
 export interface StructuredSurveyFeature {
   id: string;
   status: string;
@@ -56,7 +48,7 @@ export interface StructuredSurveyFeature {
 
 export interface ObservationHistoryItem {
   id: string;
-  kind: 'quick_sighting' | 'structured_survey';
+  kind: 'structured_survey';
   label: string;
   status: string;
   created_at: string;
@@ -203,25 +195,6 @@ export async function fetchSurveyPoints(): Promise<SurveyPointFeature[]> {
   }) as SurveyPointFeature[];
 }
 
-export async function fetchQuickSightings(): Promise<QuickSightingFeature[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('quick_sightings')
-    .select('id, taxon_group, status, gps_accuracy_m, geometry')
-    .limit(1000);
-  if (error || !data) return [];
-  return data.flatMap((row) => {
-    const coordinates = parsePoint(row.geometry);
-    return coordinates ? [{
-      id: row.id,
-      taxon_group: row.taxon_group,
-      status: row.status,
-      gps_accuracy_m: Number(row.gps_accuracy_m),
-      coordinates,
-    }] : [];
-  }) as QuickSightingFeature[];
-}
-
 export async function fetchStructuredSurveys(
   surveyPoints: SurveyPointFeature[],
 ): Promise<StructuredSurveyFeature[]> {
@@ -244,31 +217,14 @@ export async function fetchObservationHistory(): Promise<ObservationHistoryItem[
   const user = userData.user;
   if (!user) return [];
 
-  const [quickResult, surveyResult] = await Promise.all([
-    supabase
-      .from('quick_sightings')
-      .select('id, taxon_group, status, gps_accuracy_m, timestamp, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('structured_surveys')
-      .select('id, status, duration_seconds, started_at, submitted_at, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20),
-  ]);
+  const { data } = await supabase
+    .from('structured_surveys')
+    .select('id, status, duration_seconds, started_at, submitted_at, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
 
-  const quick = (quickResult.data ?? []).map((row) => ({
-    id: row.id,
-    kind: 'quick_sighting' as const,
-    label: `${row.taxon_group} sighting`,
-    status: row.status,
-    created_at: row.created_at ?? row.timestamp,
-    detail: `GPS ${Math.round(Number(row.gps_accuracy_m))}m`,
-  }));
-
-  const surveys = (surveyResult.data ?? []).map((row) => ({
+  const surveys = (data ?? []).map((row) => ({
     id: row.id,
     kind: 'structured_survey' as const,
     label: 'Structured survey',
@@ -277,7 +233,7 @@ export async function fetchObservationHistory(): Promise<ObservationHistoryItem[
     detail: row.submitted_at ? `${Math.round(Number(row.duration_seconds) / 60)} min` : 'In progress',
   }));
 
-  return [...quick, ...surveys]
+  return surveys
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     .slice(0, 20);
 }
@@ -475,22 +431,6 @@ export function surveyPointsGeoJSON(points: SurveyPointFeature[]): GeoJSON.Featu
     features: points.map((point) => ({
       type: 'Feature',
       properties: { id: point.id, status: point.status },
-      geometry: { type: 'Point', coordinates: point.coordinates },
-    })),
-  };
-}
-
-export function quickSightingsGeoJSON(points: QuickSightingFeature[]): GeoJSON.FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: points.map((point) => ({
-      type: 'Feature',
-      properties: {
-        id: point.id,
-        taxonGroup: point.taxon_group,
-        status: point.status,
-        gpsAccuracy: point.gps_accuracy_m,
-      },
       geometry: { type: 'Point', coordinates: point.coordinates },
     })),
   };

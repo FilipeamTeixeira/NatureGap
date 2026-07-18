@@ -16,15 +16,12 @@ import { CITY } from '@/lib/config';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
-  fetchQuickSightings,
   fetchSpeciesReference,
   fetchStructuredSurveys,
   fetchSurveyPoints,
-  quickSightingsGeoJSON,
   structuredSurveysGeoJSON,
   surveyPointsGeoJSON,
   type AppRole,
-  type QuickSightingFeature,
   type SpeciesReferenceOption,
   type StructuredSurveyFeature,
   type SurveyPointFeature,
@@ -42,12 +39,10 @@ export default function Page() {
   const [role, setRole] = useState<AppRole | null>(null);
   const [species, setSpecies] = useState<SpeciesReferenceOption[]>([]);
   const [surveyPoints, setSurveyPoints] = useState<SurveyPointFeature[]>([]);
-  const [quickSightings, setQuickSightings] = useState<QuickSightingFeature[]>([]);
   const [structuredSurveys, setStructuredSurveys] = useState<StructuredSurveyFeature[]>([]);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [actions, setActions] = useState<TakeAction[]>([]);
 
-  const quickSightingsFc = useMemo(() => quickSightingsGeoJSON(quickSightings), [quickSightings]);
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
   const structuredSurveysFc = useMemo(() => structuredSurveysGeoJSON(structuredSurveys), [structuredSurveys]);
   const activeLayer = useMemo<HexLayerId>(
@@ -73,17 +68,15 @@ export default function Page() {
   }, []);
 
   const refreshCitizenData = useCallback(async () => {
-    const [roleData, speciesData, surveyPointData, quickData] = await Promise.all([
+    const [roleData, speciesData, surveyPointData] = await Promise.all([
       fetchCurrentRole(),
       fetchSpeciesReference(),
       fetchSurveyPoints(),
-      fetchQuickSightings(),
     ]);
     const structuredData = await fetchStructuredSurveys(surveyPointData);
     setRole(roleData);
     setSpecies(speciesData);
     setSurveyPoints(surveyPointData);
-    setQuickSightings(quickData);
     setStructuredSurveys(structuredData);
   }, []);
 
@@ -95,7 +88,6 @@ export default function Page() {
           setRole(null);
           setSpecies([]);
           setSurveyPoints([]);
-          setQuickSightings([]);
           setStructuredSurveys([]);
         }
       });
@@ -159,6 +151,10 @@ export default function Page() {
     }
   };
 
+  const handleLocateMe = (center: [number, number]) => {
+    setFlyToTarget({ center, zoom: 15 });
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Navbar activePath="/" cityId={currentCityId} />
@@ -168,6 +164,7 @@ export default function Page() {
           layers={layers}
           onToggle={toggleLayer}
           onPlaceSelect={handlePlaceSelect}
+          onLocateMe={handleLocateMe}
           cityId={currentCityId}
         />
 
@@ -180,7 +177,6 @@ export default function Page() {
             onParkClick={handleParkClick}
             flyToTarget={flyToTarget}
             dataRevision={dataRevision}
-            quickSightingsGeoJSON={quickSightingsFc}
             structuredSurveysGeoJSON={structuredSurveysFc}
             surveyPointsGeoJSON={surveyPointsFc}
             selectedSurveyPointId={selectedSurveyPoint?.id ?? null}

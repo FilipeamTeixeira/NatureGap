@@ -35,10 +35,7 @@ import {
   renderCellProperties,
 } from '@/lib/map-utils';
 import {
-  applyLandUseDonutZoom,
-  clearLandUseDonutMarkers,
   createPopupContent,
-  syncLandUseDonutMarkers,
 } from '@/lib/map-markers';
 import {
   activeThematicLayerId,
@@ -68,7 +65,6 @@ interface MapViewProps {
   onParkClick?: (parkId: string, coordinates: [number, number]) => void;
   flyToTarget?: { center: [number, number]; zoom: number } | null;
   dataRevision?: number;
-  quickSightingsGeoJSON?: GeoJSON.FeatureCollection;
   structuredSurveysGeoJSON?: GeoJSON.FeatureCollection;
   surveyPointsGeoJSON?: GeoJSON.FeatureCollection;
   selectedSurveyPointId?: string | null;
@@ -85,7 +81,6 @@ export default function MapView({
   onParkClick,
   flyToTarget,
   dataRevision,
-  quickSightingsGeoJSON,
   structuredSurveysGeoJSON,
   surveyPointsGeoJSON,
   selectedSurveyPointId,
@@ -99,10 +94,8 @@ export default function MapView({
   const layersAddedRef = useRef(false);
   const layersRef = useRef(layers);
   const onSurveyPointSelectRef = useRef(onSurveyPointSelect);
-  const quickSightingsRef = useRef<GeoJSON.FeatureCollection | undefined>(quickSightingsGeoJSON);
   const structuredSurveysRef = useRef<GeoJSON.FeatureCollection | undefined>(structuredSurveysGeoJSON);
   const surveyPointsRef = useRef<GeoJSON.FeatureCollection | undefined>(surveyPointsGeoJSON);
-  const landUseMarkersRef = useRef<maplibregl.Marker[]>([]);
   const displayCityIdRef = useRef(displayCityId ?? CITY.id);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
   const enabledLayerIds = getEnabledLayerIds(layers);
@@ -123,11 +116,6 @@ export default function MapView({
 
   useEffect(() => {
     displayCityIdRef.current = displayCityId ?? CITY.id;
-    const map = mapRef.current;
-    if (!map || !layersAddedRef.current) return;
-    try {
-      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
-    } catch { /* layers not ready yet */ }
   }, [displayCityId]);
 
   useEffect(() => {
@@ -135,10 +123,9 @@ export default function MapView({
   }, [onSurveyPointSelect]);
 
   useEffect(() => {
-    quickSightingsRef.current = quickSightingsGeoJSON;
     structuredSurveysRef.current = structuredSurveysGeoJSON;
     surveyPointsRef.current = surveyPointsGeoJSON;
-  }, [quickSightingsGeoJSON, structuredSurveysGeoJSON, surveyPointsGeoJSON]);
+  }, [structuredSurveysGeoJSON, surveyPointsGeoJSON]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -275,7 +262,6 @@ export default function MapView({
         await fitMapToPmtilesDatasets(map, pmtilesDatasets);
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
-        syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
 
         const onHexSourceData = (event: maplibregl.MapSourceDataEvent) => {
           if (!pmtilesDatasets.some((dataset) => dataset.sourceId === event.sourceId)) return;
@@ -389,7 +375,6 @@ export default function MapView({
       });
 
       map.on('zoom', () => {
-        applyLandUseDonutZoom(map, landUseMarkersRef.current);
         setMapZoom(map.getZoom());
       });
       setMapZoom(map.getZoom());
@@ -439,29 +424,6 @@ export default function MapView({
           'circle-color': 'rgba(46,111,64,0.18)',
           'circle-stroke-color': '#2E6F40',
           'circle-stroke-width': 2,
-        },
-      });
-
-      map.addSource('quick-sightings', { type: 'geojson', data: quickSightingsRef.current ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection });
-      map.addLayer({
-        id: 'quick-sightings-layer',
-        type: 'circle',
-        source: 'quick-sightings',
-        minzoom: 14,
-        paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 6],
-          'circle-color': [
-            'match',
-            ['get', 'taxonGroup'],
-            'bird', '#3A6A8A',
-            'insect', '#E8A44C',
-            'plant', '#2E6F40',
-            'amphibian', '#6A8A3A',
-            '#667066',
-          ],
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 1,
-          'circle-opacity': 0.84,
         },
       });
 
@@ -592,11 +554,9 @@ export default function MapView({
       });
     });
 
-    const landUseMarkers = landUseMarkersRef.current;
     return () => {
       layersAddedRef.current = false;
       popupRef.current?.remove();
-      clearLandUseDonutMarkers(landUseMarkers);
       map.remove();
       mapRef.current = null;
     };
@@ -625,7 +585,6 @@ export default function MapView({
         setLayerVisibility(map, activeThematicLayerId(layers), layers);
         applyLayerPaintExpressions(map);
         applyCitizenLayerVisibility(map, layers);
-        syncLandUseDonutMarkers(map, layers, landUseMarkersRef.current, displayCityIdRef.current);
       } catch { /* layers not ready yet */ }
     };
 
@@ -652,7 +611,6 @@ export default function MapView({
     centroidSrc?.setData(parkCentroidsGeoJSON() as any);
     try {
       refreshHexLayers(map, layersRef.current);
-      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
     } catch { /* ignore */ }
   }, [dataRevision]);
 
@@ -660,15 +618,12 @@ export default function MapView({
     if (!mapRef.current || !layersAddedRef.current) return;
     const map = mapRef.current;
     const surveyPoints = map.getSource('survey-points') as maplibregl.GeoJSONSource | undefined;
-    const quickSightings = map.getSource('quick-sightings') as maplibregl.GeoJSONSource | undefined;
     const structuredSurveys = map.getSource('structured-surveys') as maplibregl.GeoJSONSource | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     surveyPoints?.setData((surveyPointsGeoJSON ?? { type: 'FeatureCollection', features: [] }) as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    quickSightings?.setData((quickSightingsGeoJSON ?? { type: 'FeatureCollection', features: [] }) as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     structuredSurveys?.setData((structuredSurveysGeoJSON ?? { type: 'FeatureCollection', features: [] }) as any);
-  }, [quickSightingsGeoJSON, structuredSurveysGeoJSON, surveyPointsGeoJSON]);
+  }, [structuredSurveysGeoJSON, surveyPointsGeoJSON]);
 
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;

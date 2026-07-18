@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/layout/Navbar';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { CalendarDays, ClipboardList, Settings, User, Binoculars } from 'lucide-react';
+import { CalendarDays, ClipboardList, Settings, User } from 'lucide-react';
 import { fetchObservationHistory, type ObservationHistoryItem } from '@/lib/citizen-science';
 
 function formatMetadata(metadata: Record<string, unknown>) {
@@ -18,7 +18,6 @@ export default function ProfilePage() {
   const metadata = formatMetadata(profile?.metadata ?? user?.user_metadata ?? {});
   const [history, setHistory] = useState<ObservationHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const quickCount = useMemo(() => history.filter((item) => item.kind === 'quick_sighting').length, [history]);
   const surveyCount = useMemo(() => history.filter((item) => item.kind === 'structured_survey').length, [history]);
 
   useEffect(() => {
@@ -110,17 +109,7 @@ export default function ProfilePage() {
                 </div>
               </section>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">
-                      <Binoculars size={14} className="text-[#2E6F40]" strokeWidth={1.7} />
-                    </div>
-                    <h2 className="text-[13px] font-semibold text-[#1F2A1F]">Quick sightings</h2>
-                  </div>
-                  <p className="text-[24px] font-semibold text-[#1F2A1F]">{quickCount}</p>
-                </section>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <section className="bg-white border border-[#E4E7E1] rounded-lg p-5">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 rounded-lg bg-[#F7F8F5] flex items-center justify-center">

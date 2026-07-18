@@ -10,7 +10,6 @@ export type LayerId =
   | 'heat'
   | 'landuse'
   | 'survey-points'
-  | 'quick-sightings'
   | 'structured-surveys'
   | 'cell-grid';
 

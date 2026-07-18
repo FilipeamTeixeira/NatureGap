@@ -98,7 +98,7 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
         map.setLayoutProperty(
           outlineLayerId,
           'visibility',
-          layerEnabled(layers, 'cell-grid') || Boolean(activeLayerId) ? 'visible' : 'none',
+          layerEnabled(layers, 'cell-grid') ? 'visible' : 'none',
         );
       }
 
@@ -182,7 +182,6 @@ export function applyCitizenLayerVisibility(map: maplibregl.Map, layers: MapLaye
   const ids = [
     ['survey-points-layer', 'survey-points', biodiversityEnabled],
     ['survey-points-selected', 'survey-points', biodiversityEnabled],
-    ['quick-sightings-layer', 'quick-sightings'],
     ['structured-surveys-layer', 'structured-surveys'],
   ] as const;
   for (const [mapLayerId, layerId, forceVisible] of ids) {
