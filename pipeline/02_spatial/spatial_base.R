@@ -113,12 +113,16 @@ green_spaces <- bind_rows(
 if (nrow(green_spaces) > 0L) {
   green_spaces <- green_spaces |>
     group_by(green_space_id) |>
-    mutate(green_space_id = if_else(
-      n() == 1L,
-      green_space_id,
-      paste(green_space_id, row_number(), sep = "-")
-    )) |>
-    ungroup()
+    mutate(
+      dupe_group_size = n(),
+      green_space_id = if_else(
+        dupe_group_size == 1L,
+        green_space_id,
+        paste(green_space_id, row_number(), sep = "-")
+      )
+    ) |>
+    ungroup() |>
+    select(-dupe_group_size)
 
   overlap <- suppressWarnings(st_intersection(
     hex_cells |> select(cell_id),
