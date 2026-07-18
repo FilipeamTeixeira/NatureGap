@@ -2,12 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { PMTiles, Protocol } from 'pmtiles';
 import { getCityLayerStats, wardCentroidsGeoJSON } from '@/lib/data';
-import { getParks, getParkStats, type GreenSpace } from '@/lib/green-spaces';
 import { CITY, MAP_CONFIG } from '@/lib/config';
-import { listHexPmtilesDatasets, type HexPmtilesDataset } from '@/lib/pmtiles-storage';
-import { fetchPipelineJson, mergeFeatureCollections } from '@/lib/storage-fetch';
+import { listHexPmtilesDatasets } from '@/lib/pmtiles-storage';
 import type { RenderCellProperties } from '@/lib/cell-detail';
 import type { MapLayer } from '@/lib/types';
 import {
@@ -17,9 +14,7 @@ import {
   hasHexOverlay,
   type HexLayerId,
   hexFillColorExpression,
-  hexFillLayerId,
   hexFillOpacityForLayer,
-  HEX_OUTLINE_LAYER_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
   LAYER_DRAW_ORDER,
@@ -29,9 +24,37 @@ import {
   patchFillColorExpressionForCities,
   patchFillOpacityExpression,
   PATCH_OUTLINE_LAYER_ID,
-  THEMATIC_LAYER_IDS,
   UNSAMPLED_FILL_COLOR,
 } from '@/lib/layer-styles';
+import {
+  emptyFeatureCollection,
+  fetchCorridorLinksGeoJSON,
+  parkCentroidsGeoJSON,
+  parkPolygonsGeoJSON,
+  registerPmtilesProtocol,
+  renderCellProperties,
+} from '@/lib/map-utils';
+import {
+  applyLandUseDonutZoom,
+  clearLandUseDonutMarkers,
+  createPopupContent,
+  syncLandUseDonutMarkers,
+} from '@/lib/map-markers';
+import {
+  activeThematicLayerId,
+  applyCitizenLayerVisibility,
+  applyLayerPaintExpressions,
+  fitMapToPmtilesDatasets,
+  getHexDatasets,
+  hexFillLayerIdForDataset,
+  hexInteractiveLayerIds,
+  hexOutlineLayerId,
+  hexSelectedLayerId,
+  refreshHexLayers,
+  selectedHexFilter,
+  setHexDatasets,
+  setLayerVisibility,
+} from '@/lib/map-layers';
 
 interface MapViewProps {
   layers: MapLayer[];
@@ -52,479 +75,7 @@ interface MapViewProps {
   onSurveyPointSelect?: (id: string, coordinates: [number, number]) => void;
 }
 
-const PMTILES_PROTOCOL_KEY = '__naturegap_pmtiles_protocol__';
 const DETAIL_ZOOM = 14;
-
-function registerPmtilesProtocol() {
-  const globalState = globalThis as typeof globalThis & {
-    [PMTILES_PROTOCOL_KEY]?: Protocol;
-  };
-  if (globalState[PMTILES_PROTOCOL_KEY]) return;
-
-  const protocol = new Protocol();
-  maplibregl.addProtocol('pmtiles', protocol.tile);
-  globalState[PMTILES_PROTOCOL_KEY] = protocol;
-}
-
-type ParkStats = ReturnType<typeof getParkStats>[string];
-
-function finiteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function statsProperties(stats: ParkStats | undefined) {
-  return {
-    impactScore: finiteNumber(stats?.impactScore),
-    natureGapScore: finiteNumber(stats?.natureGapScore),
-    expectedRichness: finiteNumber(stats?.expectedRichness),
-    ecologicalResidual: finiteNumber(stats?.ecologicalResidual),
-    ecologicalResidualNormalized: finiteNumber(stats?.ecologicalResidualNormalized),
-    dataAvailabilityRatio: finiteNumber(stats?.dataAvailabilityRatio),
-    isUnsampled: stats?.isUnsampled === true,
-    habitatQuality: finiteNumber(stats?.habitatQuality),
-    habitatQualityIndex: finiteNumber(stats?.habitatQualityIndex),
-    observedRichness: finiteNumber(stats?.observedRichness),
-    effortCorrectedRichness: finiteNumber(stats?.effortCorrectedRichness ?? stats?.observedRichness),
-    taxonomicDiversity: finiteNumber(stats?.taxonomicDiversity),
-    corridorImportance: finiteNumber(stats?.corridorImportance),
-    betweennessCentrality: finiteNumber(stats?.betweennessCentrality ?? stats?.corridorImportance),
-    treeCover: finiteNumber(stats?.treeCover),
-    treeCoverNorm: finiteNumber(stats?.treeCoverNorm),
-    heatExposure: finiteNumber(stats?.heatExposure),
-    meanLst: finiteNumber(stats?.meanLst ?? stats?.heatExposure),
-    lstIdx: finiteNumber(stats?.lstIdx ?? stats?.heatExposure),
-    landUseGreen: finiteNumber(stats?.landUseGreen),
-    landUseClass: stats?.landUseClass ?? 'unknown',
-    interventionRank: finiteNumber(stats?.interventionRank),
-    habitatQualityNorm: finiteNumber(stats?.habitatQualityNorm),
-    effortCorrectedRichnessNorm: finiteNumber(stats?.effortCorrectedRichnessNorm),
-    expectedRichnessNorm: finiteNumber(stats?.expectedRichnessNorm),
-    corridorImportanceNorm: finiteNumber(stats?.corridorImportanceNorm),
-    meanLstNorm: finiteNumber(stats?.meanLstNorm),
-    ecologicalResidualNorm: finiteNumber(stats?.ecologicalResidualNorm),
-    natureGapScoreNorm: finiteNumber(stats?.natureGapScoreNorm),
-    interventionRankNorm: finiteNumber(stats?.interventionRankNorm),
-  };
-}
-
-function primaryRing(geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon): [number, number][] {
-  return geometry.type === 'Polygon'
-    ? geometry.coordinates[0] as [number, number][]
-    : geometry.coordinates[0]?.[0] as [number, number][] ?? [];
-}
-
-function polygonCentroid(ring: [number, number][]): [number, number] {
-  const points = ring.length > 1 ? ring.slice(0, -1) : ring;
-  let twiceArea = 0;
-  let cx = 0;
-  let cy = 0;
-
-  for (let i = 0; i < points.length; i += 1) {
-    const current = points[i];
-    const next = points[(i + 1) % points.length];
-    const cross = current[0] * next[1] - next[0] * current[1];
-    twiceArea += cross;
-    cx += (current[0] + next[0]) * cross;
-    cy += (current[1] + next[1]) * cross;
-  }
-
-  if (Math.abs(twiceArea) > 1e-12) {
-    return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
-  }
-
-  const sum = points.reduce(
-    (acc, point) => [acc[0] + point[0], acc[1] + point[1]] as [number, number],
-    [0, 0] as [number, number],
-  );
-  return [sum[0] / Math.max(points.length, 1), sum[1] / Math.max(points.length, 1)];
-}
-
-/** Build a GeoJSON FeatureCollection from parks for patch-level rendering. */
-function parkPolygonsGeoJSON() {
-  const statsByPark = getParkStats();
-  return {
-    type: 'FeatureCollection' as const,
-    features: getParks().map((p) => ({
-      type: 'Feature' as const,
-      properties: {
-        parkId: p.id,
-        parkName: p.name,
-        wardId: p.wardId,
-        cityId: p.cityId,
-        ...statsProperties(statsByPark[p.id]),
-      },
-      geometry: p.geometry,
-    })),
-  };
-}
-
-function parkCentroidsGeoJSON() {
-  const statsByPark = getParkStats();
-  return {
-    type: 'FeatureCollection' as const,
-    features: getParks().map((p) => ({
-      type: 'Feature' as const,
-      properties: {
-        parkId: p.id,
-        parkName: p.name,
-        wardId: p.wardId,
-        cityId: p.cityId,
-        ...statsProperties(statsByPark[p.id]),
-      },
-      geometry: { type: 'Point' as const, coordinates: polygonCentroid(primaryRing(p.geometry)) },
-    })),
-  };
-}
-
-function emptyFeatureCollection(): GeoJSON.FeatureCollection {
-  return { type: 'FeatureCollection', features: [] };
-}
-
-function mergeFeatureCollectionChunks(parts: unknown[]): GeoJSON.FeatureCollection {
-  return mergeFeatureCollections(parts);
-}
-
-function isFeatureCollection(value: unknown): value is GeoJSON.FeatureCollection {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as GeoJSON.FeatureCollection).type === 'FeatureCollection' &&
-    Array.isArray((value as GeoJSON.FeatureCollection).features)
-  );
-}
-
-async function fetchCorridorLinksGeoJSON(): Promise<GeoJSON.FeatureCollection> {
-  const data = await fetchPipelineJson(
-    'corridor-links.geojson',
-    'corridor-links.manifest.json',
-    mergeFeatureCollectionChunks,
-  );
-  return isFeatureCollection(data) ? data : emptyFeatureCollection();
-}
-
-function safeColor(color: unknown) {
-  return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : '#3d6b2f';
-}
-
-function scoreColor(score: number | undefined) {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return '#B8C9AE';
-  if (score < -20) return '#C95B4B';
-  if (score < -10) return '#E8A44C';
-  if (score < 5) return '#B8C9AE';
-  if (score < 15) return '#73A56D';
-  return '#2E6F40';
-}
-
-function layerEnabled(layers: MapLayer[], id: string): boolean {
-  return layers.some((layer) => layer.id === id && layer.enabled);
-}
-
-function setMapLayerVisibility(map: maplibregl.Map, layerId: string, visible: boolean) {
-  if (!map.getLayer(layerId)) return;
-  try {
-    map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
-  } catch { /* layer not ready */ }
-}
-
-function activeThematicLayerId(layers: MapLayer[]): HexLayerId {
-  return THEMATIC_LAYER_IDS.find((id) => layerEnabled(layers, id)) ?? 'impact';
-}
-
-function applyLayerPaintExpressions(map: maplibregl.Map) {
-  const allCityStats = getCityLayerStats();
-  const cityIds = Array.from(new Set(allCityStats.map((stat) => stat.cityId)));
-  try {
-    for (const layerId of PATCH_FILL_LAYER_ORDER) {
-      const layer = PATCH_FILL_LAYER_IDS[layerId];
-      if (!map.getLayer(layer)) continue;
-      map.setPaintProperty(layer, 'fill-color', patchFillColorExpressionForCities(layerId, cityIds, allCityStats));
-    }
-
-    for (const dataset of getHexDatasets(map)) {
-      const cityStats = getCityLayerStats(dataset.cityId);
-      for (const layerId of LAYER_DRAW_ORDER) {
-        if (!hasHexOverlay(layerId)) continue;
-        const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
-        if (!map.getLayer(mlId)) continue;
-        map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(layerId, cityStats));
-      }
-    }
-  } catch { /* style not ready */ }
-}
-
-function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerId, layers: MapLayer[]) {
-  for (const layerId of PATCH_FILL_LAYER_ORDER) {
-    setMapLayerVisibility(map, PATCH_FILL_LAYER_IDS[layerId], activeLayerId === layerId);
-  }
-
-  setMapLayerVisibility(map, BIODIVERSITY_CIRCLES_LAYER_ID, activeLayerId === 'biodiversity');
-  setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
-  setMapLayerVisibility(map, INTERVENTION_RANK_LABELS_LAYER_ID, activeLayerId === 'intervention');
-  setMapLayerVisibility(map, CORRIDOR_LINES_LAYER_ID, false);
-
-  const datasets = getHexDatasets(map);
-
-  for (const dataset of datasets) {
-    for (const layerId of LAYER_DRAW_ORDER) {
-      if (!hasHexOverlay(layerId)) continue;
-      const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
-      if (!map.getLayer(mlId)) continue;
-      try {
-        const visible = activeLayerId === layerId;
-        map.setLayoutProperty(mlId, 'visibility', visible ? 'visible' : 'none');
-        if (visible) {
-          map.setPaintProperty(mlId, 'fill-opacity', hexFillOpacityForLayer(layerId));
-        }
-      } catch { /* layer not ready */ }
-    }
-
-    try {
-      const outlineLayerId = hexOutlineLayerId(dataset.sourceId);
-      if (map.getLayer(outlineLayerId)) {
-        map.setLayoutProperty(
-          outlineLayerId,
-          'visibility',
-          layerEnabled(layers, 'cell-grid') || Boolean(activeLayerId) ? 'visible' : 'none',
-        );
-      }
-
-      const selectedLayerId = hexSelectedLayerId(dataset.sourceId);
-      if (map.getLayer(selectedLayerId)) {
-        map.setLayoutProperty(selectedLayerId, 'visibility', Boolean(activeLayerId) ? 'visible' : 'none');
-      }
-    } catch { /* ignore */ }
-  }
-}
-
-function hexFillLayerIdForDataset(sourceId: string, layerId: HexLayerId): string {
-  return `${hexFillLayerId(layerId)}-${sourceId}`;
-}
-
-function hexOutlineLayerId(sourceId: string): string {
-  return `${HEX_OUTLINE_LAYER_ID}-${sourceId}`;
-}
-
-function hexSelectedLayerId(sourceId: string): string {
-  return `hex-selected-${sourceId}`;
-}
-
-function getHexDatasets(map: maplibregl.Map): HexPmtilesDataset[] {
-  return ((map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets ?? []);
-}
-
-function setHexDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
-  (map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets = datasets;
-}
-
-function hexInteractiveLayerIds(map: maplibregl.Map): string[] {
-  return getHexDatasets(map).flatMap((dataset) => LAYER_DRAW_ORDER
-    .filter(hasHexOverlay)
-    .map((layerId) => hexFillLayerIdForDataset(dataset.sourceId, layerId))
-    .filter((layerId) => map.getLayer(layerId)));
-}
-
-function selectedHexFilter(cellId: string | null): maplibregl.FilterSpecification {
-  return ['==', ['get', 'cellId'], cellId ?? ''];
-}
-
-async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
-  const primary = datasets.filter((dataset) => dataset.cityId === CITY.id);
-  const toFit = primary.length > 0 ? primary : datasets;
-  if (toFit.length === 0) return;
-
-  const bounds = new maplibregl.LngLatBounds();
-  const headers = await Promise.allSettled(
-    toFit.map((dataset) => new PMTiles(dataset.publicUrl).getHeader()),
-  );
-
-  for (const headerResult of headers) {
-    if (headerResult.status !== 'fulfilled') continue;
-    const { minLon, minLat, maxLon, maxLat } = headerResult.value;
-    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) continue;
-    bounds.extend([minLon, minLat]);
-    bounds.extend([maxLon, maxLat]);
-  }
-
-  if (bounds.isEmpty()) return;
-  map.fitBounds(bounds, {
-    padding: 80,
-    maxZoom: MAP_CONFIG.zoom,
-    duration: 0,
-  });
-}
-
-function refreshHexLayers(map: maplibregl.Map, layers: MapLayer[]) {
-  try {
-    setLayerVisibility(map, activeThematicLayerId(layers), layers);
-    applyLayerPaintExpressions(map);
-    map.triggerRepaint();
-  } catch {
-    /* style not ready */
-  }
-}
-
-function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
-  if (!properties) return null;
-  const cellId = String(properties.cellId ?? '');
-  if (!cellId) return null;
-
-  return {
-    cellId,
-    cityId: properties.cityId != null ? String(properties.cityId) : undefined,
-    parkId: properties.parkId != null ? String(properties.parkId) : undefined,
-    parkName: properties.parkName != null ? String(properties.parkName) : undefined,
-    impactScore: Number(properties.impactScore ?? 0),
-    natureGapScore: properties.natureGapScore == null ? null : Number(properties.natureGapScore),
-    expectedRichness: properties.expectedRichness == null ? null : Number(properties.expectedRichness),
-    ecologicalResidual: properties.ecologicalResidual == null ? null : Number(properties.ecologicalResidual),
-    ecologicalResidualNormalized: properties.ecologicalResidualNormalized == null ? null : Number(properties.ecologicalResidualNormalized),
-    habitatQuality: properties.habitatQuality == null ? null : Number(properties.habitatQuality),
-    observedRichness: properties.observedRichness == null ? null : Number(properties.observedRichness),
-    corridorImportance: properties.corridorImportance == null ? null : Number(properties.corridorImportance),
-    betweennessCentrality: properties.betweennessCentrality == null ? null : Number(properties.betweennessCentrality),
-    treeCover: properties.treeCover == null ? null : Number(properties.treeCover),
-    heatExposure: properties.heatExposure == null ? null : Number(properties.heatExposure),
-    meanLst: properties.meanLst == null ? null : Number(properties.meanLst),
-    lstIdx: properties.lstIdx == null ? null : Number(properties.lstIdx),
-    landUseGreen: properties.landUseGreen == null ? null : Number(properties.landUseGreen),
-    interventionRank: properties.interventionRank == null ? null : Number(properties.interventionRank),
-  };
-}
-
-function applyCitizenLayerVisibility(map: maplibregl.Map, layers: MapLayer[]) {
-  const biodiversityEnabled = layerEnabled(layers, 'biodiversity');
-  const ids = [
-    ['survey-points-layer', 'survey-points', biodiversityEnabled],
-    ['survey-points-selected', 'survey-points', biodiversityEnabled],
-    ['quick-sightings-layer', 'quick-sightings'],
-    ['structured-surveys-layer', 'structured-surveys'],
-  ] as const;
-  for (const [mapLayerId, layerId, forceVisible] of ids) {
-    if (!map.getLayer(mapLayerId)) continue;
-    try {
-      map.setLayoutProperty(mapLayerId, 'visibility', forceVisible || layerEnabled(layers, layerId) ? 'visible' : 'none');
-    } catch { /* layer not ready */ }
-  }
-}
-
-function createPopupContent({
-  parkName,
-  score,
-  showScore,
-}: {
-  parkName?: string;
-  score?: number;
-  showScore: boolean;
-}) {
-  const root = document.createElement('div');
-  root.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
-  root.style.padding = '10px 14px';
-  root.style.minWidth = '140px';
-
-  if (parkName) {
-    const title = document.createElement('div');
-    title.textContent = parkName;
-    title.style.fontSize = '12px';
-    title.style.fontWeight = '600';
-    title.style.color = '#1F2A1F';
-    title.style.marginBottom = showScore ? '6px' : '4px';
-    title.style.lineHeight = '1.4';
-    root.append(title);
-  }
-
-  if (showScore && typeof score === 'number') {
-    const labelEl = document.createElement('div');
-    labelEl.textContent = 'Nature Gap score';
-    labelEl.style.fontSize = '10px';
-    labelEl.style.fontWeight = '500';
-    labelEl.style.color = '#667066';
-    labelEl.style.letterSpacing = '0.03em';
-    labelEl.style.marginBottom = '2px';
-    root.append(labelEl);
-
-    const value = document.createElement('div');
-    value.textContent = score > 0 ? `+${score}` : String(score);
-    value.style.fontSize = '18px';
-    value.style.fontWeight = '700';
-    value.style.color = safeColor(scoreColor(score));
-    value.style.lineHeight = '1.2';
-    root.append(value);
-  }
-
-  const divider = document.createElement('div');
-  divider.style.height = '1px';
-  divider.style.background = '#E4E7E1';
-  divider.style.margin = showScore ? '8px -14px 6px' : '6px -14px 4px';
-  root.append(divider);
-
-  const hint = document.createElement('div');
-  hint.textContent = 'Click to explore →';
-  hint.style.fontSize = '10px';
-  hint.style.fontWeight = '500';
-  hint.style.color = '#2E6F40';
-  root.append(hint);
-
-  return root;
-}
-
-function clearLandUseDonutMarkers(markers: maplibregl.Marker[]) {
-  for (const marker of markers) marker.remove();
-  markers.length = 0;
-}
-
-function applyLandUseDonutZoom(map: maplibregl.Map, markers: maplibregl.Marker[]) {
-  const zoom = map.getZoom();
-  const display = zoom <= 13 ? 'block' : 'none';
-  for (const marker of markers) {
-    marker.getElement().style.display = display;
-  }
-}
-
-function createLandUseDonutElement(park: GreenSpace, stats: ParkStats): HTMLElement | null {
-  const green = finiteNumber(stats.landUseGreen);
-  if (green === null) return null;
-  const clampedGreen = Math.max(0, Math.min(100, green));
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.title = `${park.name}: land use`;
-  el.style.width = '34px';
-  el.style.height = '34px';
-  el.style.borderRadius = '999px';
-  el.style.border = '2px solid #ffffff';
-  el.style.padding = '0';
-  el.style.boxShadow = '0 1px 5px rgba(31,42,31,0.22)';
-  el.style.background = `conic-gradient(#1b5e20 0 ${clampedGreen}%, #b87f4f ${clampedGreen}% 100%)`;
-  el.style.position = 'relative';
-  el.style.cursor = 'default';
-
-  const hole = document.createElement('span');
-  hole.style.position = 'absolute';
-  hole.style.inset = '9px';
-  hole.style.borderRadius = '999px';
-  hole.style.background = '#ffffff';
-  hole.style.border = '1px solid rgba(31,42,31,0.14)';
-  el.append(hole);
-  return el;
-}
-
-function syncLandUseDonutMarkers(
-  map: maplibregl.Map,
-  layers: MapLayer[],
-  markers: maplibregl.Marker[],
-) {
-  clearLandUseDonutMarkers(markers);
-  if (!layerEnabled(layers, 'landuse')) return;
-
-  const statsByPark = getParkStats();
-  for (const park of getParks()) {
-    const stats = statsByPark[park.id];
-    if (!stats) continue;
-    const el = createLandUseDonutElement(park, stats);
-    if (!el) continue;
-    markers.push(new maplibregl.Marker({ element: el }).setLngLat(polygonCentroid(primaryRing(park.geometry))).addTo(map));
-  }
-  applyLandUseDonutZoom(map, markers);
-}
 
 export default function MapView({
   layers,
