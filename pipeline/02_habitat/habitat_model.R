@@ -197,6 +197,7 @@ if (file.exists(lc_path)) {
       grass_fraction     = mean(lc_class == WC_GRASS),
       built_fraction_wc  = mean(lc_class == WC_BUILT),
       green_fraction_wc  = mean(lc_class %in% WC_GREEN),
+      water_fraction     = mean(lc_class == WC_WATER),
       .groups = "drop"
     ) |>
     mutate(cell_id = grid$cell_id[row_idx]) |>
@@ -204,14 +205,14 @@ if (file.exists(lc_path)) {
 
   grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
     mutate(across(c(tree_fraction, shrub_fraction, grass_fraction,
-                    built_fraction_wc, green_fraction_wc),
+                    built_fraction_wc, green_fraction_wc, water_fraction),
                   \(x) replace_na(x, 0)))
 } else {
   message("WorldCover not found — run step 01 first. Filling with NA.")
   grid <- grid |>
     mutate(tree_fraction = NA_real_, shrub_fraction = NA_real_,
            grass_fraction = NA_real_, built_fraction_wc = NA_real_,
-           green_fraction_wc = NA_real_)
+           green_fraction_wc = NA_real_, water_fraction = NA_real_)
 }
 
 # ── 3. EMC-BUILT: impervious surface fraction per cell ───────────────────────

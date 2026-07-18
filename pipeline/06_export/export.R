@@ -869,7 +869,13 @@ green_metrics <- tibble(
   intervention_rank = numeric()
 )
 green <- NULL
-green_path <- if (file.exists(PROC_GREEN_SPACES)) PROC_GREEN_SPACES else RAW_OSM_GREEN
+green_path <- if (file.exists(PROC_GREEN_SPACES_AGG)) {
+  PROC_GREEN_SPACES_AGG
+} else if (file.exists(PROC_GREEN_SPACES)) {
+  PROC_GREEN_SPACES
+} else {
+  RAW_OSM_GREEN
+}
 
 if (file.exists(green_path)) {
   green_raw <- suppressWarnings(
