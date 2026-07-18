@@ -122,12 +122,18 @@ export function syncLandUseDonutMarkers(
   map: maplibregl.Map,
   layers: MapLayer[],
   markers: maplibregl.Marker[],
+  cityId: string,
 ) {
   clearLandUseDonutMarkers(markers);
   if (!layerEnabled(layers, 'landuse')) return;
 
   const statsByPark = getParkStats();
-  for (const park of getParks()) {
+  // Parks from other cities can be geographically very far away (e.g. Yokohama
+  // vs. Amsterdam); projecting their lng/lat while viewing a different city
+  // places these DOM markers absurdly far off-screen. Restrict to the city
+  // currently on screen — GL-rendered layers (patches, circles) don't need
+  // this since they're naturally clipped to the viewport.
+  for (const park of getParks().filter((p) => p.cityId === cityId)) {
     const stats = statsByPark[park.id];
     if (!stats) continue;
     const el = createLandUseDonutElement(park, stats);

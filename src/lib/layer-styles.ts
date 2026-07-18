@@ -142,18 +142,9 @@ function unitInterval(property: string): ExpressionSpecification {
   ] as ExpressionSpecification;
 }
 
-/** Tree-cover value from vector tile properties (0–1). */
+/** Canonical canopy-height value from vector tile properties (0–1). */
 function treeCoverValueExpression(): ExpressionSpecification {
-  return [
-    'case',
-    ['has', 'canopyHeightIdx'],
-    ['to-number', ['get', 'canopyHeightIdx']],
-    ['has', 'treeCover'],
-    ['/', ['to-number', ['get', 'treeCover']], 100],
-    ['has', 'treeCoverNorm'],
-    ['to-number', ['get', 'treeCoverNorm']],
-    0,
-  ] as ExpressionSpecification;
+  return ['to-number', ['coalesce', ['get', 'canopyHeightIdx'], 0]] as ExpressionSpecification;
 }
 
 function buildSequentialExpression(
@@ -211,7 +202,7 @@ function buildExpectedExpression(
   ] as ExpressionSpecification;
 }
 
-/** Canopy height — absolute 0–20 m index from PMTiles; treeCoverNorm for contrast. */
+/** Canopy height — absolute 0–20 m index from PMTiles, stretched to the city's p05–p95 range. */
 function buildTreecoverExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
   const stat = statForMetric(cityStats, 'canopy_height_idx');
   const low = stat?.p05 ?? stat?.minVal;
@@ -224,43 +215,8 @@ function buildTreecoverExpression(cityStats: CityLayerStats[] = []): ExpressionS
   return [
     'interpolate',
     ['linear'],
-    [
-      'case',
-      ['has', 'canopyHeightIdx'],
-      ['to-number', ['get', 'canopyHeightIdx']],
-      ['has', 'treeCover'],
-      ['/', ['to-number', ['get', 'treeCover']], 100],
-      ['has', 'treeCoverNorm'],
-      ['to-number', ['get', 'treeCoverNorm']],
-      stretched,
-    ],
+    stretched,
     ...LAYER_RAMPS.treecover.flatMap(([value, color]) => [value, color]),
-  ] as ExpressionSpecification;
-}
-
-/**
- * Heat hex — lst_idx is a coolness index (1 − rank) in the pipeline.
- * Use heatExposure (lst_rank) so higher values render hotter/redder.
- */
-function buildHeatHexExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
-  const stat = statForMetric(cityStats, 'lst_idx');
-  const low = stat?.p05 ?? stat?.minVal;
-  const high = stat?.p95 ?? stat?.maxVal;
-  const meanLstValue: ExpressionSpecification = low != null && high != null && high > low
-    ? ['max', 0, ['min', 1, ['/', ['-', unitInterval('meanLst'), low], ['-', high, low]]]] as ExpressionSpecification
-    : unitInterval('meanLst');
-
-  return [
-    'interpolate',
-    ['linear'],
-    [
-      'coalesce',
-      unitInterval('heatExposure'),
-      meanLstValue,
-      ['-', 1, ['coalesce', ['get', 'lstNorm'], 0]],
-      0,
-    ],
-    ...LAYER_RAMPS.heat.flatMap(([value, color]) => [value, color]),
   ] as ExpressionSpecification;
 }
 
@@ -397,10 +353,6 @@ export function hexFillColorExpression(
     return buildTreecoverExpression(cityStats);
   }
 
-  if (layerId === 'heat') {
-    return buildHeatHexExpression(cityStats);
-  }
-
   const spec = LAYER_STYLE_SPECS[layerId];
   const ramp = LAYER_RAMPS[layerId as keyof typeof LAYER_RAMPS];
   if (!spec.property || !ramp) {
@@ -411,6 +363,7 @@ export function hexFillColorExpression(
     intervention: 'interventionRank',
     habitat: 'habitatQuality',
     connectivity: 'betweennessCentrality',
+    heat: 'heatExposure',
   };
 
   return withUnsampledFallback(layerId, buildSequentialExpression(
@@ -497,7 +450,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   treecover: {
     title: 'Canopy height',
-    property: 'treeCover',
+    property: 'canopyHeightIdx',
     rawMetric: 'canopy_height_idx',
     legend: [
       { color: '#0d3d12', label: '15–20 m' },

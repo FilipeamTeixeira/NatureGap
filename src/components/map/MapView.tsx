@@ -103,6 +103,7 @@ export default function MapView({
   const structuredSurveysRef = useRef<GeoJSON.FeatureCollection | undefined>(structuredSurveysGeoJSON);
   const surveyPointsRef = useRef<GeoJSON.FeatureCollection | undefined>(surveyPointsGeoJSON);
   const landUseMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const displayCityIdRef = useRef(displayCityId ?? CITY.id);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
   const enabledLayerIds = getEnabledLayerIds(layers);
   const activeThematic = activeThematicLayerId(layers);
@@ -119,6 +120,15 @@ export default function MapView({
   useEffect(() => {
     layersRef.current = layers;
   }, [layers]);
+
+  useEffect(() => {
+    displayCityIdRef.current = displayCityId ?? CITY.id;
+    const map = mapRef.current;
+    if (!map || !layersAddedRef.current) return;
+    try {
+      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
+    } catch { /* layers not ready yet */ }
+  }, [displayCityId]);
 
   useEffect(() => {
     onSurveyPointSelectRef.current = onSurveyPointSelect;
@@ -265,7 +275,7 @@ export default function MapView({
         await fitMapToPmtilesDatasets(map, pmtilesDatasets);
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
-        syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
+        syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
 
         const onHexSourceData = (event: maplibregl.MapSourceDataEvent) => {
           if (!pmtilesDatasets.some((dataset) => dataset.sourceId === event.sourceId)) return;
@@ -615,7 +625,7 @@ export default function MapView({
         setLayerVisibility(map, activeThematicLayerId(layers), layers);
         applyLayerPaintExpressions(map);
         applyCitizenLayerVisibility(map, layers);
-        syncLandUseDonutMarkers(map, layers, landUseMarkersRef.current);
+        syncLandUseDonutMarkers(map, layers, landUseMarkersRef.current, displayCityIdRef.current);
       } catch { /* layers not ready yet */ }
     };
 
@@ -642,7 +652,7 @@ export default function MapView({
     centroidSrc?.setData(parkCentroidsGeoJSON() as any);
     try {
       refreshHexLayers(map, layersRef.current);
-      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current);
+      syncLandUseDonutMarkers(map, layersRef.current, landUseMarkersRef.current, displayCityIdRef.current);
     } catch { /* ignore */ }
   }, [dataRevision]);
 

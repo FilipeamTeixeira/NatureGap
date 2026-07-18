@@ -1,22 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { X, ArrowLeft } from 'lucide-react';
+import { X, ArrowLeft, Calendar, MapPin, Users, TreePine, Flower2, Leaf, Zap, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SCORE_THRESHOLDS, cityMeta, MAX_EXPECTED_RICHNESS } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
+import type { CommunityEvent, TakeAction } from '@/lib/data';
 import ScoreGauge from './ScoreGauge';
 import InterventionCard from './InterventionCard';
 
-type Tab = 'overview' | 'biodiversity' | 'habitat' | 'actions';
+type Tab = 'overview' | 'biodiversity' | 'habitat' | 'actions' | 'community';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'biodiversity', label: 'Biodiversity' },
   { id: 'habitat', label: 'Habitat' },
   { id: 'actions', label: 'Actions' },
+  { id: 'community', label: 'Community' },
 ];
+
+const EVENT_TYPE_COLOR: Record<string, string> = {
+  'Guided walk':     'text-[#2E6F40] bg-[#DDEAD8]',
+  'Citizen science': 'text-[#3A6A8A] bg-[#E3EDF5]',
+  'Restoration':     'text-[#9B6A1A] bg-[#FDF0DC]',
+  'Event':           'text-[#667066] bg-[#F0F2EE]',
+};
+
+const ACTION_ICON_MAP: Record<string, LucideIcon> = {
+  Flower2,
+  TreePine,
+  Leaf,
+  Zap,
+};
+
+const ACTION_IMPACT_COLOR: Record<string, string> = {
+  'High impact':             'text-[#2E6F40] bg-[#DDEAD8]',
+  'High impact (long-term)': 'text-[#2E6F40] bg-[#DDEAD8]',
+  'Medium impact':           'text-[#9B6A1A] bg-[#FDF0DC]',
+};
 
 const SPECIES_LABELS: Record<string, string> = {
   plant: 'Plants',
@@ -29,6 +51,10 @@ const SPECIES_LABELS: Record<string, string> = {
 interface CellDetailPanelProps {
   cell: CellData;
   activeLayer: HexLayerId;
+  /** Community events — unfiltered, same list regardless of which park/cell is selected. */
+  events?: CommunityEvent[];
+  /** Generic conservation actions — unfiltered, same list regardless of which park/cell is selected. */
+  actions?: TakeAction[];
   onClose: () => void;
   onViewInsidePark?: () => void;
 }
@@ -192,6 +218,8 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
 export default function CellDetailPanel({
   cell,
   activeLayer,
+  events = [],
+  actions = [],
   onClose,
   onViewInsidePark,
 }: CellDetailPanelProps) {
@@ -573,20 +601,108 @@ export default function CellDetailPanel({
         )}
 
         {tab === 'actions' && (
+          <div className="p-5 flex flex-col gap-6">
+            <div>
+              <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Recommended actions</p>
+              <p className="text-[12px] text-[#667066] mb-4">Ranked by pipeline composite intervention score</p>
+              <Card className="!p-0 !overflow-hidden">
+                {cell.interventions.map((iv) => (
+                  <InterventionCard key={iv.id} intervention={iv} />
+                ))}
+                {cell.interventions.length === 0 && (
+                  <p className="text-[13px] text-[#667066] leading-relaxed p-6">
+                    No ranked interventions are available for this area. Actions are assigned only
+                    to cells in the pipeline&apos;s top intervention list.
+                  </p>
+                )}
+              </Card>
+            </div>
+
+            <div>
+              <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Ways to help</p>
+              <p className="text-[12px] text-[#667066] mb-4">
+                Ranked by ecological impact — the same list everywhere on the map.
+              </p>
+              <div className="flex flex-col gap-3">
+                {actions.length === 0 && (
+                  <p className="text-[13px] text-[#667066] leading-relaxed">
+                    No recommended actions are loaded yet. Configure Supabase or run the pipeline export.
+                  </p>
+                )}
+                {actions.map(({ id, icon, title, description, impact, time }) => {
+                  const Icon = ACTION_ICON_MAP[icon] ?? Leaf;
+                  return (
+                    <Card key={id}>
+                      <div className="flex items-start gap-4">
+                        <div className="w-9 h-9 bg-[#F7F8F5] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Icon size={16} className="text-[#2E6F40]" strokeWidth={1.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <h4 className="text-[13px] font-semibold text-[#1F2A1F]">{title}</h4>
+                            <span
+                              className={cn(
+                                'text-[10px] font-semibold px-2.5 py-0.5 rounded-full',
+                                ACTION_IMPACT_COLOR[impact] ?? 'text-[#667066] bg-[#F0F2EE]',
+                              )}
+                            >
+                              {impact}
+                            </span>
+                          </div>
+                          <p className="text-[12px] text-[#667066] leading-relaxed mb-2">{description}</p>
+                          <span className="text-[11px] text-[#A8B4A8]">{time}</span>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'community' && (
           <div className="p-5">
-            <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Recommended actions</p>
-            <p className="text-[12px] text-[#667066] mb-4">Ranked by pipeline composite intervention score</p>
-            <Card className="!p-0 !overflow-hidden">
-              {cell.interventions.map((iv) => (
-                <InterventionCard key={iv.id} intervention={iv} />
-              ))}
-              {cell.interventions.length === 0 && (
-                <p className="text-[13px] text-[#667066] leading-relaxed p-6">
-                  No ranked interventions are available for this area. Actions are assigned only
-                  to cells in the pipeline&apos;s top intervention list.
+            <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Community</p>
+            <p className="text-[12px] text-[#667066] mb-4">
+              Local events and citizen science opportunities — the same list everywhere on the map.
+            </p>
+            <div className="flex flex-col gap-3">
+              {events.length === 0 && (
+                <p className="text-[13px] text-[#667066] leading-relaxed">
+                  No community events are scheduled yet. Check back soon.
                 </p>
               )}
-            </Card>
+              {events.map(({ id, title, date, location, attendees, type }) => (
+                <Card key={id}>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h4 className="text-[13px] font-semibold text-[#1F2A1F] leading-snug">{title}</h4>
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex-shrink-0',
+                        EVENT_TYPE_COLOR[type] ?? 'text-[#667066] bg-[#F0F2EE]',
+                      )}
+                    >
+                      {type}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                      <Calendar size={11} className="text-[#A8B4A8]" />
+                      {date}
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                      <MapPin size={11} className="text-[#A8B4A8]" />
+                      {location}
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] text-[#667066]">
+                      <Users size={11} className="text-[#A8B4A8]" />
+                      {attendees} registered
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>

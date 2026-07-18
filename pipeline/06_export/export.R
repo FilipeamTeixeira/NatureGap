@@ -1052,7 +1052,7 @@ grid_all <- grid |> mutate(cell_id = paste0(CITY_ID, "-", cell_id))
 # (Helpers defined globally above)
 
 for (col in c(
-  "ndvi_mean", "canopy_height_idx", "lst_idx",
+  "ndvi_mean", "canopy_height_idx", "lst_idx", "lst_rank",
   "disturbance_index", "betweenness_centrality", "ecological_residual", "nature_gap_score",
   "expected_richness", "intervention_rank", "habitat_quality"
 )) {
@@ -1063,7 +1063,10 @@ grid_all <- grid_all |>
   mutate(
     ndvi_norm             = norm_sequential(ndvi_mean),
     tree_cover_norm       = norm_sequential(canopy_height_idx),
-    lst_norm              = norm_sequential(lst_idx),
+    # lst_rank is the heat rank (hot = high), matching heatExposure's sign.
+    # lst_idx = 1 - lst_rank is a coolness index used intentionally in
+    # habitat_quality; do not normalize the heat display field from it.
+    lst_norm              = norm_sequential(lst_rank),
     disturbance_norm      = norm_sequential(disturbance_index),
     betweenness_norm      = norm_sequential(betweenness_centrality),
     residual_norm         = norm_diverging(ecological_residual),

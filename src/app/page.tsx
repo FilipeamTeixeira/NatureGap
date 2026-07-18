@@ -9,7 +9,7 @@ import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
 import CitizenSciencePanel from '@/components/citizen-science/CitizenSciencePanel';
 import { MAP_LAYERS } from '@/lib/mock-data';
 import { initParks } from '@/lib/green-spaces';
-import { initData } from '@/lib/data';
+import { initData, fetchEvents, fetchActions, type CommunityEvent, type TakeAction } from '@/lib/data';
 import { fetchCellDetail, fetchParkDetail, type RenderCellProperties } from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import { CITY } from '@/lib/config';
@@ -44,6 +44,8 @@ export default function Page() {
   const [surveyPoints, setSurveyPoints] = useState<SurveyPointFeature[]>([]);
   const [quickSightings, setQuickSightings] = useState<QuickSightingFeature[]>([]);
   const [structuredSurveys, setStructuredSurveys] = useState<StructuredSurveyFeature[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [actions, setActions] = useState<TakeAction[]>([]);
 
   const quickSightingsFc = useMemo(() => quickSightingsGeoJSON(quickSightings), [quickSightings]);
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
@@ -59,6 +61,12 @@ export default function Page() {
     Promise.allSettled([initData(), initParks()]).finally(() => {
       if (!cancelled) {
         setDataRevision((r) => r + 1);
+      }
+    });
+    Promise.all([fetchEvents(), fetchActions()]).then(([eventData, actionData]) => {
+      if (!cancelled) {
+        setEvents(eventData);
+        setActions(actionData);
       }
     });
     return () => { cancelled = true; };
@@ -184,6 +192,8 @@ export default function Page() {
           <CellDetailPanel
             cell={selectedCell}
             activeLayer={activeLayer}
+            events={events}
+            actions={actions}
             onClose={handleClosePanel}
             onViewInsidePark={() => setFlyToTarget({ center: selectedCell.coordinates, zoom: 16 })}
           />

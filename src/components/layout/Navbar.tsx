@@ -8,10 +8,8 @@ import { cityMeta } from '@/lib/config';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 const NAV_LINKS = [
-  { label: 'Explore',     href: '/' },
-  { label: 'Take Action', href: '/take-action' },
-  { label: 'Community',   href: '/community' },
-  { label: 'About',       href: '/about' },
+  { label: 'Explore', href: '/' },
+  { label: 'About',   href: '/about' },
 ];
 
 interface NavbarProps {
