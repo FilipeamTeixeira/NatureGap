@@ -385,20 +385,22 @@ cat("Fetching OpenStreetMap features...\n")
 skip_osm <- exists("OSM_SKIP_IF_EXISTS") &&
   isTRUE(OSM_SKIP_IF_EXISTS) &&
   osm_cache_ok(RAW_OSM_GREEN) &&
+  osm_cache_ok(RAW_OSM_GROUND_VEG, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_PATHS, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_ROADS, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_RAIL, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_LAMPS, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_LIT_ROADS, min_features = 0L) &&
   osm_cache_ok(RAW_OSM_AMENITIES, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_WATER, min_features = 0L)
+  osm_cache_ok(RAW_OSM_WATER, min_features = 0L) &&
+  osm_cache_ok(RAW_OSM_WATER_POLY, min_features = 0L)
 
 if (skip_osm) {
   cat("  → Using cached OSM files (OSM_SKIP_IF_EXISTS=TRUE)\n")
   cat(sprintf(
-    "    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n",
-    RAW_OSM_GREEN, RAW_OSM_PATHS, RAW_OSM_ROADS, RAW_OSM_RAIL,
-    RAW_OSM_LAMPS, RAW_OSM_LIT_ROADS, RAW_OSM_AMENITIES, RAW_OSM_WATER
+    "    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n",
+    RAW_OSM_GREEN, RAW_OSM_GROUND_VEG, RAW_OSM_PATHS, RAW_OSM_ROADS, RAW_OSM_RAIL,
+    RAW_OSM_LAMPS, RAW_OSM_LIT_ROADS, RAW_OSM_AMENITIES, RAW_OSM_WATER, RAW_OSM_WATER_POLY
   ))
 } else {
   # Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
@@ -420,6 +422,36 @@ if (skip_osm) {
   }
   st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
   cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
+
+  osm_ground_veg <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "natural", value = c("grassland", "scrub")) |>
+      osmdata_sf()
+  }, "OSM ground vegetation")
+
+  ground_veg_polygons <- if (!is.null(osm_ground_veg$osm_polygons)) {
+    osm_ground_veg$osm_polygons |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM ground vegetation polygons returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(ground_veg_polygons, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
+  cat(sprintf("  → %d ground vegetation polygons written\n", nrow(ground_veg_polygons)))
+
+  osm_ground_veg2 <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "landuse", value = c("grass", "meadow", "allotments")) |>
+      osmdata_sf()
+  }, "OSM ground vegetation (landuse)")
+
+  ground_veg_polygons2 <- if (!is.null(osm_ground_veg2$osm_polygons)) {
+    osm_ground_veg2$osm_polygons |> st_transform(CRS_LOCAL)
+  } else {
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  ground_veg_polygons_all <- bind_rows(ground_veg_polygons, ground_veg_polygons2)
+  st_write(ground_veg_polygons_all, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
+  cat(sprintf("  → %d ground vegetation polygons written (combined)\n", nrow(ground_veg_polygons_all)))
 
   osm_paths <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
@@ -520,15 +552,30 @@ if (skip_osm) {
   st_write(amenity_points, RAW_OSM_AMENITIES, delete_dsn = TRUE)
   cat(sprintf("  → %d amenity points written\n", nrow(amenity_points)))
 
-  osm_water <- fetch_osm_sf(function() {
+  osm_water_bodies <- fetch_osm_sf(function() {
+    opq(bbox = osm_bbox, timeout = 180) |>
+      add_osm_feature(key = "natural", value = "water") |>
+      osmdata_sf()
+  }, "OSM water bodies")
+
+  water_polygons <- if (!is.null(osm_water_bodies$osm_polygons)) {
+    osm_water_bodies$osm_polygons |> st_transform(CRS_LOCAL)
+  } else {
+    warning("No OSM water polygons returned — writing empty layer")
+    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+  }
+  st_write(water_polygons, RAW_OSM_WATER_POLY, delete_dsn = TRUE)
+  cat(sprintf("  → %d water polygons written\n", nrow(water_polygons)))
+
+  osm_waterways <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "waterway",
                       value = c("river", "stream", "ditch", "drain", "canal")) |>
       osmdata_sf()
   }, "OSM waterways")
 
-  water_lines <- if (!is.null(osm_water$osm_lines)) {
-    osm_water$osm_lines |> st_transform(CRS_LOCAL)
+  water_lines <- if (!is.null(osm_waterways$osm_lines)) {
+    osm_waterways$osm_lines |> st_transform(CRS_LOCAL)
   } else {
     warning("No OSM waterway lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))

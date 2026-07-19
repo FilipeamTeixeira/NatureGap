@@ -135,6 +135,21 @@ road_weight <- function(highway) {
   )
 }
 
+polygon_area_by_cell <- function(polygons, grid) {
+  if (nrow(polygons) == 0L) {
+    return(tibble(cell_id = grid$cell_id, area_m2 = 0))
+  }
+  inter <- suppressWarnings(st_intersection(polygons, grid))
+  if (nrow(inter) == 0L) {
+    return(tibble(cell_id = grid$cell_id, area_m2 = 0))
+  }
+  inter$area_m2 <- as.numeric(st_area(st_geometry(inter)))
+  inter |>
+    st_drop_geometry() |>
+    group_by(cell_id) |>
+    summarise(area_m2 = sum(area_m2), .groups = "drop")
+}
+
 # WorldCover class codes
 WC_TREE     <- 10L
 WC_SHRUB    <- 20L
@@ -236,22 +251,48 @@ if (file.exists(imp_path)) {
 green <- st_read(RAW_OSM_GREEN, quiet = TRUE)
 cell_area <- CELL_SIZE^2
 
-inter <- suppressWarnings(st_intersection(green, grid))
-
-inter$area_m2 <- as.numeric(st_area(st_geometry(inter)))
-
-green_area <- inter |>
-  st_drop_geometry() |>
-  group_by(cell_id) |>
-  summarise(green_area_m2 = sum(area_m2), .groups = "drop")
+green_area <- polygon_area_by_cell(green, grid)
 
 grid <- grid |>
   left_join(green_area, by = "cell_id") |>
   mutate(
-    green_area_m2 = replace_na(green_area_m2, 0),
+    green_area_m2 = replace_na(area_m2, 0),
     osm_green_fraction = pmin(green_area_m2 / cell_area, 1)
   ) |>
-  select(-green_area_m2)
+  select(-green_area_m2, -area_m2)
+
+# ── 4b. OSM ground vegetation: supplemental grass/scrub/meadow fraction ──────
+# Combines dedicated ground-veg tags with leisure=garden from RAW_OSM_GREEN.
+
+ground_veg_layers <- bind_rows(
+  read_optional_sf(RAW_OSM_GROUND_VEG, "OSM ground vegetation"),
+  read_optional_sf(RAW_OSM_GREEN, "OSM green spaces")
+)
+if (nrow(ground_veg_layers) > 0L) {
+  ground_veg_layers <- st_as_sf(st_union(st_geometry(ground_veg_layers)))
+}
+ground_veg_area <- polygon_area_by_cell(ground_veg_layers, grid)
+
+grid <- grid |>
+  left_join(ground_veg_area, by = "cell_id") |>
+  mutate(
+    ground_veg_area_m2 = replace_na(area_m2, 0),
+    osm_ground_veg_fraction = pmin(ground_veg_area_m2 / cell_area, 1)
+  ) |>
+  select(-ground_veg_area_m2, -area_m2)
+
+# ── 4c. OSM water bodies: supplemental water area fraction ───────────────────
+
+water_polygons <- read_optional_sf(RAW_OSM_WATER_POLY, "OSM water bodies")
+water_poly_area <- polygon_area_by_cell(water_polygons, grid)
+
+grid <- grid |>
+  left_join(water_poly_area, by = "cell_id") |>
+  mutate(
+    water_poly_area_m2 = replace_na(area_m2, 0),
+    osm_water_poly_fraction = pmin(water_poly_area_m2 / cell_area, 1)
+  ) |>
+  select(-water_poly_area_m2, -area_m2)
 
 # ── 5. OSM path density (observer effort denominator) ────────────────────────
 
@@ -327,6 +368,12 @@ lamps <- read_optional_sf(RAW_OSM_LAMPS, "OSM street lamps")
 lit_roads <- read_optional_sf(RAW_OSM_LIT_ROADS, "OSM lit roads")
 amenities <- read_optional_sf(RAW_OSM_AMENITIES, "OSM amenities")
 water <- read_optional_sf(RAW_OSM_WATER, "OSM water")
+water_polygons_prox <- read_optional_sf(RAW_OSM_WATER_POLY, "OSM water bodies")
+water_features <- bind_rows(
+  if (nrow(water) > 0L) water else NULL,
+  if (nrow(water_polygons_prox) > 0L) water_polygons_prox else NULL
+)
+if (nrow(water_features) == 0L) water_features <- empty_sf()
 
 if (nrow(roads) > 0L) {
   roads$.road_weight <- road_weight(roads$highway)
@@ -356,7 +403,7 @@ lit_road_density <- line_density_by_cell(lit_roads, grid)
 path_density <- (grid$path_km * 1000) / pmax(cell_area_ha, 0.0001)
 amenity_proximity <- distance_weighted_points(amenities, cell_centroids, radius_m = 120, decay_m = 50)
 
-water_prox <- nearest_proximity(water, cell_centroids, radius_m = 250)
+water_prox <- nearest_proximity(water_features, cell_centroids, radius_m = 250)
 permeable_fraction <- pmin(1, pmax(0, 1 - replace_na(grid$impervious_fraction, 0)))
 
 grid <- grid |>

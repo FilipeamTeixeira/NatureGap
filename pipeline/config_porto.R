@@ -216,6 +216,20 @@ RASTER_INPUT_DOWNLOADERS <- file.path(
   )
 )
 
+# PLANETSCOPE NDVI Data
+
+PLANET_NDVI_FILE <- file.path(
+  DATA_IMPORT, "planetscope",
+  paste0("planet_ndvi_", CITY_ID, ".tif")
+)
+
+# CANOPY HEIGHT META/WRI Data
+
+CANOPY_HEIGHT_FILE <- file.path(
+  DATA_IMPORT, "canopy_height",
+  paste0("canopy_height_", CITY_ID, ".tif")
+)
+
 WC_FILE <- file.path(
   DATA_IMPORT, "worldcover",
   paste0("worldcover_", CITY_ID, ".tif")
@@ -275,6 +289,7 @@ RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
 RAW_SUPABASE_OBS <- file.path(DATA_RAW, "supabase_observations.gpkg")
 RAW_OSM_GREEN  <- file.path(DATA_RAW, "osm_green_spaces.gpkg")
+RAW_OSM_GROUND_VEG <- file.path(DATA_RAW, "osm_ground_veg.gpkg")
 RAW_NATIONAL_GREEN <- file.path(DATA_RAW, "national_green_spaces.gpkg")
 RAW_OSM_PATHS  <- file.path(DATA_RAW, "osm_paths.gpkg")
 RAW_OSM_ROADS  <- file.path(DATA_RAW, "osm_roads.gpkg")
@@ -283,6 +298,8 @@ RAW_OSM_LAMPS  <- file.path(DATA_RAW, "osm_street_lamps.gpkg")
 RAW_OSM_LIT_ROADS <- file.path(DATA_RAW, "osm_lit_roads.gpkg")
 RAW_OSM_AMENITIES <- file.path(DATA_RAW, "osm_amenities.gpkg")
 RAW_OSM_WATER  <- file.path(DATA_RAW, "osm_water.gpkg")
+#RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_poly.gpkg")
+RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_polygons.gpkg")
 
 # Processed pipeline outputs
 PROC_HEX_CELLS <- file.path(DATA_PROC, "hex_cells.gpkg")
