@@ -208,7 +208,8 @@ RASTER_INPUT_DOWNLOADERS <- file.path(
   c(
     "00_download/download_worldcover.R",
     "00_download/download_sentinel2.R",
-    "00_download/download_landsat_temp.R"
+    "00_download/download_landsat_temp.R",
+    "00_download/download_canopy_height.R"
   )
 )
 
