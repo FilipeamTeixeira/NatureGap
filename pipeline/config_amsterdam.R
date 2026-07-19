@@ -210,8 +210,16 @@ RASTER_INPUT_DOWNLOADERS <- file.path(
     "00_download/download_worldcover.R",
     "00_download/download_sentinel2.R",
     "00_download/download_landsat_temp.R",
-    "00_download/download_canopy_height.R"
+    "00_download/download_canopy_height.R",
+    "00_download/download_planetscope_ndvi.R"
   )
+)
+
+# Planetscope
+
+PLANET_NDVI_FILE <- file.path(
+  DATA_IMPORT, "planetscope",
+  paste0("planet_ndvi_", CITY_ID, ".tif")
 )
 
 WC_FILE <- file.path(
