@@ -550,13 +550,19 @@ land_use_class <- function(tree, shrub, grass, water = NA_real_, built = NA_real
   water_v <- replace_na(water, -Inf)
   built_v <- replace_na(built, -Inf)
   bare_v <- replace_na(bare, -Inf)
-  fractions <- c(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
-  max_v <- max(fractions)
-  sorted <- sort(fractions[fractions > -Inf], decreasing = TRUE)
-  second_v <- if (length(sorted) >= 2L) sorted[[2L]] else 0
+  fractions <- cbind(tree_v, shrub_v, grass_v, water_v, built_v, bare_v)
+  max_v <- do.call(pmax, as.data.frame(fractions))
+  second_v <- apply(
+    fractions,
+    1L,
+    function(row) {
+      vals <- sort(row[row > -Inf], decreasing = TRUE)
+      if (length(vals) >= 2L) vals[[2L]] else 0
+    }
+  )
 
   case_when(
-    !is.finite(max_v) || max_v <= 0 ~ "unknown",
+    !is.finite(max_v) | max_v <= 0 ~ "unknown",
     max_v < 0.50 ~ "mixed",
     (max_v - second_v) < 0.12 ~ "mixed",
     tree_v == max_v ~ "tree",
