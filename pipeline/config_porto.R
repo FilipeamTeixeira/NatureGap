@@ -158,11 +158,14 @@ GBIF_MAX_RESULTS    <- 10000L
 
 OVERPASS_URL <- "https://overpass-api.de/api/interpreter"
 OVERPASS_FALLBACK_URLS <- c(
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://z.overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
 )
-OVERPASS_RETRIES     <- 3L    # attempts per endpoint before moving on
-OVERPASS_RETRY_WAIT  <- 45L   # seconds between retries (Overpass rate-limits)
+OVERPASS_RETRIES      <- 5L    # attempts per endpoint before moving on
+OVERPASS_RETRY_WAIT   <- 45L   # seconds between retries (Overpass rate-limits)
+OVERPASS_QUERY_DELAY  <- 20L   # pause between successive Overpass queries
 
 # Re-use existing OSM extracts on re-runs instead of hitting Overpass again.
 OSM_SKIP_IF_EXISTS   <- TRUE
@@ -298,8 +301,7 @@ RAW_OSM_LAMPS  <- file.path(DATA_RAW, "osm_street_lamps.gpkg")
 RAW_OSM_LIT_ROADS <- file.path(DATA_RAW, "osm_lit_roads.gpkg")
 RAW_OSM_AMENITIES <- file.path(DATA_RAW, "osm_amenities.gpkg")
 RAW_OSM_WATER  <- file.path(DATA_RAW, "osm_water.gpkg")
-#RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_poly.gpkg")
-RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_polygons.gpkg")
+RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_poly.gpkg")
 
 # Processed pipeline outputs
 PROC_HEX_CELLS <- file.path(DATA_PROC, "hex_cells.gpkg")

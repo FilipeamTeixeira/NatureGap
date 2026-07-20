@@ -157,11 +157,14 @@ GBIF_MAX_RESULTS    <- 10000L
 
 OVERPASS_URL <- "https://overpass-api.de/api/interpreter"
 OVERPASS_FALLBACK_URLS <- c(
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://z.overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
 )
-OVERPASS_RETRIES     <- 3L    # attempts per endpoint before moving on
-OVERPASS_RETRY_WAIT  <- 45L   # seconds between retries (Overpass rate-limits)
+OVERPASS_RETRIES      <- 5L    # attempts per endpoint before moving on
+OVERPASS_RETRY_WAIT   <- 45L   # seconds between retries (Overpass rate-limits)
+OVERPASS_QUERY_DELAY  <- 20L   # pause between successive Overpass queries
 
 # Re-use existing OSM extracts on re-runs instead of hitting Overpass again.
 OSM_SKIP_IF_EXISTS   <- TRUE

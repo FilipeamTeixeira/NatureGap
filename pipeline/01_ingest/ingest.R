@@ -48,6 +48,69 @@ run_raster_input_downloaders <- function() {
   invisible(TRUE)
 }
 
+# fetch_osm_sf <- function(query_fn, label) {
+#   fallback_urls <- if (exists("OVERPASS_FALLBACK_URLS")) {
+#     OVERPASS_FALLBACK_URLS
+#   } else {
+#     c(
+#       "https://overpass-api.de/api/interpreter",
+#       "https://overpass.kumi.systems/api/interpreter"
+#     )
+#   }
+#   primary_url <- if (exists("OVERPASS_URL")) {
+#     OVERPASS_URL
+#   } else {
+#     "https://overpass-api.de/api/interpreter"
+#   }
+#   max_retries <- if (exists("OVERPASS_RETRIES")) OVERPASS_RETRIES else 3L
+#   retry_wait  <- if (exists("OVERPASS_RETRY_WAIT")) OVERPASS_RETRY_WAIT else 45L
+#
+#   urls <- unique(c(primary_url, fallback_urls))
+#   last_err <- NULL
+#
+#   for (url in urls) {
+#     set_overpass_url(url)
+#     for (attempt in seq_len(max_retries)) {
+#       cat(sprintf(
+#         "  → Fetching %s via %s (attempt %d/%d)\n",
+#         label, url, attempt, max_retries
+#       ))
+#       result <- tryCatch(
+#         query_fn(),
+#         error = function(e) {
+#           last_err <<- e
+#           NULL
+#         }
+#       )
+#       if (!is.null(result)) return(result)
+#
+#       err_msg <- conditionMessage(last_err)
+#       is_transient <- grepl(
+#         "504|502|503|429|timeout|timed out|Gateway|Too Many|rate limit|overloaded",
+#         err_msg, ignore.case = TRUE
+#       )
+#       if (attempt < max_retries && is_transient) {
+#         cat(sprintf(
+#           "    … transient error, waiting %ds before retry: %s\n",
+#           retry_wait, err_msg
+#         ))
+#         Sys.sleep(retry_wait)
+#       } else {
+#         break
+#       }
+#     }
+#     warning(sprintf(
+#       "%s failed on %s after %d attempt(s): %s",
+#       label, url, max_retries, conditionMessage(last_err)
+#     ), call. = FALSE)
+#   }
+#   stop(sprintf(
+#     "All Overpass endpoints failed for %s. Last error: %s\n",
+#     label, conditionMessage(last_err)
+#   ), call. = FALSE)
+# }
+
+
 fetch_osm_sf <- function(query_fn, label) {
   fallback_urls <- if (exists("OVERPASS_FALLBACK_URLS")) {
     OVERPASS_FALLBACK_URLS
@@ -62,14 +125,32 @@ fetch_osm_sf <- function(query_fn, label) {
   } else {
     "https://overpass-api.de/api/interpreter"
   }
-  max_retries <- if (exists("OVERPASS_RETRIES")) OVERPASS_RETRIES else 3L
-  retry_wait  <- if (exists("OVERPASS_RETRY_WAIT")) OVERPASS_RETRY_WAIT else 45L
+  max_retries <- if (exists("OVERPASS_RETRIES")) OVERPASS_RETRIES else 5L
+  base_wait   <- if (exists("OVERPASS_RETRY_WAIT")) OVERPASS_RETRY_WAIT else 45L
 
   urls <- unique(c(primary_url, fallback_urls))
   last_err <- NULL
 
   for (url in urls) {
-    set_overpass_url(url)
+    # FIX: Wrap set_overpass_url in tryCatch.
+    # It makes an HTTP validation request that will crash the script if it hits a 429 or 504.
+    url_setup_success <- tryCatch({
+      set_overpass_url(url)
+      TRUE
+    }, error = function(e) {
+      last_err <<- e
+      FALSE
+    })
+
+    # If the URL validation fails, skip to the next fallback link
+    if (!url_setup_success) {
+      warning(sprintf(
+        "Could not connect to %s during setup: %s",
+        url, conditionMessage(last_err)
+      ), call. = FALSE)
+      next
+    }
+
     for (attempt in seq_len(max_retries)) {
       cat(sprintf(
         "  → Fetching %s via %s (attempt %d/%d)\n",
@@ -89,7 +170,13 @@ fetch_osm_sf <- function(query_fn, label) {
         "504|502|503|429|timeout|timed out|Gateway|Too Many|rate limit|overloaded",
         err_msg, ignore.case = TRUE
       )
+      is_rate_limited <- grepl("429|Too Many|rate limit", err_msg, ignore.case = TRUE)
       if (attempt < max_retries && is_transient) {
+        retry_wait <- if (is_rate_limited) {
+          base_wait * (2 ^ (attempt - 1))
+        } else {
+          base_wait
+        }
         cat(sprintf(
           "    … transient error, waiting %ds before retry: %s\n",
           retry_wait, err_msg
@@ -110,12 +197,43 @@ fetch_osm_sf <- function(query_fn, label) {
   ), call. = FALSE)
 }
 
+osm_cache_resolved_path <- function(path) {
+  candidates <- c(path)
+  if (grepl("osm_water_polygons\\.gpkg$", path)) {
+    candidates <- c(candidates, sub("osm_water_polygons\\.gpkg$", "osm_water_poly.gpkg", path))
+  }
+  for (p in candidates) {
+    if (file.exists(p)) return(p)
+  }
+  path
+}
+
 osm_cache_ok <- function(path, min_features = 1L) {
-  if (!file.exists(path)) return(FALSE)
+  resolved <- osm_cache_resolved_path(path)
+  if (!file.exists(resolved)) return(FALSE)
   tryCatch({
-    sf_obj <- st_read(path, quiet = TRUE)
+    sf_obj <- st_read(resolved, quiet = TRUE)
     nrow(sf_obj) >= min_features
   }, error = function(e) FALSE)
+}
+
+.overpass_queries_this_run <- 0L
+
+overpass_pause_before_query <- function() {
+  delay <- if (exists("OVERPASS_QUERY_DELAY")) OVERPASS_QUERY_DELAY else 20L
+  if (.overpass_queries_this_run > 0L && is.numeric(delay) && delay > 0) {
+    cat(sprintf("  … pausing %ds before next Overpass query\n", as.integer(delay)))
+    Sys.sleep(delay)
+  }
+  .overpass_queries_this_run <<- .overpass_queries_this_run + 1L
+  invisible(NULL)
+}
+
+use_osm_cache <- function(path, min_features, label) {
+  skip <- exists("OSM_SKIP_IF_EXISTS") && isTRUE(OSM_SKIP_IF_EXISTS)
+  if (!skip || !osm_cache_ok(path, min_features)) return(FALSE)
+  cat(sprintf("  → Using cached %s (%s)\n", label, osm_cache_resolved_path(path)))
+  TRUE
 }
 
 city_raster_ext <- function(r) {
@@ -382,31 +500,12 @@ cat(sprintf("  → %d GBIF records written\n", nrow(gbif_sf)))
 
 cat("Fetching OpenStreetMap features...\n")
 
-skip_osm <- exists("OSM_SKIP_IF_EXISTS") &&
-  isTRUE(OSM_SKIP_IF_EXISTS) &&
-  osm_cache_ok(RAW_OSM_GREEN) &&
-  osm_cache_ok(RAW_OSM_GROUND_VEG, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_PATHS, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_ROADS, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_RAIL, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_LAMPS, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_LIT_ROADS, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_AMENITIES, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_WATER, min_features = 0L) &&
-  osm_cache_ok(RAW_OSM_WATER_POLY, min_features = 0L)
+# Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
+osm_bbox <- c(BBOX_CITY["xmin"], BBOX_CITY["ymin"],
+              BBOX_CITY["xmax"], BBOX_CITY["ymax"])
 
-if (skip_osm) {
-  cat("  → Using cached OSM files (OSM_SKIP_IF_EXISTS=TRUE)\n")
-  cat(sprintf(
-    "    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n    %s\n",
-    RAW_OSM_GREEN, RAW_OSM_GROUND_VEG, RAW_OSM_PATHS, RAW_OSM_ROADS, RAW_OSM_RAIL,
-    RAW_OSM_LAMPS, RAW_OSM_LIT_ROADS, RAW_OSM_AMENITIES, RAW_OSM_WATER, RAW_OSM_WATER_POLY
-  ))
-} else {
-  # Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
-  osm_bbox <- c(BBOX_CITY["xmin"], BBOX_CITY["ymin"],
-                BBOX_CITY["xmax"], BBOX_CITY["ymax"])
-
+if (!use_osm_cache(RAW_OSM_GREEN, 1L, "OSM green spaces")) {
+  overpass_pause_before_query()
   osm_green <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "leisure",
@@ -422,7 +521,10 @@ if (skip_osm) {
   }
   st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
   cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
+}
 
+if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
+  overpass_pause_before_query()
   osm_ground_veg <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "natural", value = c("grassland", "scrub")) |>
@@ -438,6 +540,7 @@ if (skip_osm) {
   st_write(ground_veg_polygons, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
   cat(sprintf("  → %d ground vegetation polygons written\n", nrow(ground_veg_polygons)))
 
+  overpass_pause_before_query()
   osm_ground_veg2 <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "landuse", value = c("grass", "meadow", "allotments")) |>
@@ -452,7 +555,10 @@ if (skip_osm) {
   ground_veg_polygons_all <- bind_rows(ground_veg_polygons, ground_veg_polygons2)
   st_write(ground_veg_polygons_all, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
   cat(sprintf("  → %d ground vegetation polygons written (combined)\n", nrow(ground_veg_polygons_all)))
+}
 
+if (!use_osm_cache(RAW_OSM_PATHS, 0L, "OSM paths")) {
+  overpass_pause_before_query()
   osm_paths <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "highway",
@@ -468,7 +574,10 @@ if (skip_osm) {
   }
   st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
   cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
+}
 
+if (!use_osm_cache(RAW_OSM_ROADS, 0L, "OSM roads")) {
+  overpass_pause_before_query()
   osm_roads <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "highway",
@@ -486,7 +595,10 @@ if (skip_osm) {
   }
   st_write(road_lines, RAW_OSM_ROADS, delete_dsn = TRUE)
   cat(sprintf("  → %d road lines written\n", nrow(road_lines)))
+}
 
+if (!use_osm_cache(RAW_OSM_RAIL, 0L, "OSM rail")) {
+  overpass_pause_before_query()
   osm_rail <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "railway",
@@ -502,7 +614,10 @@ if (skip_osm) {
   }
   st_write(rail_lines, RAW_OSM_RAIL, delete_dsn = TRUE)
   cat(sprintf("  → %d rail lines written\n", nrow(rail_lines)))
+}
 
+if (!use_osm_cache(RAW_OSM_LAMPS, 0L, "OSM street lamps")) {
+  overpass_pause_before_query()
   osm_lamps <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "highway", value = "street_lamp") |>
@@ -517,7 +632,10 @@ if (skip_osm) {
   }
   st_write(lamp_points, RAW_OSM_LAMPS, delete_dsn = TRUE)
   cat(sprintf("  → %d street lamp points written\n", nrow(lamp_points)))
+}
 
+if (!use_osm_cache(RAW_OSM_LIT_ROADS, 0L, "OSM lit roads")) {
+  overpass_pause_before_query()
   osm_lit_roads <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "lit", value = "yes") |>
@@ -532,7 +650,10 @@ if (skip_osm) {
   }
   st_write(lit_lines, RAW_OSM_LIT_ROADS, delete_dsn = TRUE)
   cat(sprintf("  → %d lit road lines written\n", nrow(lit_lines)))
+}
 
+if (!use_osm_cache(RAW_OSM_AMENITIES, 0L, "OSM amenities")) {
+  overpass_pause_before_query()
   osm_amenities <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "amenity") |>
@@ -551,7 +672,10 @@ if (skip_osm) {
   }
   st_write(amenity_points, RAW_OSM_AMENITIES, delete_dsn = TRUE)
   cat(sprintf("  → %d amenity points written\n", nrow(amenity_points)))
+}
 
+if (!use_osm_cache(RAW_OSM_WATER_POLY, 0L, "OSM water bodies")) {
+  overpass_pause_before_query()
   osm_water_bodies <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "natural", value = "water") |>
@@ -566,7 +690,10 @@ if (skip_osm) {
   }
   st_write(water_polygons, RAW_OSM_WATER_POLY, delete_dsn = TRUE)
   cat(sprintf("  → %d water polygons written\n", nrow(water_polygons)))
+}
 
+if (!use_osm_cache(RAW_OSM_WATER, 0L, "OSM waterways")) {
+  overpass_pause_before_query()
   osm_waterways <- fetch_osm_sf(function() {
     opq(bbox = osm_bbox, timeout = 180) |>
       add_osm_feature(key = "waterway",

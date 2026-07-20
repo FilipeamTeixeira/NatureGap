@@ -744,8 +744,8 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     lstIdx             = pct_index(row$lst_idx),
     landUseGreen       = pct_index(row$green_fraction_wc),
     landUseClass       = unbox(land_use_class(
-      row$tree_fraction, row$ground_vegetation_fraction,
-      row$osm_water_fraction, row$built_fraction_wc, row$bare_fraction
+      row$tree_fraction, row$shrub_fraction, row$grass_fraction,
+      row$water_fraction, row$built_fraction_wc, row$bare_fraction
     )),
     interventionRank   = as.integer(replace_na(row$intervention_rank, 50L)),
     pressures          = as.list(derive_pressures(
@@ -1019,7 +1019,8 @@ for (col in c("plant", "bird", "insect", "mammal", "fungi", "n_survey_dates", "p
   if (!col %in% names(grid_raw)) grid_raw[[col]] <- 0
 }
 for (col in c(
-"tree_fraction", "ground_vegetation_fraction", "osm_water_fraction",
+  "tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction",
+  "ground_vegetation_fraction", "osm_water_fraction",
   "built_fraction_wc", "bare_fraction", "impervious_fraction",
   "green_fraction_wc", "lst_rank"
 )) {
@@ -1029,8 +1030,8 @@ for (col in c(
 grid <- grid_raw |>
   select(
     cell_id, any_of("green_space_id"), habitat_quality, impact_score, nature_gap_score, composite, intervention_rank, is_habitat,
-    any_of(c("tree_fraction", "ground_vegetation_fraction",
-         "osm_water_fraction", "bare_fraction",
+    any_of(c("tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction",
+             "ground_vegetation_fraction", "osm_water_fraction", "bare_fraction",
              "built_fraction_wc", "green_fraction_wc",
              "impervious_fraction", "osm_green_fraction",
              "osm_ground_veg_fraction", "osm_water_poly_fraction")),
@@ -1218,26 +1219,29 @@ hexgrid_tiles <- hexgrid_render |>
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),
-    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(canopy_height_idx, 0), 4)),
+    canopyHeightIdx    = round(replace_na(canopy_height_idx, 0), 4),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
     landUseGreen       = pct_index(green_fraction_wc),
     landUseClass       = land_use_class(
-       tree_fraction, ground_vegetation_fraction,
-       osm_water_fraction, built_fraction_wc, bare_fraction
+      tree_fraction, shrub_fraction, grass_fraction,
+      water_fraction, built_fraction_wc, bare_fraction
     ),
     interventionRank   = as.integer(replace_na(intervention_rank, 50L)),
-    ndviNorm           = if_else(is_unsampled, 0, round(replace_na(ndvi_norm, 0), 4)),
-    treeCoverNorm      = if_else(is_unsampled, 0, round(replace_na(tree_cover_norm, 0), 4)),
-    lstNorm            = if_else(is_unsampled, 0, round(replace_na(lst_norm, 0), 4)),
-    disturbanceNorm    = if_else(is_unsampled, 0, round(replace_na(disturbance_norm, 0), 4)),
-    betweennessNorm    = if_else(is_unsampled, 0, round(replace_na(betweenness_norm, 0), 4)),
+    # Remote-sensing / structural layers are valid regardless of pedestrian
+    # survey effort, so they are not masked by is_unsampled.
+    ndviNorm           = round(replace_na(ndvi_norm, 0), 4),
+    treeCoverNorm      = round(replace_na(tree_cover_norm, 0), 4),
+    lstNorm            = round(replace_na(lst_norm, 0), 4),
+    disturbanceNorm    = round(replace_na(disturbance_norm, 0), 4),
+    betweennessNorm    = round(replace_na(betweenness_norm, 0), 4),
+    expectedNorm       = round(replace_na(expected_richness_norm, 0), 4),
+    habitatQualityNorm = round(replace_na(habitat_quality_norm, 0), 4),
+    # Biodiversity-inference layers stay excluded (zeroed) for unsampled cells.
     residualNorm       = if_else(is_unsampled, 0, round(replace_na(residual_norm, 0), 4)),
     natureGapScoreNorm = if_else(is_unsampled, 0, round(replace_na(nature_gap_score_norm, 0), 4)),
-    expectedNorm       = if_else(is_unsampled, 0, round(replace_na(expected_richness_norm, 0), 4)),
-    interventionRankNorm = if_else(is_unsampled, 0, round(replace_na(intervention_rank_norm, 0), 4)),
-    habitatQualityNorm = if_else(is_unsampled, 0, round(replace_na(habitat_quality_norm, 0), 4))
+    interventionRankNorm = if_else(is_unsampled, 0, round(replace_na(intervention_rank_norm, 0), 4))
   )
 
 hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
