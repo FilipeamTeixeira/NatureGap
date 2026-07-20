@@ -744,8 +744,8 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     lstIdx             = pct_index(row$lst_idx),
     landUseGreen       = pct_index(row$green_fraction_wc),
     landUseClass       = unbox(land_use_class(
-      row$tree_fraction, row$shrub_fraction, row$grass_fraction,
-      row$water_fraction, row$built_fraction_wc, row$bare_fraction
+      row$tree_fraction, row$ground_vegetation_fraction,
+      row$osm_water_fraction, row$built_fraction_wc, row$bare_fraction
     )),
     interventionRank   = as.integer(replace_na(row$intervention_rank, 50L)),
     pressures          = as.list(derive_pressures(
@@ -1019,7 +1019,7 @@ for (col in c("plant", "bird", "insect", "mammal", "fungi", "n_survey_dates", "p
   if (!col %in% names(grid_raw)) grid_raw[[col]] <- 0
 }
 for (col in c(
-  "tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction",
+"tree_fraction", "ground_vegetation_fraction", "osm_water_fraction",
   "built_fraction_wc", "bare_fraction", "impervious_fraction",
   "green_fraction_wc", "lst_rank"
 )) {
@@ -1029,9 +1029,9 @@ for (col in c(
 grid <- grid_raw |>
   select(
     cell_id, any_of("green_space_id"), habitat_quality, impact_score, nature_gap_score, composite, intervention_rank, is_habitat,
-    any_of(c("tree_fraction", "shrub_fraction", "grass_fraction",
+    any_of(c("tree_fraction", "ground_vegetation_fraction",
+         "osm_water_fraction", "bare_fraction",
              "built_fraction_wc", "green_fraction_wc",
-             "water_fraction", "bare_fraction",
              "impervious_fraction", "osm_green_fraction",
              "osm_ground_veg_fraction", "osm_water_poly_fraction")),
     any_of(c("ndvi_mean", "lst_rank", "heat_exposure", "noise",
@@ -1218,14 +1218,14 @@ hexgrid_tiles <- hexgrid_render |>
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),
-    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(tree_fraction, 0), 4)),
+    canopyHeightIdx    = if_else(is_unsampled, 0, round(replace_na(canopy_height_idx, 0), 4)),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
     landUseGreen       = pct_index(green_fraction_wc),
     landUseClass       = land_use_class(
-      tree_fraction, shrub_fraction, grass_fraction,
-      water_fraction, built_fraction_wc, bare_fraction
+       tree_fraction, ground_vegetation_fraction,
+       osm_water_fraction, built_fraction_wc, bare_fraction
     ),
     interventionRank   = as.integer(replace_na(intervention_rank, 50L)),
     ndviNorm           = if_else(is_unsampled, 0, round(replace_na(ndvi_norm, 0), 4)),
