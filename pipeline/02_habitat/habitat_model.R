@@ -337,9 +337,17 @@ if (file.exists(RAW_NDVI)) {
   message("NDVI raster not found — ndvi_idx set to NA.")
 }
 
-# Tree cover is now derived from tree_fraction (ESA WorldCover, computed above),
-# so the Meta/WRI canopy-height raster is no longer ingested. canopy_height_idx
-# and canopy_height_m remain as NA columns for backward compatibility only.
+# Canopy height (Meta/WRI), rescaled 0-30m -> 0-1 index. Adjust the 30m upper
+# bound if your city's canopy height distribution suggests a different cap.
+if (file.exists(CANOPY_HEIGHT_FILE)) {
+  cat("Extracting canopy height per cell...\n")
+  canopy_height <- rast(CANOPY_HEIGHT_FILE) |> project(CRS_LOCAL, method = "bilinear")
+  canopy_height_mean <- terra::extract(canopy_height, vect(grid), fun = mean, na.rm = TRUE)
+  grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
+  grid$canopy_height_idx <- fixed_rescale01(grid$canopy_height_m, 0, 30)
+} else {
+  message("Canopy height raster not found — canopy_height_idx set to NA.")
+}
 
 if (file.exists(RAW_LST)) {
   cat("Extracting LST per cell...\n")
@@ -436,8 +444,8 @@ grid <- grid |>
 grid <- grid |>
   mutate(
     habitat_quality = 0.50 * replace_na(ndvi_idx, 0) +
-                      0.286 * replace_na(lst_idx, 0) +
-                      0.214 * (1 - replace_na(disturbance_idx, 1))
+      0.286 * replace_na(lst_idx, 0) +
+      0.214 * (1 - replace_na(disturbance_idx, 1))
   )
 
 cat(sprintf(

@@ -295,7 +295,8 @@ RAW_OSM_LAMPS  <- file.path(DATA_RAW, "osm_street_lamps.gpkg")
 RAW_OSM_LIT_ROADS <- file.path(DATA_RAW, "osm_lit_roads.gpkg")
 RAW_OSM_AMENITIES <- file.path(DATA_RAW, "osm_amenities.gpkg")
 RAW_OSM_WATER  <- file.path(DATA_RAW, "osm_water.gpkg")
-RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_poly.gpkg")
+#RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_poly.gpkg")
+RAW_OSM_WATER_POLY <- file.path(DATA_RAW, "osm_water_polygons.gpkg")
 
 # Processed pipeline outputs
 PROC_HEX_CELLS <- file.path(DATA_PROC, "hex_cells.gpkg")
