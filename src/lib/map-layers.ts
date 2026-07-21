@@ -135,6 +135,17 @@ export function hexInteractiveLayerIds(map: maplibregl.Map): string[] {
     .filter((layerId) => map.getLayer(layerId)));
 }
 
+/** Hex fill layers currently visible — use for click hit-testing at detail zoom. */
+export function visibleHexInteractiveLayerIds(map: maplibregl.Map): string[] {
+  return hexInteractiveLayerIds(map).filter((layerId) => {
+    try {
+      return map.getLayoutProperty(layerId, 'visibility') === 'visible';
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function selectedHexFilter(cellId: string | null): maplibregl.FilterSpecification {
   return ['==', ['get', 'cellId'], cellId ?? ''];
 }

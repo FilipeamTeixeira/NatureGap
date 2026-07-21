@@ -95,17 +95,24 @@ function habitatPotential(habitatQuality: number): HabitatPotential {
   return 'low';
 }
 
-function speciesArray(value: unknown): Species[] {
-  if (!Array.isArray(value)) {
-    return [
-      { type: 'plant', count: 0 },
-      { type: 'bird', count: 0 },
-      { type: 'insect', count: 0 },
-      { type: 'mammal', count: 0 },
-      { type: 'fungi', count: 0 },
-    ];
+/**
+ * The R pipeline serialises species/pressures/interventions with jsonlite::toJSON,
+ * so cell_attributes may store them as JSON-encoded strings rather than arrays.
+ * Parse those back before validating.
+ */
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
   }
-  return value.filter((item): item is Species => (
+}
+
+function speciesArray(value: unknown): Species[] {
+  const parsed = parseMaybeJson(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is Species => (
     typeof item === 'object' &&
     item !== null &&
     typeof (item as Species).type === 'string' &&
@@ -114,12 +121,14 @@ function speciesArray(value: unknown): Species[] {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  const parsed = parseMaybeJson(value);
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function interventionArray(value: unknown): Intervention[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is Intervention => (
+  const parsed = parseMaybeJson(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is Intervention => (
     typeof item === 'object' &&
     item !== null &&
     typeof (item as Intervention).id === 'string' &&
@@ -145,6 +154,10 @@ function detailFromRow(
   const displayName = render.parkName && render.parkName !== 'city-green'
     ? render.parkName
     : 'Green area';
+
+  const species = speciesArray(row?.species);
+  const pressures = stringArray(row?.pressures);
+  const interventions = interventionArray(row?.interventions);
 
   return {
     id: render.cellId,
@@ -173,7 +186,7 @@ function detailFromRow(
       : habitatPotential(habitatQuality),
     observerEffortScore: Number(row?.observer_effort_score ?? 0),
     taxonomicDiversity: Number(row?.taxonomic_diversity ?? 0),
-    species: speciesArray(row?.species),
+    species,
     corridorImportance,
     betweennessCentrality: pct(render.betweennessCentrality),
     treeCover: pct(row?.tree_cover ?? render.treeCover),
@@ -181,8 +194,8 @@ function detailFromRow(
     meanLst: pct(render.meanLst),
     lstIdx: pct(render.lstIdx),
     landUseGreen: pct(row?.land_use_green ?? render.landUseGreen),
-    pressures: stringArray(row?.pressures),
-    interventions: interventionArray(row?.interventions),
+    pressures,
+    interventions,
   };
 }
 
@@ -195,6 +208,7 @@ export async function fetchCellDetail(
   if (!supabase) return detailFromRow(null, render, coordinates);
 
   const lookupCellId = resolveCellId(render.cellId, render.cityId);
+  const lookupCityId = render.cityId ?? CITY.id;
 
   const { data, error } = await supabase
     .from('cell_attributes')
@@ -232,6 +246,7 @@ export async function fetchCellDetail(
       ].join(', '),
     )
     .eq('cell_id', lookupCellId)
+    .eq('city_id', lookupCityId)
     .maybeSingle<CellAttributeRow>();
 
   if (error) {

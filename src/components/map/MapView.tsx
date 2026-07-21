@@ -50,6 +50,7 @@ import {
   selectedHexFilter,
   setHexDatasets,
   setLayerVisibility,
+  visibleHexInteractiveLayerIds,
 } from '@/lib/map-layers';
 
 interface MapViewProps {
@@ -466,7 +467,7 @@ export default function MapView({
       });
 
       map.on('click', (e) => {
-        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const interactiveLayerIds = visibleHexInteractiveLayerIds(map);
         const hexFeatures = interactiveLayerIds.length
           ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
           : [];
@@ -483,7 +484,7 @@ export default function MapView({
 
       map.on('click', 'park-area', (e) => {
         if (e.defaultPrevented) return;
-        const interactiveLayerIds = hexInteractiveLayerIds(map);
+        const interactiveLayerIds = visibleHexInteractiveLayerIds(map);
         const hexFeatures = interactiveLayerIds.length
           ? map.queryRenderedFeatures(e.point, { layers: interactiveLayerIds })
           : [];
@@ -502,6 +503,8 @@ export default function MapView({
           );
           return;
         }
+        // At hex zoom the panel is cell-scoped — never open park-level aggregates.
+        if (map.getZoom() >= DETAIL_ZOOM) return;
         const parkId = e.features?.[0]?.properties?.parkId;
         if (typeof parkId === 'string') {
           e.preventDefault();

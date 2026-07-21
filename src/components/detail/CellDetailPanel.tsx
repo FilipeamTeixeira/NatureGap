@@ -155,6 +155,17 @@ function UnsampledNotice({ detail }: { detail?: string }) {
   );
 }
 
+function NoHexObservationsNotice() {
+  return (
+    <div className="bg-[#F7F8F5] rounded-xl p-4 border border-[#E4E7E1]">
+      <p className="text-[12px] font-semibold text-[#667066]">No observations in this hex</p>
+      <p className="text-[11px] text-[#A8B4A8] mt-1 leading-relaxed">
+        This 20m cell has no recorded species yet. Shaded neighbouring hexes may have observations.
+      </p>
+    </div>
+  );
+}
+
 function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
   const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
   return (
@@ -491,6 +502,8 @@ export default function CellDetailPanel({
               <CardSubtitle>From iNaturalist + GBIF records in this cell</CardSubtitle>
               {cell.isUnsampled && !hasRawObservations(cell) ? (
                 <UnsampledNotice detail="No accessible pedestrian path length or recorded observations yet — this cell is marked unsampled rather than zero-richness." />
+              ) : !hasRawObservations(cell) ? (
+                <NoHexObservationsNotice />
               ) : (
                 <>
                   {cell.isUnsampled && (
@@ -532,7 +545,7 @@ export default function CellDetailPanel({
                 <CardTitle>Taxonomic breakdown</CardTitle>
                 <CardSubtitle>{speciesTotal} distinct taxa by group</CardSubtitle>
                 <div className="flex flex-col gap-3 mb-5">
-                  {cell.species.map((s) => (
+                  {cell.species.filter((s) => s.count > 0).map((s) => (
                     <div key={s.type} className="flex items-center gap-3">
                       <div className="w-20 text-[12px] text-[#667066]">{SPECIES_LABELS[s.type]}</div>
                       <div className="flex-1 h-1.5 bg-[#E4E7E1] rounded-full overflow-hidden">
