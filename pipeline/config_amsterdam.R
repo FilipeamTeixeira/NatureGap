@@ -323,3 +323,4 @@ CONFIG_LOADED <- TRUE
 
 message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s",
                 CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID))
+

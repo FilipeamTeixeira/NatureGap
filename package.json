@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "stage:pipeline-export": "node scripts/stage-pipeline-export.mjs",
+    "sync:pipeline-from-storage": "node scripts/sync-pipeline-from-storage.mjs",
+    "apply:pipeline-migrations": "Rscript scripts/apply-pipeline-migrations.R",
     "lint": "eslint"
   },
   "browserslist": [

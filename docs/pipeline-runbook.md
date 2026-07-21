@@ -35,6 +35,114 @@ yokohama-honmoku/20260627T120000Z/hexgrid.pmtiles
 
 Do not include another leading `pipeline-export/` folder inside the bucket.
 
+## Manual publish workflow (safe)
+
+There are **two separate stores**:
+
+| Store | What you upload | What reads it |
+| --- | --- | --- |
+| **Storage** bucket `pipeline-export` | PMTiles, GeoJSON, `current.json` | Map tiles, park stats |
+| **PostgreSQL** | Nothing manual — loaded by import | Cell detail panel, `pipeline_datasets` registry |
+
+Uploading to Storage alone is safe and correct for map rendering, but
+`pipeline_datasets` and `cell_attributes` stay stale until import runs.
+
+### Step 1 — Upload to Storage (manual, safe)
+
+Upload the versioned folder plus the city pointer:
+
+```text
+<city-id>/current.json
+<city-id>/<dataset-id>/manifest.json
+<city-id>/<dataset-id>/hexgrid.pmtiles
+<city-id>/<dataset-id>/cell_attributes.geojson   (or chunked parts + manifest)
+<city-id>/<dataset-id>/parks.geojson
+<city-id>/<dataset-id>/park-stats.json
+```
+
+The bucket is public-read. No database credentials are involved.
+
+### Step 2 — Apply pending migrations
+
+If import fails with missing columns (e.g. `ecological_residual_normalized`),
+the remote database is behind the repo. Apply migrations first:
+
+```bash
+supabase db push --linked
+```
+
+Or apply the schema backfill helper (use `Rscript`, not `source()`):
+
+```bash
+npm run apply:pipeline-migrations
+```
+
+Sourcing the script in RStudio can trigger an RPostgres `bad_weak_ptr` error.
+
+### Step 3 — Import into PostgreSQL (trusted operator only)
+
+Run locally with `DATABASE_URL` in `.env.local` (never commit this file):
+
+```bash
+npm run sync:pipeline-from-storage
+```
+
+This downloads each city's active Storage dataset and calls
+`import_pipeline_dataset()` over a direct Postgres connection. Only
+**pipeline import/promote** functions accept the postgres role; app admin
+checks (`is_admin()`) are unchanged.
+
+Verify:
+
+```sql
+select city_id, dataset_id, is_active, generated_at
+from public.pipeline_datasets
+order by generated_at desc;
+```
+
+`dataset_id` and `generated_at` should match the `current.json` you uploaded.
+
+### Optional — promote without auto-activate
+
+Import with `activate = false`, then promote manually as an app admin in the
+SQL editor:
+
+```sql
+select public.promote_pipeline_dataset('yokohama-honmoku', '20260721T111818Z');
+```
+
+Use this when you want a human checkpoint before the new version goes live.
+
+## Sync Storage Uploads Into PostgreSQL
+
+Uploading to the `pipeline-export` bucket updates map tiles and `current.json`
+only. It does **not** update `public.pipeline_datasets`, `cell_attributes`, or
+`green_spaces`. Those tables are populated by `public.import_pipeline_dataset`,
+which the R pipeline runs when `POSTGRES_IMPORT_ENABLED="1"` is set **during
+the R export step** — not when Next.js reads `.env.local`.
+
+After a manual bucket upload, sync the active Storage pointer into Postgres:
+
+```bash
+npm run sync:pipeline-from-storage
+```
+
+This downloads each city's `current.json` target from Storage into
+`pipeline-export/<city>/`, then runs the existing R import for each city.
+Requires `DATABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` in `.env.local`.
+
+Dry-run (download only):
+
+```bash
+npm run sync:pipeline-from-storage -- --dry-run
+```
+
+Single city:
+
+```bash
+npm run sync:pipeline-from-storage -- --city yokohama-honmoku
+```
+
 ## Configure R/PostgreSQL
 
 Copy `.env.example` to `.env.local` and set:

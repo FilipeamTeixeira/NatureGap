@@ -61,7 +61,13 @@ resolve_data_version <- function() {
   current$datasetId %||% current$dataVersion
 }
 
-`%||%` <- function(a, b) if (is.null(a) || !length(a) || !nzchar(as.character(a))) b else a
+# `%||%` <- function(a, b) if (is.null(a) || !length(a) || !nzchar(as.character(a))) b else a
+
+`%||%` <- function(a, b) {
+  if (is.null(a) || length(a) == 0L) return(b)
+  if (is.character(a) && length(a) == 1L && !nzchar(a)) return(b)
+  a
+}
 
 data_version <- resolve_data_version()
 if (is.null(data_version) || !grepl("^[0-9]{8}T[0-9]{6}Z$", data_version)) {
@@ -155,6 +161,14 @@ con <- tryCatch(
 )
 if (is.null(con)) return(invisible(NULL))
 on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+#New stuff — privilege is enforced inside can_manage_pipeline_datasets(); no
+# session JWT spoofing needed for direct postgres DATABASE_URL connections.
+tryCatch({
+  DBI::dbExecute(con, "SET role = 'postgres';")
+}, error = function(e) {
+  message("Warning: Could not set postgres role; import may fail if privileges are insufficient.")
+})
 
 result <- tryCatch(
   DBI::dbGetQuery(
