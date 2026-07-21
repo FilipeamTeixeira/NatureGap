@@ -12,16 +12,12 @@ import { CITY, MAP_CONFIG } from '@/lib/config';
 import type { HexPmtilesDataset } from '@/lib/pmtiles-storage';
 import type { MapLayer } from '@/lib/types';
 import {
-  BIODIVERSITY_CIRCLES_LAYER_ID,
   CORRIDOR_LINES_LAYER_ID,
   hasHexOverlay,
   type HexLayerId,
   hexFillColorExpression,
   hexFillLayerId,
   hexFillOpacityForLayer,
-  HEX_OBSERVATIONS_CLUSTERS_LAYER_ID,
-  HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID,
-  HEX_OBSERVATIONS_POINTS_LAYER_ID,
   HEX_OUTLINE_LAYER_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
@@ -74,10 +70,6 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
     setMapLayerVisibility(map, PATCH_FILL_LAYER_IDS[layerId], activeLayerId === layerId);
   }
 
-  setMapLayerVisibility(map, BIODIVERSITY_CIRCLES_LAYER_ID, activeLayerId === 'biodiversity');
-  setMapLayerVisibility(map, HEX_OBSERVATIONS_CLUSTERS_LAYER_ID, activeLayerId === 'biodiversity');
-  setMapLayerVisibility(map, HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID, activeLayerId === 'biodiversity');
-  setMapLayerVisibility(map, HEX_OBSERVATIONS_POINTS_LAYER_ID, activeLayerId === 'biodiversity');
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, INTERVENTION_RANK_LABELS_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, CORRIDOR_LINES_LAYER_ID, false);
@@ -145,6 +137,14 @@ export function hexInteractiveLayerIds(map: maplibregl.Map): string[] {
 
 export function selectedHexFilter(cellId: string | null): maplibregl.FilterSpecification {
   return ['==', ['get', 'cellId'], cellId ?? ''];
+}
+
+/** Derive pipeline city slug from a multi-city hex fill layer id. */
+export function cityIdFromHexLayerId(map: maplibregl.Map, layerId: string): string | undefined {
+  for (const dataset of getHexDatasets(map)) {
+    if (layerId.endsWith(`-${dataset.sourceId}`)) return dataset.cityId;
+  }
+  return undefined;
 }
 
 export async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {

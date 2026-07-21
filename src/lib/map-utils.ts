@@ -64,6 +64,7 @@ export function statsProperties(stats: ParkStats | undefined) {
     ecologicalResidualNorm: finiteNumber(stats?.ecologicalResidualNorm),
     natureGapScoreNorm: finiteNumber(stats?.natureGapScoreNorm),
     interventionRankNorm: finiteNumber(stats?.interventionRankNorm),
+    nObs: Number(stats?.nObs ?? 0),
   };
 }
 
@@ -200,6 +201,7 @@ export function renderCellProperties(properties: maplibregl.GeoJSONFeature['prop
     lstIdx: properties.lstIdx == null ? null : Number(properties.lstIdx),
     landUseGreen: properties.landUseGreen == null ? null : Number(properties.landUseGreen),
     interventionRank: properties.interventionRank == null ? null : Number(properties.interventionRank),
+    nObs: properties.nObs == null ? undefined : Number(properties.nObs),
   };
 }
 

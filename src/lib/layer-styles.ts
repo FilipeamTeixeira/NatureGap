@@ -39,15 +39,7 @@ export const HEX_OUTLINE_LAYER_ID = 'hex-outline-always';
 export const CORRIDOR_LINES_LAYER_ID = 'corridor-lines';
 export const INTERVENTION_RANK_BADGES_LAYER_ID = 'intervention-rank-badges';
 export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
-export const BIODIVERSITY_CIRCLES_LAYER_ID = 'biodiversity-circles';
-
-/** Clustered per-hex observation points (GeoJSON source — see lib/hex-observations.ts). */
-export const HEX_OBSERVATIONS_SOURCE_ID = 'hex-observations';
-export const HEX_OBSERVATIONS_CLUSTERS_LAYER_ID = 'hex-observations-clusters';
-export const HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID = 'hex-observations-cluster-count';
-export const HEX_OBSERVATIONS_POINTS_LAYER_ID = 'hex-observations-points';
-
-export type PatchFillLayerId = Exclude<HexLayerId, 'biodiversity'>;
+export type PatchFillLayerId = HexLayerId;
 
 export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
   impact: 'nature-gap-patch-fill',
@@ -56,35 +48,35 @@ export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
   intervention: 'intervention-patch-fill',
   habitat: 'habitat-quality-patch-fill',
   treecover: 'tree-cover-patch-fill',
+  biodiversity: 'biodiversity-patch-fill',
   connectivity: 'connectivity-patch-fill',
   heat: 'heat-exposure-patch-fill',
   landuse: 'land-use-patch-fill',
 };
 
-export const HEX_FILL_LAYER_IDS: Partial<Record<HexLayerId, string>> = {
+export const HEX_FILL_LAYER_IDS: Record<HexLayerId, string> = {
   impact: 'nature-gap-hex-fill',
   expected: 'expected-richness-hex-fill',
   residual: 'ecological-residual-hex-fill',
   intervention: 'intervention-hex-fill',
   habitat: 'habitat-quality-hex-fill',
   treecover: 'tree-cover-hex-fill',
+  biodiversity: 'biodiversity-hex-fill',
   connectivity: 'connectivity-hex-fill',
   heat: 'heat-exposure-hex-fill',
   landuse: 'land-use-hex-fill',
 };
 
 export const PATCH_FILL_LAYER_ORDER = LAYER_DRAW_ORDER.filter(
-  (id): id is PatchFillLayerId => id !== 'biodiversity',
+  (id): id is PatchFillLayerId => id in PATCH_FILL_LAYER_IDS,
 );
 
 export function hasHexOverlay(layerId: HexLayerId): boolean {
-  return layerId in HEX_FILL_LAYER_IDS;
+  return Boolean(HEX_FILL_LAYER_IDS[layerId]);
 }
 
 export function hexFillLayerId(layerId: HexLayerId): string {
-  const id = HEX_FILL_LAYER_IDS[layerId];
-  if (!id) throw new Error(`Layer ${layerId} has no hex fill`);
-  return id;
+  return HEX_FILL_LAYER_IDS[layerId];
 }
 
 export function getEnabledLayerIds(layers: { id: LayerId; enabled: boolean }[]): HexLayerId[] {
@@ -151,6 +143,16 @@ function unitInterval(property: string): ExpressionSpecification {
 /** Canonical canopy-height value from vector tile properties (0–1). */
 function treeCoverValueExpression(): ExpressionSpecification {
   return ['to-number', ['coalesce', ['get', 'canopyHeightIdx'], 0]] as ExpressionSpecification;
+}
+
+/** Observation-count heatmap — darker blue = more iNaturalist/GBIF records in the hex. */
+export function buildBiodiversityObsExpression(): ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    ['coalesce', ['get', 'nObs'], 0],
+    ...LAYER_RAMPS.biodiversity.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
 }
 
 function buildSequentialExpression(
@@ -293,6 +295,8 @@ export function patchFillColorExpression(
       return buildSequentialExpression('meanLstNorm', 'meanLst', LAYER_RAMPS.heat, stat);
     case 'landuse':
       return landUseColorExpression();
+    case 'biodiversity':
+      return buildBiodiversityObsExpression();
   }
 }
 
@@ -359,6 +363,10 @@ export function hexFillColorExpression(
     return buildTreecoverExpression(cityStats);
   }
 
+  if (layerId === 'biodiversity') {
+    return buildBiodiversityObsExpression();
+  }
+
   const spec = LAYER_STYLE_SPECS[layerId];
   const ramp = LAYER_RAMPS[layerId as keyof typeof LAYER_RAMPS];
   if (!spec.property || !ramp) {
@@ -380,12 +388,24 @@ export function hexFillColorExpression(
   ));
 }
 
-export function hexFillOpacityForLayer(layerId: HexLayerId): number {
+/** Observation-count opacity — hexes/patches with no records stay transparent but clickable. */
+function biodiversityOpacity(visible: number): ExpressionSpecification {
+  return [
+    'case',
+    ['>', ['coalesce', ['get', 'nObs'], 0], 0],
+    visible,
+    0,
+  ] as ExpressionSpecification;
+}
+
+export function hexFillOpacityForLayer(layerId: HexLayerId): number | ExpressionSpecification {
+  if (layerId === 'biodiversity') return biodiversityOpacity(0.78);
   if (layerId === 'impact') return 0.5;
   return 0.78;
 }
 
 export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | ExpressionSpecification {
+  if (layerId === 'biodiversity') return biodiversityOpacity(0.7);
   if (layerId === 'connectivity') {
     return ['interpolate', ['linear'], ['zoom'], 13, 0.7, 14, 0.2] as ExpressionSpecification;
   }
@@ -467,15 +487,15 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     ],
   },
   biodiversity: {
-    title: 'Biodiversity (observed)',
-    property: 'effortCorrectedRichness',
-    rawMetric: 'effort_corrected_richness',
+    title: 'Observed biodiversity',
+    property: 'nObs',
+    rawMetric: 'n_obs',
     legend: [
-      { color: '#002171', label: 'Very high' },
-      { color: '#0d47a1', label: 'High' },
-      { color: '#1565c0', label: 'Moderate' },
-      { color: '#1e88e5', label: 'Low' },
-      { color: '#42a5f5', label: 'None recorded' },
+      { color: '#002171', label: '50+ records' },
+      { color: '#0d47a1', label: '30+ records' },
+      { color: '#1565c0', label: '15+ records' },
+      { color: '#1e88e5', label: '5+ records' },
+      { color: '#42a5f5', label: '1–4 records' },
     ],
   },
   connectivity: {

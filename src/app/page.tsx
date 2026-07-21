@@ -9,7 +9,6 @@ import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
 import CitizenSciencePanel from '@/components/citizen-science/CitizenSciencePanel';
 import { MAP_LAYERS } from '@/lib/mock-data';
 import { initParks } from '@/lib/green-spaces';
-import { initHexObservations } from '@/lib/hex-observations';
 import { initData, fetchEvents, fetchActions, type CommunityEvent, type TakeAction } from '@/lib/data';
 import { fetchCellDetail, fetchParkDetail, type RenderCellProperties } from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
@@ -54,7 +53,7 @@ export default function Page() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([initData(), initParks(), initHexObservations()]).finally(() => {
+    Promise.allSettled([initData(), initParks()]).finally(() => {
       if (!cancelled) {
         setDataRevision((r) => r + 1);
       }

@@ -56,7 +56,8 @@ PMTILES_REQUIRED_FIELDS <- c(
   "natureGapScoreNorm",
   "expectedNorm",
   "interventionRankNorm",
-  "habitatQualityNorm"
+  "habitatQualityNorm",
+  "nObs"
 )
 
 validate_render_fields <- function(value) {
@@ -276,8 +277,7 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
     "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
     "cell_attributes.manifest.json", "corridor-links.geojson",
-    "corridor-links.manifest.json", "top_interventions.json",
-    "hex_observations.geojson"
+    "corridor-links.manifest.json", "top_interventions.json"
   )
   for (base in c("cell_attributes", "corridor-links")) {
     parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
@@ -361,8 +361,7 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
-      chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed"),
-      hexObservations = list(path = "hex_observations.geojson", purpose = "Lightweight per-hex observation points for client-side MapLibre GeoJSON clustering")
+      chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed")
     ),
     counts = list(
       renderCells = as.integer(cell_count),
@@ -1150,25 +1149,6 @@ if ("green_space_id" %in% names(grid) && nrow(park_lookup) > 0L) {
 grid_df <- st_drop_geometry(grid)
 n_cells <- nrow(grid_df)
 
-# ── Lightweight hex-observations export (GeoJSON clustering source) ─────────
-# One point per hex with ≥1 observation — centroid geometry + counts only.
-# Kept separate from cell_attributes.geojson/hexgrid.pmtiles because MapLibre's
-# built-in GeoJSON clustering (`cluster: true`) only works on GeoJSON sources,
-# not the PMTiles vector tiles the full hex grid is served through.
-hex_observations <- grid |>
-  filter(replace_na(n_obs, 0L) > 0L) |>
-  transmute(
-    cellId             = cell_id,
-    nObs               = as.integer(replace_na(n_obs, 0L)),
-    speciesRichnessRaw = as.integer(replace_na(species_richness, 0L)),
-    observedRichness   = round(replace_na(observed_richness, 0), 1)
-  ) |>
-  (\(x) suppressWarnings(st_centroid(x)))()
-
-hex_observations_path <- file.path(DATA_EXPORT, "hex_observations.geojson")
-write_geojson(hex_observations, hex_observations_path)
-cat(sprintf("Written: %s (%d hexes with observations)\n", hex_observations_path, nrow(hex_observations)))
-
 cell_taxa_lookup <- list()
 if (file.exists(PROC_CELL_TAXA)) {
   cell_taxa_lookup <- jsonlite::read_json(PROC_CELL_TAXA, simplifyVector = FALSE)
@@ -1243,6 +1223,7 @@ hexgrid_tiles <- hexgrid_render |>
     ecologicalResidualNormalized = if_else(is_unsampled, 0, round(replace_na(ecological_residual_normalized, 0), 4)),
     habitatQuality     = pct_index(habitat_quality),
     observedRichness   = if_else(is_unsampled, 0, round(replace_na(observed_richness, 0), 1)),
+    nObs               = as.integer(replace_na(n_obs, 0L)),
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),

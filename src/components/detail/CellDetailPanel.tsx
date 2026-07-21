@@ -133,6 +133,12 @@ function ecologicalStatus(score: number): string {
 
 const UNSAMPLED_MESSAGE = 'Not enough observation data yet';
 
+function hasRawObservations(cell: CellData): boolean {
+  return cell.nObs > 0
+    || cell.speciesRichnessRaw > 0
+    || cell.species.some((species) => species.count > 0);
+}
+
 /**
  * Distinct "no data" state for observation-dependent metrics (Nature Gap,
  * Ecological Residual, Observed Biodiversity, Intervention Priority) so an
@@ -401,7 +407,11 @@ export default function CellDetailPanel({
                   </div>
                   <div className="text-[11px] text-[#667066] mt-1.5">Observed (corrected)</div>
                   <div className="text-[10px] text-[#A8B4A8] mt-1">
-                    {cell.isUnsampled ? UNSAMPLED_MESSAGE : `${cell.speciesRichnessRaw} raw taxa`}
+                    {cell.isUnsampled
+                      ? (hasRawObservations(cell)
+                        ? `${cell.speciesRichnessRaw} raw taxa · ${cell.nObs} records (unsampled)`
+                        : UNSAMPLED_MESSAGE)
+                      : `${cell.speciesRichnessRaw} raw taxa`}
                   </div>
                 </div>
                 <div className="bg-[#F7F8F5] rounded-xl p-4">
@@ -479,14 +489,17 @@ export default function CellDetailPanel({
             <Card>
               <CardTitle>Observed richness</CardTitle>
               <CardSubtitle>From iNaturalist + GBIF records in this cell</CardSubtitle>
-              {cell.isUnsampled ? (
+              {cell.isUnsampled && !hasRawObservations(cell) ? (
                 <UnsampledNotice detail="No accessible pedestrian path length or recorded observations yet — this cell is marked unsampled rather than zero-richness." />
               ) : (
                 <>
+                  {cell.isUnsampled && (
+                    <UnsampledNotice detail="Records exist here, but this hex has no accessible OSM pedestrian path — effort-corrected richness is unavailable and the cell is excluded from residual inference." />
+                  )}
                   <div className="grid grid-cols-2 gap-3 mb-2">
-                    <div className="bg-[#F7F8F5] rounded-xl p-4">
+                    <div className={cn('rounded-xl p-4', cell.isUnsampled ? 'bg-[#F0F0EE]' : 'bg-[#F7F8F5]')}>
                       <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                        {formatMetric(cell.observedRichness)}
+                        {cell.isUnsampled ? '—' : formatMetric(cell.observedRichness)}
                       </div>
                       <div className="text-[11px] text-[#667066] mt-1.5">Effort-corrected index</div>
                     </div>
@@ -495,7 +508,7 @@ export default function CellDetailPanel({
                       <div className="text-[11px] text-[#667066] mt-1.5">Total records</div>
                     </div>
                   </div>
-                  <ObservedRichnessExplainer cell={cell} />
+                  {!cell.isUnsampled && <ObservedRichnessExplainer cell={cell} />}
                 </>
               )}
             </Card>

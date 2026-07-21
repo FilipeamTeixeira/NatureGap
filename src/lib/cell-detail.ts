@@ -1,7 +1,22 @@
-import { MAX_EXPECTED_RICHNESS, CITY } from './config';
+import { MAX_EXPECTED_RICHNESS, CITY, CITIES } from './config';
 import { getParkStats, getParks } from './green-spaces';
 import { supabase } from './supabase';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
+
+const CITY_ID_PREFIXES = Object.keys(CITIES);
+
+/** Map tiles use local cell ids; PostgreSQL stores `{cityId}-{localId}`. */
+export function resolveCellId(cellId: string, cityId?: string): string {
+  const trimmed = cellId.trim();
+  if (!trimmed) return trimmed;
+
+  for (const prefix of CITY_ID_PREFIXES) {
+    if (trimmed.startsWith(`${prefix}-`)) return trimmed;
+  }
+
+  const city = cityId ?? CITY.id;
+  return `${city}-${trimmed}`;
+}
 
 export type RenderCellProperties = {
   cellId: string;
@@ -24,6 +39,9 @@ export type RenderCellProperties = {
   lstIdx?: number | null;
   landUseGreen?: number | null;
   interventionRank?: number | null;
+  /** Optional map-tile fallback before Supabase load completes. */
+  nObs?: number;
+  speciesRichnessRaw?: number;
 };
 
 type CellAttributeRow = {
@@ -138,7 +156,7 @@ function detailFromRow(
     natureGapScore,
     habitatQuality,
     habitatQualityIndex: row?.habitat_quality_index ?? habitatQuality / 100,
-    speciesRichnessRaw: Number(row?.species_richness_raw ?? 0),
+    speciesRichnessRaw: Number(row?.species_richness_raw ?? render.speciesRichnessRaw ?? 0),
     observedRichness,
     effortCorrectedRichness: observedRichness,
     expectedRichness,
@@ -147,7 +165,7 @@ function detailFromRow(
     isUnsampled: row?.is_unsampled ?? undefined,
     temporalBiasFlag: row?.temporal_bias_flag ?? undefined,
     pathKm: row?.path_km ?? undefined,
-    nObs: Number(row?.n_obs ?? 0),
+    nObs: Number(row?.n_obs ?? render.nObs ?? 0),
     nSurveyDates: Number(row?.n_survey_dates ?? 0),
     status: impactStatus(impactScore),
     habitatPotential: habitatPotentialValue === 'high' || habitatPotentialValue === 'moderate' || habitatPotentialValue === 'low'
@@ -175,6 +193,8 @@ export async function fetchCellDetail(
   if (!render.cellId) return null;
 
   if (!supabase) return detailFromRow(null, render, coordinates);
+
+  const lookupCellId = resolveCellId(render.cellId, render.cityId);
 
   const { data, error } = await supabase
     .from('cell_attributes')
@@ -211,7 +231,7 @@ export async function fetchCellDetail(
         'interventions',
       ].join(', '),
     )
-    .eq('cell_id', render.cellId)
+    .eq('cell_id', lookupCellId)
     .maybeSingle<CellAttributeRow>();
 
   if (error) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export interface GeolocationState {
   coordinates: [number, number] | null;
@@ -37,11 +37,6 @@ export function useGeolocation(): GeolocationState {
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 12000 },
     );
   }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(refresh, 0);
-    return () => window.clearTimeout(timeout);
-  }, [refresh]);
 
   return { coordinates, accuracyM, loading, error, refresh };
 }

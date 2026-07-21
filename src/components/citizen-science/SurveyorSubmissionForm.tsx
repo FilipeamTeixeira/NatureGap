@@ -312,7 +312,7 @@ export default function SurveyorSubmissionForm({
                   ? `${gps.coordinates[1].toFixed(5)}, ${gps.coordinates[0].toFixed(5)}`
                   : gps.loading
                     ? 'Detecting...'
-                    : 'Unavailable'}
+                    : 'Tap Refresh to detect your location'}
               </p>
               {gps.accuracyM != null && (
                 <p className={cn('text-[11px] mt-1', gps.accuracyM > 25 ? 'text-[#B07A2A]' : 'text-[#667066]')}>
