@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "cityId": "porto-center",
-  "datasetId": "20260718T193111Z",
-  "dataVersion": "20260718T193111Z",
-  "generatedAt": "2026-07-18T19:31:11Z",
-  "manifest": "20260718T193111Z/manifest.json",
+  "datasetId": "20260721T085824Z",
+  "dataVersion": "20260721T085824Z",
+  "generatedAt": "2026-07-21T08:58:24Z",
+  "manifest": "20260721T085824Z/manifest.json",
   "sourceLayer": "hexgrid",
-  "hexgrid": "20260718T193111Z/hexgrid.pmtiles"
+  "hexgrid": "20260721T085824Z/hexgrid.pmtiles"
 }

@@ -276,7 +276,8 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
     "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
     "cell_attributes.manifest.json", "corridor-links.geojson",
-    "corridor-links.manifest.json", "top_interventions.json"
+    "corridor-links.manifest.json", "top_interventions.json",
+    "hex_observations.geojson"
   )
   for (base in c("cell_attributes", "corridor-links")) {
     parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
@@ -360,7 +361,8 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
-      chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed")
+      chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed"),
+      hexObservations = list(path = "hex_observations.geojson", purpose = "Lightweight per-hex observation points for client-side MapLibre GeoJSON clustering")
     ),
     counts = list(
       renderCells = as.integer(cell_count),
@@ -820,11 +822,11 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     ),
     taxonomicDiversity = round(replace_na(finite_mean(rows$taxonomic_shannon), 0), 1),
     species = species_list(
-      sum(replace_na(rows$plant, 0L)),
-      sum(replace_na(rows$bird, 0L)),
-      sum(replace_na(rows$insect, 0L)),
-      sum(replace_na(rows$mammal, 0L)),
-      sum(replace_na(rows$fungi, 0L)),
+      length(park_taxa$plant),
+      length(park_taxa$bird),
+      length(park_taxa$insect),
+      length(park_taxa$mammal),
+      length(park_taxa$fungi),
       taxa = park_taxa
     ),
     corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
@@ -1147,6 +1149,25 @@ if ("green_space_id" %in% names(grid) && nrow(park_lookup) > 0L) {
 
 grid_df <- st_drop_geometry(grid)
 n_cells <- nrow(grid_df)
+
+# ── Lightweight hex-observations export (GeoJSON clustering source) ─────────
+# One point per hex with ≥1 observation — centroid geometry + counts only.
+# Kept separate from cell_attributes.geojson/hexgrid.pmtiles because MapLibre's
+# built-in GeoJSON clustering (`cluster: true`) only works on GeoJSON sources,
+# not the PMTiles vector tiles the full hex grid is served through.
+hex_observations <- grid |>
+  filter(replace_na(n_obs, 0L) > 0L) |>
+  transmute(
+    cellId             = cell_id,
+    nObs               = as.integer(replace_na(n_obs, 0L)),
+    speciesRichnessRaw = as.integer(replace_na(species_richness, 0L)),
+    observedRichness   = round(replace_na(observed_richness, 0), 1)
+  ) |>
+  (\(x) suppressWarnings(st_centroid(x)))()
+
+hex_observations_path <- file.path(DATA_EXPORT, "hex_observations.geojson")
+write_geojson(hex_observations, hex_observations_path)
+cat(sprintf("Written: %s (%d hexes with observations)\n", hex_observations_path, nrow(hex_observations)))
 
 cell_taxa_lookup <- list()
 if (file.exists(PROC_CELL_TAXA)) {

@@ -19,6 +19,8 @@ data/export/
 *.RData
 .Rproj.user/
 pipeline/data/
+pipeline-export/
+pipeline-export/porto-center
 
 # Raster files (large)
 *.tif

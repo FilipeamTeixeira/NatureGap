@@ -19,6 +19,9 @@ import {
   hexFillColorExpression,
   hexFillLayerId,
   hexFillOpacityForLayer,
+  HEX_OBSERVATIONS_CLUSTERS_LAYER_ID,
+  HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID,
+  HEX_OBSERVATIONS_POINTS_LAYER_ID,
   HEX_OUTLINE_LAYER_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
@@ -72,6 +75,9 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
   }
 
   setMapLayerVisibility(map, BIODIVERSITY_CIRCLES_LAYER_ID, activeLayerId === 'biodiversity');
+  setMapLayerVisibility(map, HEX_OBSERVATIONS_CLUSTERS_LAYER_ID, activeLayerId === 'biodiversity');
+  setMapLayerVisibility(map, HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID, activeLayerId === 'biodiversity');
+  setMapLayerVisibility(map, HEX_OBSERVATIONS_POINTS_LAYER_ID, activeLayerId === 'biodiversity');
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, INTERVENTION_RANK_LABELS_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, CORRIDOR_LINES_LAYER_ID, false);

@@ -15,6 +15,10 @@ import {
   type HexLayerId,
   hexFillColorExpression,
   hexFillOpacityForLayer,
+  HEX_OBSERVATIONS_CLUSTERS_LAYER_ID,
+  HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID,
+  HEX_OBSERVATIONS_POINTS_LAYER_ID,
+  HEX_OBSERVATIONS_SOURCE_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
   LAYER_DRAW_ORDER,
@@ -26,6 +30,7 @@ import {
   PATCH_OUTLINE_LAYER_ID,
   UNSAMPLED_FILL_COLOR,
 } from '@/lib/layer-styles';
+import { getHexObservationsGeoJSON } from '@/lib/hex-observations';
 import {
   emptyFeatureCollection,
   fetchCorridorLinksGeoJSON,
@@ -374,6 +379,67 @@ export default function MapView({
         },
       });
 
+      map.addSource(HEX_OBSERVATIONS_SOURCE_ID, {
+        type: 'geojson',
+        data: getHexObservationsGeoJSON(),
+        cluster: true,
+        clusterMaxZoom: DETAIL_ZOOM,
+        clusterRadius: 40,
+      });
+
+      map.addLayer({
+        id: HEX_OBSERVATIONS_CLUSTERS_LAYER_ID,
+        type: 'circle',
+        source: HEX_OBSERVATIONS_SOURCE_ID,
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#42a5f5',
+            10, '#1565c0',
+            50, '#002171',
+          ],
+          'circle-radius': ['step', ['get', 'point_count'], 12, 10, 16, 50, 22],
+          'circle-opacity': 0.85,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5,
+        },
+      });
+
+      map.addLayer({
+        id: HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID,
+        type: 'symbol',
+        source: HEX_OBSERVATIONS_SOURCE_ID,
+        filter: ['has', 'point_count'],
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-size': 11,
+          'text-font': MAP_CONFIG.mapFonts,
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#ffffff',
+        },
+      });
+
+      map.addLayer({
+        id: HEX_OBSERVATIONS_POINTS_LAYER_ID,
+        type: 'circle',
+        source: HEX_OBSERVATIONS_SOURCE_ID,
+        filter: ['!', ['has', 'point_count']],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['coalesce', ['get', 'nObs'], 0], 0, 4, 10, 6, 50, 9],
+          'circle-color': '#1565c0',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5,
+          'circle-opacity': 0.85,
+        },
+      });
+
       map.on('zoom', () => {
         setMapZoom(map.getZoom());
       });
@@ -552,6 +618,31 @@ export default function MapView({
         if (typeof id !== 'string') return;
         onSurveyPointSelectRef.current?.(id, [e.lngLat.lng, e.lngLat.lat]);
       });
+
+      map.on('mouseenter', HEX_OBSERVATIONS_CLUSTERS_LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', HEX_OBSERVATIONS_CLUSTERS_LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
+      map.on('click', HEX_OBSERVATIONS_CLUSTERS_LAYER_ID, async (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const clusterId = feature.properties?.cluster_id;
+        if (typeof clusterId !== 'number' || feature.geometry.type !== 'Point') return;
+        const source = map.getSource(HEX_OBSERVATIONS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+        if (!source) return;
+        try {
+          const zoom = await source.getClusterExpansionZoom(clusterId);
+          const [lng, lat] = feature.geometry.coordinates as [number, number];
+          map.easeTo({ center: [lng, lat], zoom });
+        } catch { /* ignore */ }
+      });
+
+      map.on('mouseenter', HEX_OBSERVATIONS_POINTS_LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', HEX_OBSERVATIONS_POINTS_LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
+      map.on('click', HEX_OBSERVATIONS_POINTS_LAYER_ID, (e) => {
+        const feature = e.features?.[0];
+        const cellId = feature?.properties?.cellId;
+        if (typeof cellId !== 'string') return;
+        onClickRef.current({ cellId }, [e.lngLat.lng, e.lngLat.lat]);
+      });
     });
 
     return () => {
@@ -605,10 +696,13 @@ export default function MapView({
     const map = mapRef.current;
     const parkSrc = map.getSource('parks') as maplibregl.GeoJSONSource | undefined;
     const centroidSrc = map.getSource('park-centroids') as maplibregl.GeoJSONSource | undefined;
+    const hexObservationsSrc = map.getSource(HEX_OBSERVATIONS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     parkSrc?.setData(parkPolygonsGeoJSON() as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     centroidSrc?.setData(parkCentroidsGeoJSON() as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    hexObservationsSrc?.setData(getHexObservationsGeoJSON() as any);
     try {
       refreshHexLayers(map, layersRef.current);
     } catch { /* ignore */ }

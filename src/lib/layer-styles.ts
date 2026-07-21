@@ -41,6 +41,12 @@ export const INTERVENTION_RANK_BADGES_LAYER_ID = 'intervention-rank-badges';
 export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
 export const BIODIVERSITY_CIRCLES_LAYER_ID = 'biodiversity-circles';
 
+/** Clustered per-hex observation points (GeoJSON source — see lib/hex-observations.ts). */
+export const HEX_OBSERVATIONS_SOURCE_ID = 'hex-observations';
+export const HEX_OBSERVATIONS_CLUSTERS_LAYER_ID = 'hex-observations-clusters';
+export const HEX_OBSERVATIONS_CLUSTER_COUNT_LAYER_ID = 'hex-observations-cluster-count';
+export const HEX_OBSERVATIONS_POINTS_LAYER_ID = 'hex-observations-points';
+
 export type PatchFillLayerId = Exclude<HexLayerId, 'biodiversity'>;
 
 export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {

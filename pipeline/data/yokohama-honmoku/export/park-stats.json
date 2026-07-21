@@ -33,6 +33,12 @@
         "type": "plant",
         "count": 74,
         "names": [
+          "Bugles (Ajuga)",
+          "Dicots (Magnoliopsida)",
+          "Japanese false bindweed (Calystegia hederacea)",
+          "mustard family (Brassicaceae)",
+          "St. John's worts (Hypericum)",
+          "Youngia (Youngia)",
           "アオカモジグサ (Elymus ciliaris)",
           "アキカラマツ (Thalictrum minus)",
           "アサガオ (Ipomoea nil)",
@@ -66,8 +72,8 @@
           "サンゴジュ (Viburnum odoratissimum)",
           "シケシダ (Deparia japonica)",
           "シモツケ (Spiraea japonica)",
-          "シラカシ (Quercus myrsinifolia)",
           "ジュズダマ (Coix lacryma-jobi)",
+          "シラカシ (Quercus myrsinifolia)",
           "スギ (Cryptomeria japonica)",
           "タケニグサ (Macleaya cordata)",
           "タンキリマメ (Rhynchosia volubilis)",
@@ -100,18 +106,12 @@
           "ヤマウコギ (Eleutherococcus spinosus)",
           "ヤマホタルブクロ (Campanula punctata)",
           "ユキノシタ (Saxifraga stolonifera)",
-          "ワレモコウ (Sanguisorba officinalis)",
-          "Bugles (Ajuga)",
-          "Dicots (Magnoliopsida)",
-          "Japanese false bindweed (Calystegia hederacea)",
-          "St. John's worts (Hypericum)",
-          "Youngia (Youngia)",
-          "mustard family (Brassicaceae)"
+          "ワレモコウ (Sanguisorba officinalis)"
         ]
       },
       {
         "type": "bird",
-        "count": 47,
+        "count": 31,
         "names": [
           "Asian House-Martin (Delichon dasypus)",
           "Asian Tit (Parus cinereus)",
@@ -150,12 +150,12 @@
         "type": "insect",
         "count": 6,
         "names": [
-          "モンシロチョウ (Pieris rapae crucivora)",
           "Goschkevitschi's Labyrinth (Neope goschkevitschii)",
           "Insects (Insecta)",
           "Oriental Lesser Emperor (Anax julius)",
           "Pieris rapae",
-          "Pieris rapae crucivora (Pieris rapae crucivora)"
+          "Pieris rapae crucivora (Pieris rapae crucivora)",
+          "モンシロチョウ (Pieris rapae crucivora)"
         ]
       },
       {
@@ -184,7 +184,7 @@
     "landUseGreen": 36,
     "landUseClass": "tree",
     "interventionRank": 10,
-    "pressures": ["No biodiversity observations recorded in this cell", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Unsampled cell — no accessible pedestrian path length from OSM", "Low survey effort — fewer than 2 distinct survey dates", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
     "interventions": []
   },
   "osm-616215664": {
@@ -315,7 +315,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 25,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-457373485": {
@@ -379,7 +379,7 @@
     "landUseGreen": 62,
     "landUseClass": "tree",
     "interventionRank": 39,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-312872914": {
@@ -443,7 +443,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 15,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-508549680": {
@@ -507,7 +507,7 @@
     "landUseGreen": 74,
     "landUseClass": "built",
     "interventionRank": 9,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (20)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (20)"],
     "interventions": []
   },
   "osm-green-space-508549681": {
@@ -571,7 +571,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 50,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-312874588": {
@@ -635,7 +635,7 @@
     "landUseGreen": 34,
     "landUseClass": "built",
     "interventionRank": 7,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (25)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (25)"],
     "interventions": []
   },
   "osm-green-space-508548796": {
@@ -699,7 +699,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 49,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-508105966": {
@@ -763,7 +763,7 @@
     "landUseGreen": 48,
     "landUseClass": "tree",
     "interventionRank": 47,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-1383895561": {
@@ -827,7 +827,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 27,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-454774353": {
@@ -891,7 +891,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 38,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-354332606": {
@@ -955,7 +955,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 36,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-508064088": {
@@ -1019,7 +1019,7 @@
     "landUseGreen": 4,
     "landUseClass": "built",
     "interventionRank": 43,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-1089686659": {
@@ -1083,7 +1083,7 @@
     "landUseGreen": 46,
     "landUseClass": "built",
     "interventionRank": 11,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-508067842": {
@@ -1147,7 +1147,7 @@
     "landUseGreen": 34,
     "landUseClass": "built",
     "interventionRank": 44,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-508064583": {
@@ -1211,7 +1211,7 @@
     "landUseGreen": 39,
     "landUseClass": "built",
     "interventionRank": 17,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
     "interventions": []
   },
   "osm-378127228": {
@@ -1285,7 +1285,7 @@
     "landUseGreen": 75,
     "landUseClass": "tree",
     "interventionRank": 2,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (24)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (24)"],
     "interventions": [
       {
         "id": "yokohama-honmoku-6042-rank-6",
@@ -1422,7 +1422,7 @@
     "landUseGreen": 32,
     "landUseClass": "built",
     "interventionRank": 40,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-455007384": {
@@ -1486,7 +1486,7 @@
     "landUseGreen": 8,
     "landUseClass": "built",
     "interventionRank": 18,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-312883205": {
@@ -1531,7 +1531,7 @@
       },
       {
         "type": "bird",
-        "count": 54,
+        "count": 35,
         "names": [
           "Anas crecca",
           "Ardea cinerea",
@@ -1600,7 +1600,7 @@
     "landUseGreen": 42,
     "landUseClass": "tree",
     "interventionRank": 16,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (23)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Low survey effort — fewer than 2 distinct survey dates", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (23)"],
     "interventions": []
   },
   "osm-green-space-354332038": {
@@ -1664,7 +1664,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 35,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-95183768": {
@@ -1699,45 +1699,45 @@
     "species": [
       {
         "type": "plant",
-        "count": 41,
+        "count": 32,
         "names": [
-          "ムベ (Stauntonia hexaphylla)",
           "Asian jumpseed (Persicaria filiformis)",
           "Asiatic dayflower (Commelina communis)",
+          "bamboos, canes, and allies (Bambusoideae)",
           "Campylolepides (Campylolepides)",
           "Chinese evergreen oak (Quercus myrsinifolia)",
           "Chusan Palm (Trachycarpus fortunei)",
+          "citrus (Citrus)",
           "Comfreys (Symphytum)",
           "Dicots (Magnoliopsida)",
+          "flowering plants (Angiospermae)",
           "Hamilton's spindle (Euonymus hamiltonianus)",
+          "holly olive (Osmanthus heterophyllus)",
+          "hydrangeas (Hydrangea)",
           "Japanese Clover (Kummerowia striata)",
           "Japanese honewort (Cryptotaenia japonica)",
           "Japanese zelkova (Zelkova serrata)",
+          "low smartweed (Persicaria longiseta)",
           "Nudicaules (Nudicaules)",
+          "oaks (Quercus)",
+          "palms (Arecaceae)",
           "Pinkladies (Oenothera speciosa)",
           "Plants (Plantae)",
           "Sawtooth oak (Quercus acutissima)",
+          "spearmint (Mentha spicata)",
+          "tall goldenrod (Solidago altissima)",
           "Trifolium (Trifolium)",
           "Tropical Finger-grass (Digitaria ciliaris)",
           "Vascular Plants (Tracheophyta)",
           "Weigela bushes (Weigela)",
           "Woodsorrels (Oxalis)",
-          "bamboos, canes, and allies (Bambusoideae)",
-          "citrus (Citrus)",
-          "flowering plants (Angiospermae)",
-          "holly olive (Osmanthus heterophyllus)",
-          "hydrangeas (Hydrangea)",
-          "low smartweed (Persicaria longiseta)",
-          "oaks (Quercus)",
-          "palms (Arecaceae)",
-          "spearmint (Mentha spicata)",
-          "tall goldenrod (Solidago altissima)",
-          "yellow foxtail (Setaria pumila)"
+          "yellow foxtail (Setaria pumila)",
+          "ムベ (Stauntonia hexaphylla)"
         ]
       },
       {
         "type": "bird",
-        "count": 36,
+        "count": 24,
         "names": [
           "Amur Stonechat (Saxicola stejnegeri)",
           "Asian Tit (Parus cinereus)",
@@ -1767,9 +1767,8 @@
       },
       {
         "type": "insect",
-        "count": 17,
+        "count": 14,
         "names": [
-          "カラスヨトウ属 (Amphipyra)",
           "Atractomorpha lata (Atractomorpha lata)",
           "Brown Marmorated Stink Bug (Halyomorpha halys)",
           "Chinese Mantis (Tenodera sinensis)",
@@ -1782,7 +1781,8 @@
           "Kaempfer Cicada (Planopleura kaempferi)",
           "Lymantria",
           "Meadowhawks (Sympetrum)",
-          "Red Ring Skirt (Hestina assimilis)"
+          "Red Ring Skirt (Hestina assimilis)",
+          "カラスヨトウ属 (Amphipyra)"
         ]
       },
       {
@@ -1797,23 +1797,23 @@
         "type": "fungi",
         "count": 17,
         "names": [
-          "オロシタケ (Heterochaete delicata)",
-          "クロコブタケ (Annulohypoxylon truncatum)",
-          "チャカイガラタケ (Daedaleopsis confragosa tricolor)",
-          "メダケ赤衣病菌 (Stereostratum corticioides)",
+          "artist's bracket (Ganoderma applanatum)",
           "Black Witches' Butter (Exidia glandulosa)",
           "Brittlestems and Allies (Psathyrellaceae)",
           "Cryphonectriaceae (Cryphonectriaceae)",
           "Erysiphe euonymicola (Erysiphe euonymicola)",
           "Erysiphe uncinuloides (Erysiphe uncinuloides)",
+          "field and button mushrooms (Agaricus)",
           "Mushrooms, Bracket Fungi, Puffballs, and Allies (Agaricomycetes)",
           "Neoerysiphe galeopsidis (Neoerysiphe galeopsidis)",
           "Sphaerulina azaleae (Sphaerulina azaleae)",
           "Sporocadaceae (Sporocadaceae)",
+          "turkey-tail (Trametes versicolor)",
           "Wood ear fungi (Auricularia)",
-          "artist's bracket (Ganoderma applanatum)",
-          "field and button mushrooms (Agaricus)",
-          "turkey-tail (Trametes versicolor)"
+          "オロシタケ (Heterochaete delicata)",
+          "クロコブタケ (Annulohypoxylon truncatum)",
+          "チャカイガラタケ (Daedaleopsis confragosa tricolor)",
+          "メダケ赤衣病菌 (Stereostratum corticioides)"
         ]
       }
     ],
@@ -1827,7 +1827,7 @@
     "landUseGreen": 94,
     "landUseClass": "tree",
     "interventionRank": 4,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (33)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (34)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (33)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Temporal sampling bias — observations are weekend-only", "Effort-corrected richness (0.0) is below the habitat expectation (34)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (22)"],
     "interventions": [
       {
         "id": "yokohama-honmoku-8957-rank-1",
@@ -1946,8 +1946,8 @@
         "count": 3,
         "names": [
           "Chinese Hackberry (Celtis sinensis)",
-          "Three-cornered garlic (Allium triquetrum)",
-          "pines (Pinus)"
+          "pines (Pinus)",
+          "Three-cornered garlic (Allium triquetrum)"
         ]
       },
       {
@@ -1961,8 +1961,8 @@
         "type": "insect",
         "count": 2,
         "names": [
-          "オオスカシバ 日本亜種 (Cephonodes hylas hylas)",
-          "Cephonodes hylas"
+          "Cephonodes hylas",
+          "オオスカシバ 日本亜種 (Cephonodes hylas hylas)"
         ]
       },
       {
@@ -1984,7 +1984,7 @@
     "landUseGreen": 40,
     "landUseClass": "tree",
     "interventionRank": 19,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Unsampled cell — no accessible pedestrian path length from OSM"],
     "interventions": []
   },
   "osm-green-space-312888383": {
@@ -2019,22 +2019,21 @@
     "species": [
       {
         "type": "plant",
-        "count": 117,
+        "count": 90,
         "names": [
-          "ウラジロ (Diplopterygium glaucum)",
-          "オオヨモギ (Artemisia montana)",
-          "コシダ (Dicranopteris linearis)",
-          "コモチシダ (Woodwardia orientalis)",
-          "チョウチンゴケ科 (Mniaceae)",
-          "フモトシダ (Microlepia marginata)",
           "Arrow Bamboo (Pseudosasa japonica)",
           "Arundinarieae",
           "Aster ageratoides",
           "Aster ageratoides (Aster ageratoides)",
+          "austral ladies'-tresses (Spiranthes australis)",
+          "autumn fern (Dryopteris erythrosora)",
+          "bamboos, canes, and allies (Bambusoideae)",
           "Broad-leaved Bamboo (Sasa palmata)",
           "Bunch-flowered Daffodil (Narcissus tazetta)",
+          "bush clovers and lespedezas (Lespedeza)",
           "Bushkiller (Causonis japonica)",
           "Camellias (Camellia)",
+          "cast-iron plant (Aspidistra elatior)",
           "Cheesewoods (Pittosporum)",
           "China knotweed (Persicaria chinensis)",
           "Chinese Hackberry (Celtis sinensis)",
@@ -2045,12 +2044,14 @@
           "Common Liverwort (Marchantia polymorpha)",
           "Cotton Rosemallow (Hibiscus mutabilis)",
           "Cucumber-herb (Trigonotis peduncularis)",
+          "cyclamen-leaf violet (Viola grypoceras)",
           "Decumbent Bugle (Ajuga decumbens)",
           "Dicots (Magnoliopsida)",
           "Dryopteris sparsa (Dryopteris sparsa)",
           "Eupatorium chinense (Eupatorium chinense)",
           "European White Waterlily (Nymphaea alba)",
           "Ferns (Polypodiopsida)",
+          "field horsetail (Equisetum arvense)",
           "Flowering Apricot (Prunus mume)",
           "Fringed Iris (Iris japonica)",
           "Great Scented Liverwort (Conocephalum conicum)",
@@ -2073,16 +2074,22 @@
           "Kerria japonica",
           "Korean Dandelion (Taraxacum platycarpum)",
           "Korean mulberry (Morus indica)",
+          "leopard-plant (Farfugium japonicum)",
           "Long Sepal Violet (Viola inconspicua)",
           "Long-tail Spleenwort (Asplenium incisum)",
           "Malvoideae (Malvoideae)",
           "Manchurian violet (Viola mandshurica)",
+          "monocots (Liliopsida)",
           "Moso Bamboo (Phyllostachys edulis)",
           "Mountain Hydrangea (Hydrangea serrata)",
           "Oriental chain fern (Woodwardia orientalis)",
           "Oriental false hawksbeard (Youngia japonica)",
           "Philadelphia fleabane (Erigeron philadelphicus)",
+          "pines (Pinus)",
           "Plume Thistles (Cirsium)",
+          "rabbit's foot ferns (Davallia)",
+          "red spider lily (Lycoris radiata)",
+          "rhododendrons and azaleas (Rhododendron)",
           "Rio Spiderwort (Tradescantia fluminensis)",
           "Rubus palmatus",
           "Rubus palmatus coptophyllus (Rubus palmatus coptophyllus)",
@@ -2092,32 +2099,24 @@
           "Spring starflower (Ipheion uniflorum)",
           "Sticky mouse-ear chickweed (Cerastium glomeratum)",
           "Sweet viburnum (Viburnum odoratissimum)",
+          "tall flatsedge (Cyperus eragrostis)",
+          "true asters (Aster)",
           "Vitis ficifolia",
           "Willows (Salix)",
           "Wintersweet (Chimonanthus praecox)",
           "Yabumyoga (Pollia japonica)",
-          "austral ladies'-tresses (Spiranthes australis)",
-          "autumn fern (Dryopteris erythrosora)",
-          "bamboos, canes, and allies (Bambusoideae)",
-          "bush clovers and lespedezas (Lespedeza)",
-          "cast-iron plant (Aspidistra elatior)",
-          "cyclamen-leaf violet (Viola grypoceras)",
-          "field horsetail (Equisetum arvense)",
-          "leopard-plant (Farfugium japonicum)",
-          "monocots (Liliopsida)",
-          "pines (Pinus)",
-          "rabbit's foot ferns (Davallia)",
-          "red spider lily (Lycoris radiata)",
-          "rhododendrons and azaleas (Rhododendron)",
-          "tall flatsedge (Cyperus eragrostis)",
-          "true asters (Aster)"
+          "ウラジロ (Diplopterygium glaucum)",
+          "オオヨモギ (Artemisia montana)",
+          "コシダ (Dicranopteris linearis)",
+          "コモチシダ (Woodwardia orientalis)",
+          "チョウチンゴケ科 (Mniaceae)",
+          "フモトシダ (Microlepia marginata)"
         ]
       },
       {
         "type": "bird",
-        "count": 194,
+        "count": 78,
         "names": [
-          "メジロ (Zosterops japonicus japonicus)",
           "Alcedo atthis",
           "Ardea cinerea",
           "Asian Brown Flycatcher (Muscicapa latirostris)",
@@ -2128,8 +2127,8 @@
           "Black-backed Wagtail (Motacilla alba lugens)",
           "Black-eared Kite (Milvus migrans lineatus)",
           "Black-headed Gull (Chroicocephalus ridibundus)",
-          "Brown-eared Bulbul (Hypsipetes amaurotis)",
           "Brown-eared Bulbul (amaurotis) (Hypsipetes amaurotis amaurotis)",
+          "Brown-eared Bulbul (Hypsipetes amaurotis)",
           "Brown-headed Thrush (Turdus chrysolaus)",
           "Bull-headed Shrike (Lanius bucephalus)",
           "Carrion Crow (Corvus corone)",
@@ -2194,18 +2193,14 @@
           "Warbling White-eye (Zosterops japonicus)",
           "White Wagtail (Motacilla alba)",
           "White-cheeked Starling (Spodiopsar cineraceus)",
-          "Zosterops japonicus"
+          "Zosterops japonicus",
+          "メジロ (Zosterops japonicus japonicus)"
         ]
       },
       {
         "type": "insect",
-        "count": 49,
+        "count": 45,
         "names": [
-          "アカボシゴマダラ 大陸亜種 (Hestina assimilis assimilis)",
-          "シロヘリキリガ (Orthosia limbata)",
-          "ハラビロカマキリ 基亜種 (Hierodula patellifera patellifera)",
-          "ヨツボシモンシデムシ (Nicrophorus quadripunctatus)",
-          "ルリタテハ 日本本土亜種 (Kaniska canace nojaponicum)",
           "Angled Sunbeam (Curetis acuta)",
           "Asian Comma (Polygonia c-aureum)",
           "Asian Giant Hornet (Vespa mandarinia)",
@@ -2222,11 +2217,11 @@
           "Hestina assimilis assimilis (Hestina assimilis assimilis)",
           "Hierodula patellifera",
           "Japanese Common Bluebottle (Graphium sarpedon nipponum)",
+          "Japanese common grass yellow (Eurema mandarina)",
           "Japanese Dart (Potanthus flavus)",
           "Japanese Green Bush-Cricket (Tettigonia orientalis)",
           "Japanese Peacock Swallowtail (Papilio dehaanii)",
           "Japanese Treebrown (Lethe sicelis)",
-          "Japanese common grass yellow (Eurema mandarina)",
           "Joro Spider (Trichonephila clavata)",
           "Kaniska canace",
           "Maile Pilau Hornworm (Macroglossum pyrrhosticta)",
@@ -2245,12 +2240,17 @@
           "Typical Cicadas (Cicadidae)",
           "Western Honey Bee (Apis mellifera)",
           "White-tailed Skimmer (Orthetrum albistylum)",
-          "Yellow-spotted Stink Bug (Erthesina fullo)"
+          "Yellow-spotted Stink Bug (Erthesina fullo)",
+          "アカボシゴマダラ 大陸亜種 (Hestina assimilis assimilis)",
+          "シロヘリキリガ (Orthosia limbata)",
+          "ハラビロカマキリ 基亜種 (Hierodula patellifera patellifera)",
+          "ヨツボシモンシデムシ (Nicrophorus quadripunctatus)",
+          "ルリタテハ 日本本土亜種 (Kaniska canace nojaponicum)"
         ]
       },
       {
         "type": "mammal",
-        "count": 23,
+        "count": 10,
         "names": [
           "Amur Carp (Cyprinus rubrofuscus)",
           "Bluegill (Lepomis macrochirus)",
@@ -2266,7 +2266,7 @@
       },
       {
         "type": "fungi",
-        "count": 13,
+        "count": 12,
         "names": [
           "Common Gilled Mushrooms and Allies (Agaricales)",
           "Dotted-stalked Suillus (Suillus granulatus)",
@@ -2293,7 +2293,7 @@
     "landUseGreen": 83,
     "landUseClass": "tree",
     "interventionRank": 13,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Temporal sampling bias <e2><80><94> observations are weekend-only", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (33)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (27)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "Temporal sampling bias — observations are weekend-only", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (32)", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (33)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (27)"],
     "interventions": [
       {
         "id": "yokohama-honmoku-9753-rank-18",
@@ -2366,7 +2366,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 41,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-506149882": {
@@ -2430,7 +2430,7 @@
     "landUseGreen": 62,
     "landUseClass": "built",
     "interventionRank": 42,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-320197043": {
@@ -2504,7 +2504,7 @@
     "landUseGreen": 33,
     "landUseClass": "built",
     "interventionRank": 6,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Temporal sampling bias — observations are weekend-only", "Low survey effort — fewer than 2 distinct survey dates"],
     "interventions": []
   },
   "osm-844516386": {
@@ -2568,7 +2568,7 @@
     "landUseGreen": 100,
     "landUseClass": "tree",
     "interventionRank": 30,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-354239225": {
@@ -2632,7 +2632,7 @@
     "landUseGreen": 20,
     "landUseClass": "mixed",
     "interventionRank": 28,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-354248134": {
@@ -2696,7 +2696,7 @@
     "landUseGreen": 14,
     "landUseClass": "mixed",
     "interventionRank": 3,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Unsampled cell — no accessible pedestrian path length from OSM"],
     "interventions": []
   },
   "osm-453899167": {
@@ -2760,7 +2760,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 29,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-455048186": {
@@ -2824,7 +2824,7 @@
     "landUseGreen": 97,
     "landUseClass": "tree",
     "interventionRank": 14,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (30)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (31)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (30)"],
     "interventions": []
   },
   "osm-453724629": {
@@ -2888,7 +2888,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 26,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-385653372": {
@@ -3080,7 +3080,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 20,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-354329924": {
@@ -3147,7 +3147,7 @@
     "landUseGreen": 40,
     "landUseClass": "built",
     "interventionRank": 34,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-354307889": {
@@ -3211,7 +3211,7 @@
     "landUseGreen": 62,
     "landUseClass": "tree",
     "interventionRank": 1,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (29)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (30)", "Effort-corrected richness (0.0) is below the habitat expectation (27)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
     "interventions": []
   },
   "osm-green-space-508088240": {
@@ -3275,7 +3275,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 46,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-508085835": {
@@ -3339,7 +3339,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 45,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-410888262": {
@@ -3403,7 +3403,7 @@
     "landUseGreen": 1,
     "landUseClass": "built",
     "interventionRank": 23,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
     "interventions": []
   },
   "osm-green-space-312877778": {
@@ -3470,7 +3470,7 @@
     "landUseGreen": 55,
     "landUseClass": "tree",
     "interventionRank": 5,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Temporal sampling bias <e2><80><94> observations are weekend-only", "Low survey effort <e2><80><94> fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (27)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (20)", "Temporal sampling bias — observations are weekend-only", "Low survey effort — fewer than 2 distinct survey dates", "Effort-corrected richness (0.0) is below the habitat expectation (21)", "Effort-corrected richness (0.0) is below the habitat expectation (25)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (28)", "Effort-corrected richness (0.0) is below the habitat expectation (27)"],
     "interventions": []
   },
   "osm-green-space-451676406": {
@@ -3534,7 +3534,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 37,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-354327315": {
@@ -3598,7 +3598,7 @@
     "landUseGreen": 18,
     "landUseClass": "built",
     "interventionRank": 33,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-401922726": {
@@ -3662,7 +3662,7 @@
     "landUseGreen": 3,
     "landUseClass": "built",
     "interventionRank": 24,
-    "pressures": ["Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
+    "pressures": ["Unsampled cell — no accessible pedestrian path length from OSM", "No biodiversity observations recorded in this cell"],
     "interventions": []
   },
   "osm-green-space-354300913": {
@@ -3726,7 +3726,7 @@
     "landUseGreen": 64,
     "landUseClass": "tree",
     "interventionRank": 8,
-    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
+    "pressures": ["No biodiversity observations recorded in this cell", "Effort-corrected richness (0.0) is below the habitat expectation (22)", "Effort-corrected richness (0.0) is below the habitat expectation (23)", "Effort-corrected richness (0.0) is below the habitat expectation (26)", "Effort-corrected richness (0.0) is below the habitat expectation (24)", "Unsampled cell — no accessible pedestrian path length from OSM", "Effort-corrected richness (0.0) is below the habitat expectation (21)"],
     "interventions": []
   },
   "osm-green-space-303412611": {
@@ -3790,7 +3790,7 @@
     "landUseGreen": 0,
     "landUseClass": "built",
     "interventionRank": 31,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-312876875": {
@@ -3854,7 +3854,7 @@
     "landUseGreen": 16,
     "landUseClass": "built",
     "interventionRank": 32,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   },
   "osm-green-space-508544571": {
@@ -3918,7 +3918,7 @@
     "landUseGreen": 47,
     "landUseClass": "built",
     "interventionRank": 48,
-    "pressures": "Unsampled cell <e2><80><94> no accessible pedestrian path length from OSM",
+    "pressures": "Unsampled cell — no accessible pedestrian path length from OSM",
     "interventions": []
   }
 }
