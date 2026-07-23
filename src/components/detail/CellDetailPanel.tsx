@@ -343,8 +343,8 @@ export default function CellDetailPanel({
                       </div>
                     </div>
                     <p className="text-[12px] text-[#667066] leading-relaxed">
-                      Ecological residual is corrected richness minus expected richness. Positive
-                      values indicate more species than expected; negative values indicate fewer.
+                      Ecological residual is expected richness minus corrected richness. Positive
+                      values indicate fewer species than expected; negative values indicate more.
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <div className="bg-[#F7F8F5] rounded-xl p-3">
