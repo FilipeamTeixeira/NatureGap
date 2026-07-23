@@ -3,7 +3,7 @@ import { getCellStats } from './park-data';
 import { STORAGE } from './config';
 import {
   fetchPipelineJson,
-  mergeGeoJsonChunks,
+  mergeFeatureCollections,
 } from './storage-fetch';
 
 const EMPTY_GRID: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -26,7 +26,7 @@ export async function initHexGrid(): Promise<void> {
     const data = await fetchPipelineJson(
       'hexgrid.geojson',
       STORAGE.HEXGRID_MANIFEST_KEY,
-      mergeGeoJsonChunks,
+      mergeFeatureCollections,
     );
 
     if (data && (data as GeoJSON.FeatureCollection).features?.length) {
