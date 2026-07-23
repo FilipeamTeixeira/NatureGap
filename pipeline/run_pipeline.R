@@ -9,6 +9,10 @@
 #   source("config_amsterdam.R")
 #   source("run_pipeline.R")
 #
+# Connectivity (stage 04) runs separately on its own schedule:
+#   source("config_porto.R")
+#   source("04_connectivity/connectivity.R")
+#
 # To run only from a specific numbered folder (e.g. skip 01_ingest):
 #   START_STEP <- 2
 #   source("run_pipeline.R")
@@ -39,7 +43,6 @@ steps <- list(
   list(n = 2L, folder = "02_spatial", label = "Spatial base", file = "02_spatial/spatial_base.R"),
   list(n = 2L, folder = "02_habitat", label = "Habitat model", file = "02_habitat/habitat_model.R"),
   list(n = 3L, folder = "03_observations", label = "Observations", file = "03_observations/observation_layer.R"),
-  list(n = 4L, folder = "04_connectivity", label = "Connectivity", file = "04_connectivity/connectivity.R"),
   list(n = 5L, folder = "05_residuals", label = "Residuals", file = "05_residuals/residuals.R"),
   list(n = 5L, folder = "05_patch", label = "Patch aggregation", file = "05_patch/patch_aggregation.R"),
   list(n = 6L, folder = "06_export", label = "Export", file = "06_export/export.R"),

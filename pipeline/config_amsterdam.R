@@ -148,11 +148,11 @@ BBOX_FETCH <- c(
 )   # slightly wider than analysis domain to capture edge observations
 
 # ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
-city <- "amsterdam-schimmelstraat"
+city <- "noord-holland"
 regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "netherlands-latest.osm.pbf")
 
-aoi_mode <- "bbox"            # "relation" or "bbox"
-# relation_id <- 47811L         # Amsterdam — uncomment + set aoi_mode <- "relation"
+aoi_mode <- "relation"            # "relation" or "bbox"
+relation_id <- 11960504L         # Amsterdam — uncomment + set aoi_mode <- "relation"
 bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
 
 halo_m <- 750                 # buffer used for tile halos (Task 3)

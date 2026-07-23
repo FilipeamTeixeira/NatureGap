@@ -22,41 +22,37 @@ library(igraph)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
+source(here::here("04_connectivity", "connectivity_load.R"), local = FALSE)
+
 TOP_N         <- 20    # number of cells for counterfactual connectivity
 
 # ── 1. Load and join layers ──────────────────────────────────────────────────
 
-hab  <- st_read(PROC_GRID_HABITAT, quiet = TRUE) |>
-  select(-any_of("is_unsampled"))
-
-obs  <- st_read(PROC_GRID_OBS, quiet = TRUE) |>
-  st_drop_geometry()
-
-if ("is_unsampled" %in% names(obs)) {
-  obs <- obs |> rename(obs_is_unsampled = is_unsampled)
+grid <- if (file.exists(PROC_GRID_OBS)) {
+  st_read(PROC_GRID_OBS, quiet = TRUE)
+} else {
+  st_read(PROC_GRID_HABITAT, quiet = TRUE)
 }
 
-obs <- obs |>
-  select(cell_id, species_richness, richness_corrected,
-         effort_corrected_richness, any_of(c("observed_richness", "survey_effort_units", "obs_is_unsampled")), n_obs, species_shannon,
-         n_survey_dates, weighted_observation_effort, has_structured_survey,
-         weekend_only, temporal_bias_flag,
-         plant, bird, insect, mammal, fungi)
+grid <- grid |>
+  select(-any_of(c(
+    "is_unsampled", "corridor_importance", "connectivity_score",
+    "betweenness_centrality", "path_node_id", "node_importance",
+    "fragmentation_index", "neighbor_fragmentation", "edge_density",
+    "patch_isolation", "patch_size_distribution", "patch_area_ha"
+  )))
 
-conn <- st_read(PROC_GRID_CONN,quiet = TRUE) |>
-  st_drop_geometry() |>
-  select(cell_id, corridor_importance, connectivity_score, node_importance,
-         any_of("betweenness_centrality"),
-         fragmentation_index, neighbor_fragmentation, edge_density,
-         patch_isolation, patch_size_distribution, patch_area_ha)
-
-grid <- hab |>
-  left_join(obs,  by = "cell_id") |>
-  left_join(conn, by = "cell_id")
-
-if (!"obs_is_unsampled" %in% names(grid)) {
+if ("is_unsampled" %in% names(grid)) {
+  grid <- grid |> rename(obs_is_unsampled = is_unsampled)
+} else {
   grid$obs_is_unsampled <- NA
 }
+
+conn <- join_connectivity_to_cells(grid)
+
+grid <- grid |>
+  left_join(conn, by = "cell_id")
+
 if (!"betweenness_centrality" %in% names(grid)) {
   grid$betweenness_centrality <- grid$corridor_importance
 }
