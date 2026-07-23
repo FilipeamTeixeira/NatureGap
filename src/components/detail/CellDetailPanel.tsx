@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, ArrowLeft, Calendar, MapPin, Users, TreePine, Flower2, Leaf, Zap, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SCORE_THRESHOLDS, cityMeta, MAX_EXPECTED_RICHNESS } from '@/lib/config';
+import { cityMeta, MAX_EXPECTED_RICHNESS } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
 import type { CommunityEvent, TakeAction } from '@/lib/data';
@@ -126,8 +126,8 @@ function SpeciesGroupList({ species }: { species: CellData['species'] }) {
 }
 
 function ecologicalStatus(score: number): string {
-  if (score < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING) return 'Under pressure';
-  if (score > SCORE_THRESHOLDS.BETTER) return 'Potential refuge';
+  if (score > 5) return 'Under pressure';
+  if (score < -15) return 'Potential refuge';
   return 'Performing as expected';
 }
 
@@ -241,7 +241,7 @@ export default function CellDetailPanel({
   onViewInsidePark,
 }: CellDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview');
-  const isUnder = cell.impactScore < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
+  const isUnder = cell.impactScore > 5;
   const speciesTotal = cell.species.reduce((s, sp) => s + sp.count, 0);
   const showResidualSummary = activeLayer === 'residual';
 

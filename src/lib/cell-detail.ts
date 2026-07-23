@@ -82,11 +82,11 @@ function pct(value: number | null | undefined): number {
 }
 
 function impactStatus(score: number): ImpactStatus {
-  if (score < -20) return 'much-worse';
-  if (score < -10) return 'worse';
-  if (score < 5) return 'as-expected';
-  if (score < 15) return 'better';
-  return 'much-better';
+  if (score < -15) return 'much-better';
+  if (score < -5) return 'better';
+  if (score < 10) return 'as-expected';
+  if (score < 20) return 'worse';
+  return 'much-worse';
 }
 
 function habitatPotential(habitatQuality: number): HabitatPotential {
