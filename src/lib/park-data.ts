@@ -11,7 +11,6 @@ import type { CellData, CellStatsFields } from './types';
 import type { GreenSpace } from './green-spaces';
 import parkStatsData from '@/data/park-stats.json';
 import { parseParkStats } from './data-validation';
-import { parseCellsJson, parseParkStats } from './data-validation';
 import { supabase } from './supabase';
 import { STORAGE } from './config';
 import {
