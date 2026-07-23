@@ -1,8 +1,8 @@
 # NatureGap — Import versioned pipeline products to PostgreSQL
 #
 # Deterministic import contract:
-#   manifest.json + cell_attributes.geojson + optional parks.geojson
-#   -> public.import_pipeline_dataset(...)
+#   manifest.json + cell_attributes.geojson (or chunked parts + manifest)
+#   + optional parks.geojson -> public.import_pipeline_dataset(...)
 
 library(jsonlite)
 library(sf)
@@ -51,14 +51,31 @@ export_root <- file.path(repo_root, "pipeline-export", CITY_ID)
 resolve_data_version <- function() {
   env_version <- Sys.getenv("NATUREGAP_DATA_VERSION", unset = "")
   if (nzchar(env_version)) return(env_version)
-  if (exists("DATA_VERSION") && nzchar(DATA_VERSION)) return(DATA_VERSION)
+
+  version_has_manifest <- function(version) {
+    file.exists(file.path(export_root, version, "manifest.json"))
+  }
 
   current_path <- file.path(export_root, "current.json")
-  if (!file.exists(current_path)) {
-    stop(sprintf("Cannot resolve DATA_VERSION; missing %s", current_path), call. = FALSE)
+  if (file.exists(current_path)) {
+    current <- jsonlite::read_json(current_path, simplifyVector = FALSE)
+    current_version <- as.character(current$datasetId %||% current$dataVersion %||% "")
+    if (nzchar(current_version)) {
+      return(current_version)
+    }
   }
-  current <- jsonlite::read_json(current_path, simplifyVector = FALSE)
-  current$datasetId %||% current$dataVersion
+
+  if (exists("DATA_VERSION", envir = .GlobalEnv) && nzchar(DATA_VERSION)) {
+    if (version_has_manifest(DATA_VERSION)) {
+      return(DATA_VERSION)
+    }
+    message(sprintf(
+      "Ignoring stale session DATA_VERSION=%s (export folder missing); using current.json instead.",
+      DATA_VERSION
+    ))
+  }
+
+  stop(sprintf("Cannot resolve DATA_VERSION; missing %s", current_path), call. = FALSE)
 }
 
 # `%||%` <- function(a, b) if (is.null(a) || !length(a) || !nzchar(as.character(a))) b else a
@@ -89,11 +106,24 @@ if (identical(mget(import_done_key, envir = .GlobalEnv, ifnotfound = list(NULL))
 
 version_dir <- file.path(export_root, data_version)
 manifest_path <- file.path(version_dir, "manifest.json")
-cell_path <- file.path(version_dir, "cell_attributes.geojson")
 parks_path <- file.path(version_dir, "parks.geojson")
 
-for (path in c(manifest_path, cell_path)) {
-  if (!file.exists(path)) stop(sprintf("Required import product is missing: %s", path), call. = FALSE)
+if (!file.exists(manifest_path)) {
+  stop(sprintf(
+    paste0(
+      "Required import product is missing: %s\n",
+      "  Resolved dataset: %s\n",
+      "  current.json points to: %s\n",
+      "  Restart R or set NATUREGAP_DATA_VERSION to an existing export folder."
+    ),
+    manifest_path,
+    data_version,
+    if (file.exists(file.path(export_root, "current.json"))) {
+      as.character(jsonlite::read_json(file.path(export_root, "current.json"), simplifyVector = FALSE)$datasetId %||% "<unknown>")
+    } else {
+      "<missing>"
+    }
+  ), call. = FALSE)
 }
 
 manifest <- jsonlite::read_json(manifest_path, simplifyVector = FALSE)
@@ -104,10 +134,72 @@ if (!identical(manifest$datasetId %||% manifest$dataVersion, data_version)) {
   stop("Manifest datasetId/dataVersion does not match selected DATA_VERSION.", call. = FALSE)
 }
 
-validate_geojson_features <- function(path, id_field, label) {
-  data <- jsonlite::read_json(path, simplifyVector = FALSE)
+# Build one JSON text payload for PostgreSQL without holding every feature in
+# memory and re-serializing the full collection again after chunk merge.
+read_cell_attributes_geojson_text <- function(version_dir) {
+  single_path <- file.path(version_dir, "cell_attributes.geojson")
+  if (file.exists(single_path)) {
+    message("Reading cell_attributes.geojson…")
+    return(readChar(single_path, file.info(single_path)$size))
+  }
+
+  chunk_manifest_path <- file.path(version_dir, "cell_attributes.manifest.json")
+  if (!file.exists(chunk_manifest_path)) {
+    stop(sprintf(
+      "Required import product is missing: %s (and no cell_attributes.manifest.json)",
+      single_path
+    ), call. = FALSE)
+  }
+
+  chunk_manifest <- jsonlite::read_json(chunk_manifest_path, simplifyVector = FALSE)
+  chunk_names <- chunk_manifest$chunks %||% list()
+  if (length(chunk_names) == 0L) {
+    stop("cell_attributes.manifest.json contains no chunks.", call. = FALSE)
+  }
+
+  tmp <- tempfile(fileext = ".geojson")
+  con <- file(tmp, open = "wt")
+  on.exit(close(con), add = TRUE)
+  write('{"type":"FeatureCollection","features":[', con)
+
+  total_features <- 0L
+  for (i in seq_along(chunk_names)) {
+    chunk_name <- chunk_names[[i]]
+    chunk_path <- file.path(version_dir, chunk_name)
+    if (!file.exists(chunk_path)) {
+      stop(sprintf("Chunk file missing: %s", chunk_path), call. = FALSE)
+    }
+    message(sprintf(
+      "  merging chunk %d/%d (%s)…",
+      i, length(chunk_names), chunk_name
+    ))
+    chunk_data <- jsonlite::read_json(chunk_path, simplifyVector = FALSE)
+    feats <- chunk_data$features %||% list()
+    if (length(feats) == 0L) next
+    chunk_text <- jsonlite::toJSON(feats, auto_unbox = TRUE, null = "null")
+    inner <- substr(chunk_text, 2L, nchar(chunk_text) - 1L)
+    if (total_features > 0L) write(",", con)
+    write(inner, con)
+    total_features <- total_features + length(feats)
+    rm(chunk_data, feats, chunk_text, inner)
+    gc(verbose = FALSE)
+  }
+  write("]}", con)
+  close(con)
+  on.exit(NULL)
+
+  merged_size_mb <- file.info(tmp)$size / 1024^2
+  message(sprintf(
+    "Merged cell_attributes.geojson (%d features, %.1f MB)",
+    total_features,
+    merged_size_mb
+  ))
+  readChar(tmp, file.info(tmp)$size)
+}
+
+validate_geojson_features <- function(data, id_field, label, source = label) {
   if (!identical(data$type, "FeatureCollection")) {
-    stop(sprintf("%s must be a GeoJSON FeatureCollection: %s", label, path), call. = FALSE)
+    stop(sprintf("%s must be a GeoJSON FeatureCollection: %s", label, source), call. = FALSE)
   }
   features <- data$features %||% list()
   if (length(features) == 0L && identical(label, "cell_attributes")) {
@@ -121,13 +213,13 @@ validate_geojson_features <- function(path, id_field, label) {
   }, character(1))
 
   if (any(!nzchar(ids))) {
-    stop(sprintf("%s contains missing IDs.", basename(path)), call. = FALSE)
+    stop(sprintf("%s contains missing IDs.", source), call. = FALSE)
   }
   duplicates <- unique(ids[duplicated(ids)])
   if (length(duplicates) > 0L) {
     stop(sprintf(
       "%s contains duplicate IDs: %s",
-      basename(path),
+      source,
       paste(head(duplicates, 20), collapse = ", ")
     ), call. = FALSE)
   }
@@ -136,19 +228,34 @@ validate_geojson_features <- function(path, id_field, label) {
     is.null(feature$geometry) || identical(feature$geometry$type, NULL)
   }, logical(1))
   if (any(missing_geometry)) {
-    stop(sprintf("%s contains %d features with missing geometry.", basename(path), sum(missing_geometry)), call. = FALSE)
+    stop(sprintf("%s contains %d features with missing geometry.", source, sum(missing_geometry)), call. = FALSE)
   }
 
   data
 }
 
-cell_geojson <- validate_geojson_features(cell_path, "cell_id", "cell_attributes")
+cell_geojson_text <- read_cell_attributes_geojson_text(version_dir)
+message(sprintf(
+  "Prepared cell_attributes payload (%.1f MB); PostgreSQL validates server-side",
+  nchar(cell_geojson_text) / 1024^2
+))
 green_geojson <- if (file.exists(parks_path)) {
-  validate_geojson_features(parks_path, "id", "parks")
+  validate_geojson_features(
+    jsonlite::read_json(parks_path, simplifyVector = FALSE),
+    "id",
+    "parks",
+    parks_path
+  )
 } else {
   NULL
 }
+green_geojson_text <- if (is.null(green_geojson)) {
+  NA_character_
+} else {
+  jsonlite::toJSON(green_geojson, auto_unbox = TRUE, null = "null")
+}
 
+message("Connecting to PostgreSQL…")
 con <- tryCatch(
   connect_database(db_url),
   error = function(err) {
@@ -170,6 +277,7 @@ tryCatch({
   message("Warning: Could not set postgres role; import may fail if privileges are insufficient.")
 })
 
+message("Running import_pipeline_dataset on PostgreSQL (120k cells — may take 5–15 minutes)…")
 result <- tryCatch(
   DBI::dbGetQuery(
     con,
@@ -193,8 +301,8 @@ result <- tryCatch(
       paste0("pipeline-export/", CITY_ID, "/", data_version, "/"),
       paste0("pipeline-export/", CITY_ID, "/", data_version, "/manifest.json"),
       manifest$sourceLayer %||% "hexgrid",
-      jsonlite::toJSON(cell_geojson, auto_unbox = TRUE, null = "null"),
-      if (is.null(green_geojson)) NA_character_ else jsonlite::toJSON(green_geojson, auto_unbox = TRUE, null = "null"),
+      cell_geojson_text,
+      green_geojson_text,
       TRUE
     )
   ),

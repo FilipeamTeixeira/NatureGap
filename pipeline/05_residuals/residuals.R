@@ -245,7 +245,34 @@ top_cells <- top_cells |>
     )
   )
 
-# ── 6. Write outputs ─────────────────────────────────────────────────────────
+# ── 6. Carry green_space_id from spatial base ────────────────────────────────
+# Habitat/observation tiles rebuild cell_id locally and do not preserve the
+# linkage written by 02_spatial/spatial_base.R. Re-attach by overlap area.
+
+if (!"green_space_id" %in% names(grid) && file.exists(PROC_GREEN_SPACES)) {
+  green_spaces_link <- st_read(PROC_GREEN_SPACES, quiet = TRUE) |>
+    st_transform(st_crs(grid))
+  overlap <- suppressWarnings(st_intersection(
+    grid |> select(cell_id),
+    green_spaces_link |> select(green_space_id)
+  ))
+  if (nrow(overlap) > 0L) {
+    overlap <- suppressWarnings(st_collection_extract(overlap, "POLYGON", warn = FALSE))
+    overlap_rank <- overlap |>
+      mutate(overlap_area_m2 = as.numeric(st_area(overlap))) |>
+      st_drop_geometry() |>
+      arrange(cell_id, desc(overlap_area_m2), green_space_id) |>
+      group_by(cell_id) |>
+      slice_head(n = 1L) |>
+      ungroup() |>
+      select(cell_id, green_space_id)
+    grid <- grid |> left_join(overlap_rank, by = "cell_id")
+  } else {
+    grid$green_space_id <- NA_character_
+  }
+}
+
+# ── 7. Write outputs ─────────────────────────────────────────────────────────
 
 st_write(grid, PROC_GRID_RESID, delete_dsn = TRUE)
 write_csv(top_cells, PROC_TOP_INTER)

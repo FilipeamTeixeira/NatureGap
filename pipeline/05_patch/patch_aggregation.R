@@ -32,7 +32,23 @@ if (!"green_space_id" %in% names(green_spaces)) {
   stop("green_spaces.gpkg must contain green_space_id.", call. = FALSE)
 }
 if (!"green_space_id" %in% names(hex)) {
-  stop("grid_residuals.gpkg must contain green_space_id from the spatial base.", call. = FALSE)
+  overlap <- suppressWarnings(st_intersection(
+    hex |> select(cell_id),
+    green_spaces |> select(green_space_id)
+  ))
+  if (nrow(overlap) == 0L) {
+    stop("grid_residuals.gpkg must contain green_space_id from the spatial base.", call. = FALSE)
+  }
+  overlap <- suppressWarnings(st_collection_extract(overlap, "POLYGON", warn = FALSE))
+  overlap_rank <- overlap |>
+    mutate(overlap_area_m2 = as.numeric(st_area(overlap))) |>
+    st_drop_geometry() |>
+    arrange(cell_id, desc(overlap_area_m2), green_space_id) |>
+    group_by(cell_id) |>
+    slice_head(n = 1L) |>
+    ungroup() |>
+    select(cell_id, green_space_id)
+  hex <- hex |> left_join(overlap_rank, by = "cell_id")
 }
 
 for (col in c(
