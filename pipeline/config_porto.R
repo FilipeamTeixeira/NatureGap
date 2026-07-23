@@ -10,6 +10,8 @@
 #   3. Run: source("pipeline/config_porto.R"); source("pipeline/run_pipeline.R")
 
 library(here)
+library(sf)
+library(jsonlite)
 
 # pipeline.Rproj lives in pipeline/, so here() may be the pipeline folder or the
 # repo root. Resolve paths from the directory that contains 01_ingest/.
@@ -145,6 +147,35 @@ BBOX_FETCH <- c(
   xmax = unname(BBOX_CITY["xmax"]) + 0.004,
   ymax = unname(BBOX_CITY["ymax"]) + 0.004
 )   # slightly wider than analysis domain to capture edge observations
+
+# ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
+city <- "porto"
+regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "portugal-latest.osm.pbf")
+
+aoi_mode <- "relation"        # "relation" or "bbox"
+relation_id <- 3372453L        # Porto
+# bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # fallback — uncomment + set aoi_mode <- "bbox"
+
+halo_m <- 750                 # buffer used for tile halos (Task 3)
+tile_size_m <- 2000           # core tile edge length before buffering
+
+BOUNDARIES_DIR <- file.path(PIPELINE_ROOT, "data", "boundaries")
+dir.create(BOUNDARIES_DIR, recursive = TRUE, showWarnings = FALSE)
+if (!exists("CONFIG_AOI_HELPERS_LOADED")) {
+  source(file.path(PIPELINE_ROOT, "config_aoi_helpers.R"))
+}
+
+aoi <- load_city_aoi(
+  city = city,
+  aoi_mode = aoi_mode,
+  boundaries_dir = BOUNDARIES_DIR,
+  relation_id = relation_id,
+  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL
+)
+
+if (!file.exists(regional_pbf)) {
+  warning("[config] regional_pbf not found: ", regional_pbf, call. = FALSE)
+}
 
 # ── Observation ingest ────────────────────────────────────────────────────────
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
@@ -322,5 +353,5 @@ PROC_CELL_TAXA    <- file.path(DATA_PROC, "cell_taxa.json")
 # Each pipeline script checks for this flag before re-sourcing config.
 CONFIG_LOADED <- TRUE
 
-message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s",
-                CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID))
+message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s | aoi_mode: %s",
+                CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID, aoi_mode))
