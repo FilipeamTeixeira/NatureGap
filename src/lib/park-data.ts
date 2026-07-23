@@ -10,6 +10,7 @@
 import type { CellData, CellStatsFields } from './types';
 import type { GreenSpace } from './green-spaces';
 import parkStatsData from '@/data/park-stats.json';
+import { parseParkStats } from './data-validation';
 import { parseCellsJson, parseParkStats } from './data-validation';
 import { supabase } from './supabase';
 import { STORAGE } from './config';
@@ -64,7 +65,7 @@ export async function initParkStats(): Promise<void> {
       fetchJsonFromStorage(STORAGE.PARK_STATS_KEY),
     ]);
 
-    const parsedCells = parseCellsJson(cellsRaw ?? {});
+    const parsedCells = parseParkStats(cellsRaw ?? {});
     if (Object.keys(parsedCells).length > 0) {
       runtimeCellStats = parsedCells;
       console.info(`[park-data] Loaded ${Object.keys(parsedCells).length} cells`);
