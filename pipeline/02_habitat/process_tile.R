@@ -672,8 +672,14 @@ load_obs_for_tiling <- function(crs_local) {
              observation_source, observation_weight, observer_id)
   })
 
+  supabase_observations_enabled <- identical(Sys.getenv("SUPABASE_OBSERVATIONS_ENABLED", unset = "0"), "1") ||
+    identical(Sys.getenv("SUPABASE_OBSERVATIONS_REQUIRED", unset = "0"), "1")
   supabase_path <- if (exists("RAW_SUPABASE_OBS")) RAW_SUPABASE_OBS else NA_character_
-  supabase_std <- if (is.character(supabase_path) && file.exists(supabase_path)) {
+  supabase_std <- if (
+    supabase_observations_enabled &&
+    is.character(supabase_path) &&
+    file.exists(supabase_path)
+  ) {
     raw <- st_read(supabase_path, quiet = TRUE)
     if (!"observer_id" %in% names(raw)) raw$observer_id <- NA_character_
     raw |>

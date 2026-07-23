@@ -3,6 +3,10 @@
 # Deterministic import contract:
 #   manifest.json + cell_attributes.geojson (or chunked parts + manifest)
 #   + optional parks.geojson -> public.import_pipeline_dataset(...)
+#
+# Replace semantics (migration 20260723190000_pipeline_import_replace.sql):
+#   each import purges prior rows for the target dataset_id, then promotes the
+#   new snapshot as the active city projection. Re-importing current.json is safe.
 
 library(jsonlite)
 library(sf)
@@ -134,13 +138,10 @@ if (!identical(manifest$datasetId %||% manifest$dataVersion, data_version)) {
   stop("Manifest datasetId/dataVersion does not match selected DATA_VERSION.", call. = FALSE)
 }
 
-# Build one JSON text payload for PostgreSQL without holding every feature in
-# memory and re-serializing the full collection again after chunk merge.
-read_cell_attributes_geojson_text <- function(version_dir) {
+list_cell_attribute_sources <- function(version_dir) {
   single_path <- file.path(version_dir, "cell_attributes.geojson")
   if (file.exists(single_path)) {
-    message("Reading cell_attributes.geojson…")
-    return(readChar(single_path, file.info(single_path)$size))
+    return(list(single_path))
   }
 
   chunk_manifest_path <- file.path(version_dir, "cell_attributes.manifest.json")
@@ -157,44 +158,44 @@ read_cell_attributes_geojson_text <- function(version_dir) {
     stop("cell_attributes.manifest.json contains no chunks.", call. = FALSE)
   }
 
-  tmp <- tempfile(fileext = ".geojson")
-  con <- file(tmp, open = "wt")
-  on.exit(close(con), add = TRUE)
-  write('{"type":"FeatureCollection","features":[', con)
-
-  total_features <- 0L
-  for (i in seq_along(chunk_names)) {
-    chunk_name <- chunk_names[[i]]
-    chunk_path <- file.path(version_dir, chunk_name)
-    if (!file.exists(chunk_path)) {
-      stop(sprintf("Chunk file missing: %s", chunk_path), call. = FALSE)
-    }
-    message(sprintf(
-      "  merging chunk %d/%d (%s)…",
-      i, length(chunk_names), chunk_name
-    ))
-    chunk_data <- jsonlite::read_json(chunk_path, simplifyVector = FALSE)
-    feats <- chunk_data$features %||% list()
-    if (length(feats) == 0L) next
-    chunk_text <- jsonlite::toJSON(feats, auto_unbox = TRUE, null = "null")
-    inner <- substr(chunk_text, 2L, nchar(chunk_text) - 1L)
-    if (total_features > 0L) write(",", con)
-    write(inner, con)
-    total_features <- total_features + length(feats)
-    rm(chunk_data, feats, chunk_text, inner)
-    gc(verbose = FALSE)
+  paths <- file.path(version_dir, chunk_names)
+  missing <- paths[!file.exists(paths)]
+  if (length(missing) > 0L) {
+    stop(sprintf("Chunk file missing: %s", missing[[1L]]), call. = FALSE)
   }
-  write("]}", con)
-  close(con)
-  on.exit(NULL)
+  as.list(paths)
+}
 
-  merged_size_mb <- file.info(tmp)$size / 1024^2
-  message(sprintf(
-    "Merged cell_attributes.geojson (%d features, %.1f MB)",
-    total_features,
-    merged_size_mb
-  ))
-  readChar(tmp, file.info(tmp)$size)
+use_batch_import <- function(sources) {
+  length(sources) > 1L || (
+    length(sources) == 1L &&
+      unname(file.info(sources[[1]])$size) > 40 * 1024^2
+  )
+}
+
+batch_import_available <- function(con) {
+  out <- DBI::dbGetQuery(
+    con,
+    "select to_regprocedure('public.import_pipeline_dataset_prepare(text,text,timestamptz,text,text,text)') is not null as ok"
+  )
+  isTRUE(out$ok[[1]])
+}
+
+replace_import_available <- function(con) {
+  out <- DBI::dbGetQuery(
+    con,
+    "select to_regprocedure('public.purge_pipeline_dataset_snapshot(text,text)') is not null as ok"
+  )
+  isTRUE(out$ok[[1]])
+}
+
+read_geojson_text <- function(path) {
+  readChar(path, file.info(path)$size)
+}
+
+count_geojson_features <- function(path) {
+  data <- jsonlite::read_json(path, simplifyVector = FALSE)
+  length(data$features %||% list())
 }
 
 validate_geojson_features <- function(data, id_field, label, source = label) {
@@ -234,11 +235,14 @@ validate_geojson_features <- function(data, id_field, label, source = label) {
   data
 }
 
-cell_geojson_text <- read_cell_attributes_geojson_text(version_dir)
+cell_sources <- list_cell_attribute_sources(version_dir)
+expected_cell_count <- sum(vapply(cell_sources, count_geojson_features, integer(1L)))
 message(sprintf(
-  "Prepared cell_attributes payload (%.1f MB); PostgreSQL validates server-side",
-  nchar(cell_geojson_text) / 1024^2
+  "Found %d cell_attributes source file(s) (%d features total)",
+  length(cell_sources),
+  expected_cell_count
 ))
+
 green_geojson <- if (file.exists(parks_path)) {
   validate_geojson_features(
     jsonlite::read_json(parks_path, simplifyVector = FALSE),
@@ -277,43 +281,140 @@ tryCatch({
   message("Warning: Could not set postgres role; import may fail if privileges are insufficient.")
 })
 
-message("Running import_pipeline_dataset on PostgreSQL (120k cells — may take 5–15 minutes)…")
-result <- tryCatch(
+tryCatch({
+  DBI::dbExecute(con, "SET statement_timeout = '10min'")
+}, error = function(e) {
+  message("Warning: Could not disable statement_timeout.")
+})
+
+if (!replace_import_available(con)) {
+  message(
+    paste0(
+      "Warning: purge_pipeline_dataset_snapshot is not installed; ",
+      "re-importing an existing dataset_id may leave orphan rows or fail promotion. ",
+      "Apply migration supabase/migrations/20260723190000_pipeline_import_replace.sql."
+    )
+  )
+}
+
+storage_prefix <- paste0("pipeline-export/", CITY_ID, "/", data_version, "/")
+manifest_storage_path <- paste0(storage_prefix, "manifest.json")
+source_layer <- manifest$sourceLayer %||% "hexgrid"
+
+if (use_batch_import(cell_sources)) {
+  if (!batch_import_available(con)) {
+    stop(
+      paste0(
+        "Large cell_attributes export requires batched import functions.\n",
+        "Apply migration supabase/migrations/20260723180000_pipeline_import_batch.sql ",
+        "then retry."
+      ),
+      call. = FALSE
+    )
+  }
+
+  message("Preparing batched PostgreSQL import…")
   DBI::dbGetQuery(
     con,
-    "
-    select public.import_pipeline_dataset(
-      $1::text,
-      $2::text,
-      $3::timestamptz,
-      $4::text,
-      $5::text,
-      $6::text,
-      $7::jsonb,
-      $8::jsonb,
-      $9::boolean
-    ) as result
-    ",
+    "select public.import_pipeline_dataset_prepare($1::text, $2::text, $3::timestamptz, $4::text, $5::text, $6::text)",
     params = list(
       CITY_ID,
       data_version,
       manifest$generatedAt,
-      paste0("pipeline-export/", CITY_ID, "/", data_version, "/"),
-      paste0("pipeline-export/", CITY_ID, "/", data_version, "/manifest.json"),
-      manifest$sourceLayer %||% "hexgrid",
-      cell_geojson_text,
-      green_geojson_text,
-      TRUE
+      storage_prefix,
+      manifest_storage_path,
+      source_layer
     )
-  ),
-  error = function(err) {
-    skip_postgres_import(sprintf(
-      "Could not run public.import_pipeline_dataset; generated export files remain available for manual upload/import. Error: %s",
-      conditionMessage(err)
-    ))
-    NULL
-  }
   )
+
+  imported_cells <- 0L
+  for (i in seq_along(cell_sources)) {
+    source_path <- cell_sources[[i]]
+    source_size_mb <- unname(file.info(source_path)$size) / 1024^2
+    message(sprintf(
+      "Importing cell batch %d/%d (%s, %.1f MB)…",
+      i, length(cell_sources), basename(source_path), source_size_mb
+    ))
+    batch_count <- DBI::dbGetQuery(
+      con,
+      "select public.import_pipeline_dataset_cells_batch($1::text, $2::text, $3::timestamptz, $4::jsonb) as batch_count",
+      params = list(
+        CITY_ID,
+        data_version,
+        manifest$generatedAt,
+        read_geojson_text(source_path)
+      )
+    )$batch_count[[1]]
+    imported_cells <- imported_cells + as.integer(batch_count)
+    message(sprintf("  → batch %d/%d imported (%d cells, %d total so far)", i, length(cell_sources), batch_count, imported_cells))
+  }
+
+  message("Finalizing import (green spaces + dataset promotion)…")
+  result <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "select public.import_pipeline_dataset_finalize($1::text, $2::text, $3::timestamptz, $4::integer, $5::jsonb, $6::boolean) as result",
+      params = list(
+        CITY_ID,
+        data_version,
+        manifest$generatedAt,
+        expected_cell_count,
+        green_geojson_text,
+        TRUE
+      )
+    ),
+    error = function(err) {
+      skip_postgres_import(sprintf(
+        "Could not finalize batched pipeline import. Error: %s",
+        conditionMessage(err)
+      ))
+      NULL
+    }
+  )
+} else {
+  cell_geojson_text <- read_geojson_text(cell_sources[[1]])
+  message(sprintf(
+    "Running import_pipeline_dataset (%.1f MB, %d cells)…",
+    nchar(cell_geojson_text) / 1024^2,
+    expected_cell_count
+  ))
+  result <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "
+      select public.import_pipeline_dataset(
+        $1::text,
+        $2::text,
+        $3::timestamptz,
+        $4::text,
+        $5::text,
+        $6::text,
+        $7::jsonb,
+        $8::jsonb,
+        $9::boolean
+      ) as result
+      ",
+      params = list(
+        CITY_ID,
+        data_version,
+        manifest$generatedAt,
+        storage_prefix,
+        manifest_storage_path,
+        source_layer,
+        cell_geojson_text,
+        green_geojson_text,
+        TRUE
+      )
+    ),
+    error = function(err) {
+      skip_postgres_import(sprintf(
+        "Could not run public.import_pipeline_dataset; generated export files remain available for manual upload/import. Error: %s",
+        conditionMessage(err)
+      ))
+      NULL
+    }
+  )
+}
 if (is.null(result)) return(invisible(NULL))
 
 cat("PostgreSQL import complete:\n")

@@ -14,7 +14,6 @@ required <- identical(Sys.getenv("SUPABASE_OBSERVATIONS_REQUIRED", unset = "0"),
 enabled <- required || identical(Sys.getenv("SUPABASE_OBSERVATIONS_ENABLED", unset = "0"), "1")
 
 write_empty_supabase_observations <- function() {
-  if (file.exists(RAW_SUPABASE_OBS)) return(invisible(NULL))
   empty <- st_sf(
     observation_id = character(),
     observation_source = character(),
@@ -32,6 +31,7 @@ write_empty_supabase_observations <- function() {
     geometry = st_sfc(crs = 4326)
   )
   st_write(empty, RAW_SUPABASE_OBS, delete_dsn = TRUE, quiet = TRUE)
+  message(sprintf("Cleared user observations: %s (0 rows)", RAW_SUPABASE_OBS))
   invisible(NULL)
 }
 

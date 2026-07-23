@@ -77,7 +77,7 @@ write_geojson <- function(value, output_path) {
 }
 
 # Supabase Storage file limit — chunk outputs above this size (bytes).
-MAX_UPLOAD_BYTES <- 45 * 1024^2
+MAX_UPLOAD_BYTES <- 5 * 1024^2
 
 cleanup_chunked_outputs <- function(output_path, extension_pattern) {
   base_name <- tools::file_path_sans_ext(basename(output_path))

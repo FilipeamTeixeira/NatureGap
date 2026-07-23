@@ -218,6 +218,43 @@ comment on column public.quick_sightings.city_id is
 comment on column public.structured_surveys.city_id is
   'City namespace inherited from the survey point.';
 
+-- Views created before city_id was added keep their old column list until recreated.
+create or replace view public.analysis_quick_sightings as
+select qs.*
+from public.quick_sightings qs
+where qs.status <> 'rejected'
+  and not exists (
+    select 1
+    from public.flags f
+    where f.record_type = 'quick_sighting'
+      and f.record_id = qs.id::text
+      and f.outcome in ('pending', 'confirmed')
+  );
+
+create or replace view public.analysis_structured_surveys as
+select ss.*
+from public.structured_surveys ss
+where ss.status <> 'rejected'
+  and not exists (
+    select 1
+    from public.flags f
+    where f.record_type = 'structured_survey'
+      and f.record_id = ss.id::text
+      and f.outcome in ('pending', 'confirmed')
+  );
+
+create or replace view public.analysis_survey_records as
+select sr.*
+from public.survey_records sr
+join public.analysis_structured_surveys ss on ss.id = sr.survey_id
+where not exists (
+  select 1
+  from public.flags f
+  where f.record_type = 'survey_record'
+    and f.record_id = sr.id::text
+    and f.outcome in ('pending', 'confirmed')
+);
+
 -- ── City-aware cell assignment ──────────────────────────────────────────────
 
 create or replace function public.find_cell_id_for_point(

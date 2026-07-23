@@ -1,228 +1,52 @@
--- Deterministic R pipeline import contract.
--- R remains the producer of ecological outputs; PostgreSQL validates, stores,
--- and promotes versioned products without recomputing ecological metrics.
+-- Pipeline import replace semantics:
+--   * Re-importing the same dataset_id purges prior snapshot rows first.
+--   * Promoting a dataset retires active cell rows not present in the import
+--     instead of failing with "stale cell rows would become stale".
 
-set search_path = public, extensions;
-
--- ── Versioned green-space products ──────────────────────────────────────────
-
-create table if not exists public.green_spaces (
-  green_space_id text not null,
-  city_id text not null,
-  dataset_id text not null,
-  generated_at timestamptz not null,
-  name text,
-  name_ja text,
-  ward_id text,
-  geometry geometry(MultiPolygon, 4326) not null,
-  habitat_quality_index numeric,
-  effort_corrected_richness numeric,
-  expected_richness numeric,
-  ecological_residual numeric,
-  ecological_residual_normalized numeric,
-  nature_gap_score numeric,
-  corridor_importance numeric,
-  intervention_rank numeric,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  primary key (city_id, green_space_id),
-  constraint green_spaces_id_not_blank check (length(trim(green_space_id)) > 0),
-  constraint green_spaces_city_not_blank check (length(trim(city_id)) > 0),
-  constraint green_spaces_dataset_not_blank check (length(trim(dataset_id)) > 0)
-);
-
-create table if not exists public.pipeline_green_spaces (
-  city_id text not null,
-  dataset_id text not null,
-  green_space_id text not null,
-  generated_at timestamptz not null,
-  name text,
-  name_ja text,
-  ward_id text,
-  geometry geometry(MultiPolygon, 4326) not null,
-  habitat_quality_index numeric,
-  effort_corrected_richness numeric,
-  expected_richness numeric,
-  ecological_residual numeric,
-  ecological_residual_normalized numeric,
-  nature_gap_score numeric,
-  corridor_importance numeric,
-  intervention_rank numeric,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  primary key (city_id, dataset_id, green_space_id),
-  constraint pipeline_green_spaces_dataset_fk
-    foreign key (city_id, dataset_id)
-    references public.pipeline_datasets(city_id, dataset_id)
-    on delete restrict,
-  constraint pipeline_green_spaces_id_not_blank check (length(trim(green_space_id)) > 0)
-);
-
-alter table public.green_spaces
-drop column if exists properties,
-drop column if exists tree_cover,
-drop column if exists heat_exposure,
-drop column if exists land_use_green,
-drop column if exists land_use_class,
-add column if not exists habitat_quality_index numeric,
-add column if not exists effort_corrected_richness numeric,
-add column if not exists expected_richness numeric,
-add column if not exists ecological_residual numeric,
-add column if not exists ecological_residual_normalized numeric,
-add column if not exists nature_gap_score numeric,
-add column if not exists corridor_importance numeric,
-add column if not exists intervention_rank numeric;
-
-alter table public.pipeline_green_spaces
-drop column if exists properties,
-drop column if exists tree_cover,
-drop column if exists heat_exposure,
-drop column if exists land_use_green,
-drop column if exists land_use_class,
-add column if not exists habitat_quality_index numeric,
-add column if not exists effort_corrected_richness numeric,
-add column if not exists expected_richness numeric,
-add column if not exists ecological_residual numeric,
-add column if not exists ecological_residual_normalized numeric,
-add column if not exists nature_gap_score numeric,
-add column if not exists corridor_importance numeric,
-add column if not exists intervention_rank numeric;
-
-create index if not exists green_spaces_city_active_idx
-on public.green_spaces (city_id, is_active);
-
-create index if not exists green_spaces_geometry_gist_idx
-on public.green_spaces using gist (geometry);
-
-create index if not exists pipeline_green_spaces_geometry_gist_idx
-on public.pipeline_green_spaces using gist (geometry);
-
-drop trigger if exists green_spaces_set_updated_at on public.green_spaces;
-create trigger green_spaces_set_updated_at
-before update on public.green_spaces
-for each row execute function public.set_updated_at();
-
-drop trigger if exists pipeline_green_spaces_set_updated_at on public.pipeline_green_spaces;
-create trigger pipeline_green_spaces_set_updated_at
-before update on public.pipeline_green_spaces
-for each row execute function public.set_updated_at();
-
-drop trigger if exists green_spaces_prevent_delete on public.green_spaces;
-create trigger green_spaces_prevent_delete
-before delete on public.green_spaces
-for each row execute function public.prevent_hard_delete();
-
-drop trigger if exists pipeline_green_spaces_prevent_delete on public.pipeline_green_spaces;
-create trigger pipeline_green_spaces_prevent_delete
-before delete on public.pipeline_green_spaces
-for each row execute function public.prevent_hard_delete();
-
-create or replace function public.audit_row_change()
+create or replace function public.prevent_hard_delete()
 returns trigger
 language plpgsql
-security definer
-set search_path = public, auth
-as $$
-declare
-  pk jsonb;
-begin
-  if tg_table_name = 'cell_attributes' then
-    pk := jsonb_build_object(
-      'cell_id',
-      case when tg_op = 'INSERT' then new.cell_id else old.cell_id end
-    );
-  elsif tg_table_name = 'pipeline_datasets' then
-    pk := jsonb_build_object(
-      'city_id',
-      case when tg_op = 'INSERT' then new.city_id else old.city_id end,
-      'dataset_id',
-      case when tg_op = 'INSERT' then new.dataset_id else old.dataset_id end
-    );
-  elsif tg_table_name = 'pipeline_cell_attributes' then
-    pk := jsonb_build_object(
-      'city_id',
-      case when tg_op = 'INSERT' then new.city_id else old.city_id end,
-      'dataset_id',
-      case when tg_op = 'INSERT' then new.dataset_id else old.dataset_id end,
-      'cell_id',
-      case when tg_op = 'INSERT' then new.cell_id else old.cell_id end
-    );
-  elsif tg_table_name = 'green_spaces' then
-    pk := jsonb_build_object(
-      'city_id',
-      case when tg_op = 'INSERT' then new.city_id else old.city_id end,
-      'green_space_id',
-      case when tg_op = 'INSERT' then new.green_space_id else old.green_space_id end
-    );
-  elsif tg_table_name = 'pipeline_green_spaces' then
-    pk := jsonb_build_object(
-      'city_id',
-      case when tg_op = 'INSERT' then new.city_id else old.city_id end,
-      'dataset_id',
-      case when tg_op = 'INSERT' then new.dataset_id else old.dataset_id end,
-      'green_space_id',
-      case when tg_op = 'INSERT' then new.green_space_id else old.green_space_id end
-    );
-  elsif tg_table_name = 'user_roles' then
-    pk := jsonb_build_object(
-      'user_id',
-      case when tg_op = 'INSERT' then new.user_id else old.user_id end
-    );
-  else
-    pk := jsonb_build_object(
-      'id',
-      case when tg_op = 'INSERT' then new.id else old.id end
-    );
-  end if;
-
-  insert into public.audit_log (
-    table_name,
-    record_pk,
-    operation,
-    old_row,
-    new_row,
-    changed_by
-  )
-  values (
-    tg_table_name,
-    pk,
-    tg_op,
-    case when tg_op = 'UPDATE' then to_jsonb(old) else null end,
-    to_jsonb(new),
-    auth.uid()
-  );
-
-  return new;
-end;
-$$;
-
-drop trigger if exists green_spaces_audit on public.green_spaces;
-create trigger green_spaces_audit
-after insert or update on public.green_spaces
-for each row execute function public.audit_row_change();
-
-drop trigger if exists pipeline_green_spaces_audit on public.pipeline_green_spaces;
-create trigger pipeline_green_spaces_audit
-after insert or update on public.pipeline_green_spaces
-for each row execute function public.audit_row_change();
-
--- pipeline_observations_export is created in 20260627130000_citizen_science_completion.sql
--- after analysis views are aligned with city_id and approved-only filters.
-
--- ── Import validation and promotion ─────────────────────────────────────────
-
-create or replace function public.assert_valid_pipeline_dataset_id(value text)
-returns void
-language plpgsql
-stable
 set search_path = public
 as $$
 begin
-  if value is null or value !~ '^[0-9]{8}T[0-9]{6}Z$' then
-    raise exception 'Invalid dataset_id "%". Expected UTC format YYYYMMDDTHHMMSSZ.', coalesce(value, '<null>')
-      using errcode = 'check_violation';
+  if tg_table_name in ('pipeline_cell_attributes', 'pipeline_green_spaces')
+     and coalesce(current_setting('naturegap.pipeline_import_purge', true), '') = 'on' then
+    return old;
   end if;
+
+  raise exception 'Hard deletes are not allowed on %. Use lifecycle status fields instead.', tg_table_name
+    using errcode = 'check_violation';
+end;
+$$;
+
+create or replace function public.purge_pipeline_dataset_snapshot(
+  target_city_id text,
+  target_dataset_id text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.can_manage_pipeline_datasets() then
+    raise exception 'Only admins can purge pipeline dataset snapshots.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  perform public.assert_valid_pipeline_dataset_id(target_dataset_id);
+
+  perform set_config('naturegap.pipeline_import_purge', 'on', true);
+
+  delete from public.pipeline_cell_attributes
+  where city_id = target_city_id
+    and dataset_id = target_dataset_id;
+
+  delete from public.pipeline_green_spaces
+  where city_id = target_city_id
+    and dataset_id = target_dataset_id;
+
+  perform set_config('naturegap.pipeline_import_purge', 'off', true);
 end;
 $$;
 
@@ -235,10 +59,8 @@ language plpgsql
 security definer
 set search_path = public, extensions
 as $$
-declare
-  stale_cells integer;
 begin
-  if not public.is_admin() then
+  if not public.can_manage_pipeline_datasets() then
     raise exception 'Only admins can promote pipeline datasets.'
       using errcode = 'insufficient_privilege';
   end if;
@@ -255,11 +77,15 @@ begin
       using errcode = 'foreign_key_violation';
   end if;
 
-  select count(*)
-  into stale_cells
-  from public.cell_attributes ca
+  -- Retire cells that are no longer part of this import so the active
+  -- projection matches the uploaded dataset (hard deletes remain forbidden).
+  update public.cell_attributes ca
+  set
+    dataset_id = 'superseded',
+    last_updated = now()
   where ca.city_id = target_city_id
     and ca.dataset_id <> 'legacy'
+    and ca.dataset_id <> target_dataset_id
     and not exists (
       select 1
       from public.pipeline_cell_attributes pca
@@ -267,11 +93,6 @@ begin
         and pca.dataset_id = target_dataset_id
         and pca.cell_id = ca.cell_id
     );
-
-  if stale_cells > 0 then
-    raise exception 'Cannot promote %.%: % active cell rows would become stale.', target_city_id, target_dataset_id, stale_cells
-      using errcode = 'check_violation';
-  end if;
 
   update public.pipeline_datasets
   set is_active = false
@@ -393,6 +214,52 @@ begin
 end;
 $$;
 
+create or replace function public.import_pipeline_dataset_prepare(
+  target_city_id text,
+  target_dataset_id text,
+  target_generated_at timestamptz,
+  target_storage_prefix text,
+  target_manifest_path text,
+  target_source_layer text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.can_manage_pipeline_datasets() then
+    raise exception 'Only admins can import pipeline datasets.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  perform public.assert_valid_pipeline_dataset_id(target_dataset_id);
+
+  if target_city_id is null or length(trim(target_city_id)) = 0 then
+    raise exception 'city_id is required.' using errcode = 'check_violation';
+  end if;
+
+  if target_generated_at is null then
+    raise exception 'generated_at is required.' using errcode = 'check_violation';
+  end if;
+
+  perform public.purge_pipeline_dataset_snapshot(target_city_id, target_dataset_id);
+
+  insert into public.pipeline_datasets (
+    city_id, dataset_id, generated_at, storage_prefix, manifest_path, source_layer, is_active
+  )
+  values (
+    target_city_id, target_dataset_id, target_generated_at, target_storage_prefix,
+    target_manifest_path, coalesce(nullif(target_source_layer, ''), 'hexgrid'), false
+  )
+  on conflict (city_id, dataset_id) do update set
+    generated_at = excluded.generated_at,
+    storage_prefix = excluded.storage_prefix,
+    manifest_path = excluded.manifest_path,
+    source_layer = excluded.source_layer;
+end;
+$$;
+
 create or replace function public.import_pipeline_dataset(
   target_city_id text,
   target_dataset_id text,
@@ -417,7 +284,7 @@ declare
   duplicate_cell_ids text[];
   duplicate_green_ids text[];
 begin
-  if not public.is_admin() then
+  if not public.can_manage_pipeline_datasets() then
     raise exception 'Only admins can import pipeline datasets.'
       using errcode = 'insufficient_privilege';
   end if;
@@ -476,6 +343,8 @@ begin
     raise exception 'cell_attributes_geojson contains duplicate cell IDs: %.', duplicate_cell_ids
       using errcode = 'unique_violation';
   end if;
+
+  perform public.purge_pipeline_dataset_snapshot(target_city_id, target_dataset_id);
 
   insert into public.pipeline_datasets (
     city_id, dataset_id, generated_at, storage_prefix, manifest_path, source_layer, is_active
@@ -710,42 +579,4 @@ begin
 end;
 $$;
 
-alter table public.green_spaces enable row level security;
-alter table public.pipeline_green_spaces enable row level security;
-
-drop policy if exists "Green spaces readable" on public.green_spaces;
-create policy "Green spaces readable"
-on public.green_spaces
-for select
-to authenticated
-using (true);
-
-drop policy if exists "Admins manage green spaces" on public.green_spaces;
-create policy "Admins manage green spaces"
-on public.green_spaces
-for all
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-drop policy if exists "Pipeline green spaces readable" on public.pipeline_green_spaces;
-create policy "Pipeline green spaces readable"
-on public.pipeline_green_spaces
-for select
-to authenticated
-using (true);
-
-drop policy if exists "Admins manage pipeline green spaces" on public.pipeline_green_spaces;
-create policy "Admins manage pipeline green spaces"
-on public.pipeline_green_spaces
-for all
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-grant select on public.green_spaces to authenticated;
-grant select on public.pipeline_green_spaces to authenticated;
-grant insert, update on public.green_spaces to authenticated;
-grant insert, update on public.pipeline_green_spaces to authenticated;
-grant execute on function public.assert_valid_pipeline_dataset_id(text) to authenticated;
-grant execute on function public.import_pipeline_dataset(text, text, timestamptz, text, text, text, jsonb, jsonb, boolean) to authenticated;
+grant execute on function public.purge_pipeline_dataset_snapshot(text, text) to authenticated;
