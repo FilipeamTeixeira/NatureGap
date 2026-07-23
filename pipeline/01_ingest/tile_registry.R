@@ -183,6 +183,15 @@ st_write(
 )
 message("[tile_registry] Wrote registry: ", registry_path)
 
+core_registry_path <- file.path(TILES_DIR, "core_tiles.gpkg")
+st_write(
+  core_tiles |> select(tile_id, cell_idx, core_area_m2),
+  core_registry_path,
+  delete_dsn = TRUE,
+  quiet = TRUE
+)
+message("[tile_registry] Wrote core tiles: ", core_registry_path)
+
 extracts <- make_extract_entries(halo_tiles$tile_id)
 config_paths <- write_extract_configs(extracts, TILES_DIR, PIPELINE_ROOT)
 message(sprintf(

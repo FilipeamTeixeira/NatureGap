@@ -1,0 +1,856 @@
+# Per-tile habitat + observation processing (stages 02–03)
+#
+# process_tile() computes metrics on the halo extent and returns core cells only.
+# run_tiled_processing() parallelises across tiles and combines with bind_rows().
+
+library(sf)
+library(terra)
+library(tidyverse)
+library(lubridate)
+library(vegan)
+library(jsonlite)
+library(furrr)
+
+# ── Habitat helpers (from habitat_model.R) ─────────────────────────────────────
+
+rescale01 <- function(x) {
+  x <- as.numeric(x)
+  rng <- range(x, na.rm = TRUE)
+  if (!all(is.finite(rng)) || diff(rng) == 0) return(rep(0, length(x)))
+  pmin(1, pmax(0, (x - rng[1]) / diff(rng)))
+}
+
+fixed_rescale01 <- function(x, min_value, max_value) {
+  x <- as.numeric(x)
+  pmin(1, pmax(0, (x - min_value) / (max_value - min_value)))
+}
+
+percent_rank01 <- function(x) {
+  x <- as.numeric(x)
+  out <- rep(NA_real_, length(x))
+  ok <- !is.na(x)
+  n <- sum(ok)
+  if (n == 0L) return(out)
+  if (n == 1L) {
+    out[ok] <- 0
+    return(out)
+  }
+  out[ok] <- (rank(x[ok], ties.method = "average") - 1) / (n - 1)
+  out
+}
+
+empty_sf <- function(crs) {
+  st_sf(geometry = st_sfc(crs = crs))
+}
+
+line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight = 1) {
+  if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
+  lines <- suppressWarnings(st_collection_extract(lines, "LINESTRING", warn = FALSE))
+  if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
+  if (!is.null(weight_col) && weight_col %in% names(lines)) {
+    lines$.weight <- as.numeric(lines[[weight_col]])
+  } else {
+    lines$.weight <- default_weight
+  }
+  inter <- suppressWarnings(st_intersection(lines |> select(.weight), grid |> select(cell_id)))
+  if (nrow(inter) == 0L) return(rep(0, nrow(grid)))
+  inter$weighted_len_m <- as.numeric(st_length(inter)) * replace_na(inter$.weight, default_weight)
+  density <- inter |>
+    st_drop_geometry() |>
+    group_by(cell_id) |>
+    summarise(weighted_len_m = sum(weighted_len_m), .groups = "drop")
+  out <- rep(0, nrow(grid))
+  out[match(density$cell_id, grid$cell_id)] <- density$weighted_len_m
+  out / (as.numeric(st_area(grid)) / 10000)
+}
+
+point_density_by_cell <- function(points, grid) {
+  if (nrow(points) == 0L) return(rep(0, nrow(grid)))
+  points <- suppressWarnings(st_collection_extract(points, "POINT", warn = FALSE))
+  if (nrow(points) == 0L) return(rep(0, nrow(grid)))
+  points_geom <- st_sf(geometry = st_geometry(points), crs = st_crs(points))
+  joined <- st_join(points_geom, grid |> select(cell_id), join = st_within, left = FALSE)
+  if (nrow(joined) == 0L) return(rep(0, nrow(grid)))
+  counts <- joined |> st_drop_geometry() |> count(cell_id, name = "n")
+  out <- rep(0, nrow(grid))
+  out[match(counts$cell_id, grid$cell_id)] <- counts$n
+  out / (as.numeric(st_area(grid)) / 10000)
+}
+
+distance_weighted_points <- function(points, centroids, radius_m, decay_m) {
+  if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
+  points <- suppressWarnings(st_collection_extract(points, "POINT", warn = FALSE))
+  if (nrow(points) == 0L) return(rep(0, nrow(centroids)))
+  idx <- st_nearest_feature(centroids, points)
+  d <- as.numeric(st_distance(centroids, points[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, exp(-d / decay_m), 0)
+}
+
+distance_weighted_lines <- function(lines, centroids, radius_m, decay_m, weights = NULL) {
+  if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
+  lines <- suppressWarnings(st_collection_extract(lines, "LINESTRING", warn = FALSE))
+  if (nrow(lines) == 0L) return(rep(0, nrow(centroids)))
+  if (is.null(weights)) weights <- rep(1, nrow(lines))
+  idx <- st_nearest_feature(centroids, lines)
+  d <- as.numeric(st_distance(centroids, lines[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, exp(-d / decay_m) * weights[idx], 0)
+}
+
+nearest_proximity <- function(features, centroids, radius_m) {
+  if (nrow(features) == 0L) return(rep(0, nrow(centroids)))
+  idx <- st_nearest_feature(centroids, features)
+  d <- as.numeric(st_distance(centroids, features[idx, ], by_element = TRUE))
+  if_else(d <= radius_m, pmax(0, 1 - d / radius_m), 0)
+}
+
+road_weight <- function(highway) {
+  x <- tolower(as.character(highway))
+  dplyr::case_when(
+    x %in% c("motorway", "trunk") ~ 5,
+    x == "primary" ~ 4,
+    x == "secondary" ~ 3,
+    x == "tertiary" ~ 2,
+    x %in% c("residential", "unclassified") ~ 1,
+    x %in% c("service", "living_street") ~ 0.6,
+    TRUE ~ 1
+  )
+}
+
+polygon_area_by_cell <- function(polygons, grid) {
+  if (nrow(polygons) == 0L) {
+    return(tibble(cell_id = grid$cell_id, area_m2 = 0))
+  }
+  inter <- suppressWarnings(st_intersection(polygons, grid))
+  if (nrow(inter) == 0L) {
+    return(tibble(cell_id = grid$cell_id, area_m2 = 0))
+  }
+  inter$area_m2 <- as.numeric(st_area(st_geometry(inter)))
+  inter |>
+    st_drop_geometry() |>
+    group_by(cell_id) |>
+    summarise(area_m2 = sum(area_m2), .groups = "drop")
+}
+
+classify_taxon_group <- function(label) {
+  x <- tolower(as.character(label))
+  dplyr::case_when(
+    is.na(x) | x == "" ~ NA_character_,
+    x %in% c("plantae", "chromista") ~ "plant",
+    grepl("^(plant|magnoli|pinopsida|liliopsida|polypodi)", x) ~ "plant",
+    x == "aves" | grepl("bird", x) ~ "bird",
+    x %in% c("insecta", "arachnida") | grepl("insect|spider|arthropod", x) ~ "insect",
+    x %in% c("mammalia", "amphibia", "reptilia", "actinopterygii", "animalia") ~ "mammal",
+    x == "fungi" | grepl("fung", x) ~ "fungi",
+    TRUE ~ NA_character_
+  )
+}
+
+WC_TREE <- 10L
+WC_SHRUB <- 20L
+WC_GRASS <- 30L
+WC_BUILT <- 50L
+WC_WATER <- 80L
+WC_WETLAND <- 90L
+WC_MANGROVE <- 95L
+WC_GREEN <- c(WC_TREE, WC_SHRUB, WC_GRASS, WC_WETLAND, WC_MANGROVE)
+
+# ── OSM PBF helpers ───────────────────────────────────────────────────────────
+
+osm_tag_from_other <- function(other_tags, key) {
+  if (is.na(other_tags) || !nzchar(other_tags)) return(NA_character_)
+  pattern <- paste0("\"", key, "\"=>\"([^\"]*)\"")
+  match <- regexpr(pattern, other_tags, perl = TRUE)
+  if (match[1L] == -1L) return(NA_character_)
+  substr(other_tags, match[1L] + nchar(key) + 4L, match[1L] + attr(match, "match.length") - 2L)
+}
+
+read_osm_layer <- function(pbf_path, layer, wkt_filter = NULL) {
+  if (!file.exists(pbf_path)) return(empty_sf(4326))
+  args <- list(dsn = pbf_path, layer = layer, quiet = TRUE, int64_as_string = TRUE)
+  if (!is.null(wkt_filter)) args$wkt_filter <- wkt_filter
+  out <- tryCatch(do.call(st_read, args), error = function(e) empty_sf(4326))
+  if (nrow(out) == 0L) return(empty_sf(4326))
+  out <- st_make_valid(out)
+  out <- out[!st_is_empty(out), , drop = FALSE]
+  if (nrow(out) == 0L) return(empty_sf(4326))
+  if ("other_tags" %in% names(out)) {
+    for (col in c("highway", "railway", "leisure", "landuse", "natural", "amenity", "lit", "waterway")) {
+      if (!col %in% names(out)) out[[col]] <- NA_character_
+      missing <- is.na(out[[col]]) | !nzchar(out[[col]])
+      if (any(missing)) {
+        out[[col]][missing] <- vapply(out$other_tags[missing], osm_tag_from_other, character(1L), key = col)
+      }
+    }
+  }
+  st_transform(out, CRS_LOCAL)
+}
+
+read_osm_lines <- function(pbf_path, wkt_filter) {
+  bind_rows(
+    read_osm_layer(pbf_path, "lines", wkt_filter),
+    read_osm_layer(pbf_path, "multilinestrings", wkt_filter)
+  )
+}
+
+read_osm_polygons <- function(pbf_path, wkt_filter) {
+  read_osm_layer(pbf_path, "multipolygons", wkt_filter)
+}
+
+read_osm_points <- function(pbf_path, wkt_filter) {
+  read_osm_layer(pbf_path, "points", wkt_filter)
+}
+
+wkt_filter_from_sf <- function(x, crs_local = CRS_LOCAL) {
+  bb <- st_bbox(st_transform(st_as_sf(x), 4326))
+  st_as_text(st_as_sfc(bb), trim = TRUE)
+}
+
+filter_core_cells <- function(grid, core_polygon) {
+  centroids <- suppressWarnings(st_centroid(grid))
+  inside <- st_intersects(centroids, core_polygon, sparse = FALSE)[, 1L]
+  grid[inside, , drop = FALSE]
+}
+
+# ── process_tile ──────────────────────────────────────────────────────────────
+
+safe_crop <- function(r, v) {
+  tryCatch(terra::crop(r, v), error = function(e) NULL)
+}
+
+process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NULL) {
+  if (is.null(cfg)) cfg <- list()
+  crs_local <- cfg$CRS_LOCAL %||% CRS_LOCAL
+  cell_size <- cfg$CELL_SIZE %||% CELL_SIZE
+  halo_m <- cfg$halo_m %||% halo_m
+
+  core_local <- st_transform(st_as_sf(core_polygon), crs_local)
+  halo_extent <- st_buffer(core_local, dist = halo_m)
+  wkt_filter <- wkt_filter_from_sf(halo_extent, crs_local)
+
+  grid <- st_make_grid(halo_extent, cellsize = cell_size, square = FALSE) |>
+    st_as_sf() |>
+    mutate(cell_id = row_number())
+
+  tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
+
+  # ── Rasters (crop to halo bbox) ───────────────────────────────────────────
+  halo_bb <- st_transform(halo_extent, 4326)
+  halo_vect <- terra::vect(st_as_sf(halo_bb))
+
+  lc_path <- cfg$RAW_LANDCOVER %||% RAW_LANDCOVER
+  if (file.exists(lc_path)) {
+    lc_proj <- project(rast(lc_path), crs_local, method = "near")
+    lc <- safe_crop(lc_proj, halo_vect)
+    if (!is.null(lc)) {
+    lc_vals <- terra::extract(lc, vect(grid))
+    lc_fracs <- lc_vals |>
+      as_tibble() |>
+      rename(row_idx = ID, lc_class = 2) |>
+      filter(!is.na(lc_class)) |>
+      group_by(row_idx) |>
+      summarise(
+        tree_fraction = mean(lc_class == WC_TREE),
+        shrub_fraction = mean(lc_class == WC_SHRUB),
+        grass_fraction = mean(lc_class == WC_GRASS),
+        built_fraction_wc = mean(lc_class == WC_BUILT),
+        green_fraction_wc = mean(lc_class %in% WC_GREEN),
+        water_fraction = mean(lc_class == WC_WATER),
+        .groups = "drop"
+      ) |>
+      mutate(cell_id = grid$cell_id[row_idx]) |>
+      select(-row_idx)
+    grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
+      mutate(across(
+        c(tree_fraction, shrub_fraction, grass_fraction, built_fraction_wc, green_fraction_wc, water_fraction),
+        \(x) replace_na(x, 0)
+      ))
+    } else {
+      grid <- grid |> mutate(
+        tree_fraction = NA_real_, shrub_fraction = NA_real_, grass_fraction = NA_real_,
+        built_fraction_wc = NA_real_, green_fraction_wc = NA_real_, water_fraction = NA_real_
+      )
+    }
+  } else {
+    grid <- grid |> mutate(
+      tree_fraction = NA_real_, shrub_fraction = NA_real_, grass_fraction = NA_real_,
+      built_fraction_wc = NA_real_, green_fraction_wc = NA_real_, water_fraction = NA_real_
+    )
+  }
+
+  imp_path <- cfg$RAW_IMPERVIOUS %||% RAW_IMPERVIOUS
+  if (file.exists(imp_path)) {
+    imp_proj <- project(rast(imp_path), crs_local, method = "bilinear")
+    imp <- safe_crop(imp_proj, halo_vect)
+    if (!is.null(imp)) {
+      imp_mean <- terra::extract(imp, vect(grid), fun = mean, na.rm = TRUE)
+      grid$impervious_fraction <- replace_na(imp_mean[[2]], 0)
+    } else {
+      grid$impervious_fraction <- NA_real_
+    }
+  } else {
+    grid$impervious_fraction <- NA_real_
+  }
+
+  grid$ndvi_mean <- NA_real_
+  grid$ndvi_idx <- NA_real_
+  ndvi_path <- cfg$RAW_NDVI %||% RAW_NDVI
+  if (file.exists(ndvi_path)) {
+    ndvi_proj <- project(rast(ndvi_path), crs_local, method = "bilinear")
+    ndvi <- safe_crop(ndvi_proj, halo_vect)
+    if (!is.null(ndvi)) {
+      ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
+      grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
+      grid$ndvi_idx <- fixed_rescale01(grid$ndvi_mean, -0.2, 1.0)
+    }
+  }
+
+  grid$canopy_height_m <- NA_real_
+  grid$canopy_height_idx <- NA_real_
+  canopy_path <- cfg$CANOPY_HEIGHT_FILE %||% if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_
+  if (is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)) {
+    canopy_proj <- project(rast(canopy_path), crs_local, method = "bilinear")
+    canopy_height <- safe_crop(canopy_proj, halo_vect)
+    if (!is.null(canopy_height)) {
+      canopy_height_mean <- terra::extract(canopy_height, vect(grid), fun = mean, na.rm = TRUE)
+      grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
+      grid$canopy_height_idx <- fixed_rescale01(grid$canopy_height_m, 0, 30)
+    }
+  }
+
+  grid$lst_celsius <- NA_real_
+  lst_path <- cfg$RAW_LST %||% RAW_LST
+  if (file.exists(lst_path)) {
+    lst_proj <- project(rast(lst_path), crs_local, method = "bilinear")
+    lst <- safe_crop(lst_proj, halo_vect)
+    if (!is.null(lst)) {
+      lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
+      grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
+    }
+  }
+
+  # ── OSM from per-tile PBF ─────────────────────────────────────────────────
+  lines <- read_osm_lines(halo_pbf_path, wkt_filter)
+  polys <- read_osm_polygons(halo_pbf_path, wkt_filter)
+  points <- read_osm_points(halo_pbf_path, wkt_filter)
+
+  green <- polys |> filter(leisure %in% c("park", "nature_reserve", "garden"))
+  ground_veg <- polys |> filter(
+    natural %in% c("grassland", "scrub") |
+      landuse %in% c("grass", "meadow", "allotments") |
+      leisure == "garden"
+  )
+  water_polygons <- polys |> filter(natural == "water")
+  paths <- lines |> filter(highway %in% c("path", "footway", "pedestrian", "steps", "track"))
+  roads <- lines |> filter(highway %in% c(
+    "motorway", "trunk", "primary", "secondary", "tertiary",
+    "residential", "service", "unclassified", "living_street"
+  ))
+  rail <- lines |> filter(railway %in% c("rail", "light_rail", "subway", "tram"))
+  lit_roads <- lines |> filter(lit == "yes")
+  lamps <- {
+    lamp_points <- points |> filter(highway == "street_lamp")
+    lamp_line_centroids <- lines |>
+      filter(highway == "street_lamp") |>
+      suppressWarnings(st_centroid())
+    if (nrow(lamp_points) == 0L && nrow(lamp_line_centroids) == 0L) {
+      empty_sf(crs_local)
+    } else if (nrow(lamp_points) == 0L) {
+      lamp_line_centroids
+    } else if (nrow(lamp_line_centroids) == 0L) {
+      lamp_points
+    } else {
+      bind_rows(lamp_points, lamp_line_centroids)
+    }
+  }
+  amenity_polys <- polys |> filter(!is.na(amenity) & nzchar(amenity))
+  amenity_poly_centroids <- if (nrow(amenity_polys) > 0L) {
+    suppressWarnings(st_centroid(amenity_polys))
+  } else {
+    empty_sf(crs_local)
+  }
+  amenities <- bind_rows(
+    points |> filter(!is.na(amenity) & nzchar(amenity)),
+    amenity_poly_centroids
+  )
+  water_lines <- lines |> filter(!is.na(waterway) & nzchar(waterway))
+  water_features <- bind_rows(water_lines, water_polygons)
+
+  cell_area <- cell_size^2
+  green_area <- polygon_area_by_cell(green, grid)
+  grid <- grid |>
+    left_join(green_area, by = "cell_id") |>
+    mutate(
+      green_area_m2 = replace_na(area_m2, 0),
+      osm_green_fraction = pmin(green_area_m2 / cell_area, 1)
+    ) |>
+    select(-green_area_m2, -area_m2)
+
+  ground_veg_area <- polygon_area_by_cell(ground_veg, grid)
+  grid <- grid |>
+    left_join(ground_veg_area, by = "cell_id") |>
+    mutate(
+      ground_veg_area_m2 = replace_na(area_m2, 0),
+      osm_ground_veg_fraction = pmin(ground_veg_area_m2 / cell_area, 1)
+    ) |>
+    select(-ground_veg_area_m2, -area_m2)
+
+  water_poly_area <- polygon_area_by_cell(water_polygons, grid)
+  grid <- grid |>
+    left_join(water_poly_area, by = "cell_id") |>
+    mutate(
+      water_poly_area_m2 = replace_na(area_m2, 0),
+      osm_water_poly_fraction = pmin(water_poly_area_m2 / cell_area, 1)
+    ) |>
+    select(-water_poly_area_m2, -area_m2)
+
+  if (nrow(paths) > 0L) {
+    inter <- suppressWarnings(st_intersection(paths, grid))
+    inter$len_m <- as.numeric(st_length(st_geometry(inter)))
+    path_length <- inter |>
+      st_drop_geometry() |>
+      group_by(cell_id) |>
+      summarise(path_length_m = sum(len_m), .groups = "drop")
+    grid <- grid |>
+      left_join(path_length, by = "cell_id") |>
+      mutate(path_length_m = replace_na(path_length_m, 0))
+  } else {
+    grid$path_length_m <- 0
+  }
+
+  grid <- grid |>
+    mutate(
+      path_km = path_length_m / 1000,
+      is_unsampled = path_km <= 0
+    ) |>
+    select(-path_length_m)
+
+  cell_centroids <- suppressWarnings(st_centroid(grid))
+  cell_area_ha <- as.numeric(st_area(grid)) / 10000
+  if (nrow(roads) > 0L) roads$.road_weight <- road_weight(roads$highway)
+
+  road_density <- line_density_by_cell(roads, grid, ".road_weight")
+  rail_density <- line_density_by_cell(rail, grid, default_weight = 3)
+  road_proximity <- distance_weighted_lines(
+    roads, cell_centroids, 150, 60,
+    if (nrow(roads) > 0L) roads$.road_weight else NULL
+  )
+  rail_proximity <- distance_weighted_lines(rail, cell_centroids, 200, 80, rep(3, nrow(rail)))
+  lamp_density <- point_density_by_cell(lamps, grid)
+  lamp_proximity <- distance_weighted_points(lamps, cell_centroids, 80, 30)
+  lit_road_density <- line_density_by_cell(lit_roads, grid)
+  path_density <- (grid$path_km * 1000) / pmax(cell_area_ha, 0.0001)
+  amenity_proximity <- distance_weighted_points(amenities, cell_centroids, 120, 50)
+  water_prox <- nearest_proximity(water_features, cell_centroids, 250)
+  permeable_fraction <- pmin(1, pmax(0, 1 - replace_na(grid$impervious_fraction, 0)))
+
+  grid <- grid |>
+    mutate(
+      road_density = road_density,
+      rail_density = rail_density,
+      road_proximity = road_proximity,
+      rail_proximity = rail_proximity,
+      lamp_density = lamp_density,
+      lamp_proximity = lamp_proximity,
+      lit_road_density = lit_road_density,
+      path_density = path_density,
+      amenity_proximity = amenity_proximity,
+      water_prox = water_prox,
+      permeable_fraction = permeable_fraction
+    )
+
+  # ── Observations (optional per-tile subset) ───────────────────────────────
+  obs_defaults <- tibble(
+    n_obs = 0L, raw_species_count = 0, species_richness = 0,
+    n_survey_dates = 0L, n_observers = 0L,
+    observed_dates_json = "[]", observer_ids_json = "[]",
+    weighted_observation_effort = 0, has_structured_survey = FALSE,
+    weekend_obs = 0L, weekday_obs = 0L, weekend_only = FALSE, temporal_bias_flag = FALSE,
+    species_shannon = NA_real_,
+    plant = 0L, bird = 0L, insect = 0L, mammal = 0L, fungi = 0L
+  )
+
+  if (!is.null(obs_tile) && nrow(obs_tile) > 0L && nrow(grid) > 0L) {
+    grid_centroids <- suppressWarnings(st_centroid(grid))
+    nearest_idx <- st_nearest_feature(obs_tile, grid_centroids)
+    obs_joined <- obs_tile |>
+      mutate(
+        cell_id = grid$cell_id[nearest_idx],
+        path_km = grid$path_km[nearest_idx]
+      )
+
+    richness <- obs_joined |>
+      st_drop_geometry() |>
+      mutate(is_weekend = !is.na(observed_on) & wday(observed_on) %in% c(1L, 7L)) |>
+      group_by(cell_id, taxon_name) |>
+      mutate(taxon_weight = max(observation_weight, na.rm = TRUE)) |>
+      ungroup() |>
+      group_by(cell_id) |>
+      summarise(
+        n_obs = n(),
+        raw_species_count = n_distinct(taxon_name[!is.na(taxon_name)]),
+        species_richness = sum(taxon_weight[!duplicated(taxon_name)], na.rm = TRUE),
+        n_survey_dates = n_distinct(observed_on[!is.na(observed_on)]),
+        n_observers = n_distinct(observer_id[!is.na(observer_id) & nzchar(observer_id)]),
+        observed_dates_json = as.character(toJSON(
+          sort(unique(as.character(observed_on[!is.na(observed_on)]))), auto_unbox = TRUE
+        )),
+        observer_ids_json = as.character(toJSON(
+          sort(unique(as.character(observer_id[!is.na(observer_id) & nzchar(observer_id)]))),
+          auto_unbox = TRUE
+        )),
+        weighted_observation_effort = sum(observation_weight, na.rm = TRUE),
+        has_structured_survey = any(observation_source == "structured_survey", na.rm = TRUE),
+        weekend_obs = sum(is_weekend, na.rm = TRUE),
+        weekday_obs = sum(!is_weekend & !is.na(observed_on), na.rm = TRUE),
+        weekend_only = weekend_obs > 0L & weekday_obs == 0L,
+        temporal_bias_flag = weekend_only,
+        .groups = "drop"
+      )
+
+    if (nrow(obs_joined) > 0L) {
+      species_matrix <- obs_joined |>
+        st_drop_geometry() |>
+        count(cell_id, taxon_name) |>
+        pivot_wider(names_from = taxon_name, values_from = n, values_fill = 0) |>
+        column_to_rownames("cell_id")
+      shannon <- vegan::diversity(species_matrix, index = "shannon")
+      diversity_df <- tibble(cell_id = as.integer(rownames(species_matrix)), species_shannon = shannon)
+    } else {
+      diversity_df <- tibble(cell_id = integer(), species_shannon = numeric())
+    }
+
+    taxon_counts <- obs_joined |>
+      st_drop_geometry() |>
+      mutate(taxon_group = classify_taxon_group(iconic_taxon_name)) |>
+      filter(!is.na(taxon_group)) |>
+      group_by(cell_id, taxon_group) |>
+      summarise(count = n_distinct(taxon_name), .groups = "drop") |>
+      pivot_wider(names_from = taxon_group, values_from = count, values_fill = 0)
+    for (col in c("plant", "bird", "insect", "mammal", "fungi")) {
+      if (!col %in% names(taxon_counts)) taxon_counts[[col]] <- 0L
+    }
+
+    grid <- grid |>
+      left_join(richness, by = "cell_id") |>
+      left_join(diversity_df, by = "cell_id") |>
+      left_join(taxon_counts, by = "cell_id")
+  }
+
+  for (col in names(obs_defaults)) {
+    if (!col %in% names(grid)) grid[[col]] <- obs_defaults[[col]]
+  }
+
+  # ── Keep core cells only ──────────────────────────────────────────────────
+  core_out <- filter_core_cells(grid, core_local) |>
+    mutate(tile_id = tile_id)
+
+  core_out
+}
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+finish_citywide_metrics <- function(grid) {
+  grid$lst_rank <- percent_rank01(grid$lst_celsius)
+  grid$lst_idx <- 1 - grid$lst_rank
+  grid$heat_exposure <- grid$lst_rank
+
+  grid <- grid |>
+    mutate(
+      noise = rescale01(
+        0.55 * rescale01(road_density) +
+          0.20 * rescale01(road_proximity) +
+          0.20 * rescale01(rail_density) +
+          0.05 * rescale01(rail_proximity)
+      ),
+      light_pollution = rescale01(
+        0.50 * rescale01(lamp_density) +
+          0.30 * rescale01(lamp_proximity) +
+          0.20 * rescale01(lit_road_density)
+      ),
+      osm_disturbance_idx = rescale01(
+        0.60 * rescale01(path_density) +
+          0.40 * rescale01(amenity_proximity)
+      ),
+      disturbance_idx = osm_disturbance_idx,
+      disturbance_index = disturbance_idx,
+      water_proximity = rescale01(
+        0.70 * water_prox +
+          0.30 * permeable_fraction
+      ),
+      habitat_quality = 0.50 * replace_na(ndvi_idx, 0) +
+        0.286 * replace_na(lst_idx, 0) +
+        0.214 * (1 - replace_na(disturbance_idx, 1)),
+      path_km = replace_na(path_km, 0),
+      is_unsampled = replace_na(path_km <= 0, TRUE),
+      survey_effort_units = if_else(is_unsampled, NA_real_, log1p(path_km)),
+      effort_corrected_richness = if_else(
+        is_unsampled,
+        NA_real_,
+        replace_na(species_richness, 0) / survey_effort_units
+      ),
+      observed_richness = effort_corrected_richness,
+      richness_corrected = effort_corrected_richness,
+      raw_species_count = if_else(is_unsampled, NA_real_, replace_na(raw_species_count, 0)),
+      species_richness = if_else(is_unsampled, NA_real_, replace_na(species_richness, 0)),
+      n_obs = replace_na(n_obs, 0L),
+      n_survey_dates = replace_na(n_survey_dates, 0L),
+      n_observers = replace_na(n_observers, 0L),
+      observed_dates_json = replace_na(observed_dates_json, "[]"),
+      observer_ids_json = replace_na(observer_ids_json, "[]"),
+      weighted_observation_effort = replace_na(weighted_observation_effort, 0),
+      has_structured_survey = replace_na(has_structured_survey, FALSE),
+      weekend_obs = replace_na(weekend_obs, 0L),
+      weekday_obs = replace_na(weekday_obs, 0L),
+      weekend_only = replace_na(weekend_only, FALSE),
+      temporal_bias_flag = replace_na(temporal_bias_flag, FALSE),
+      plant = replace_na(plant, 0L),
+      bird = replace_na(bird, 0L),
+      insect = replace_na(insect, 0L),
+      mammal = replace_na(mammal, 0L),
+      fungi = replace_na(fungi, 0L)
+    ) |>
+    select(-any_of(c(
+      "road_density", "rail_density", "road_proximity", "rail_proximity",
+      "lamp_density", "lamp_proximity", "lit_road_density", "path_density",
+      "amenity_proximity", "water_prox", "permeable_fraction"
+    )))
+
+  coords <- st_coordinates(suppressWarnings(st_centroid(grid)))
+  grid <- grid[order(coords[, 2], coords[, 1]), ]
+  grid$cell_id <- seq_len(nrow(grid))
+  grid
+}
+
+load_obs_for_tiling <- function(crs_local) {
+  read_std <- function(path, source_name, mapper) {
+    if (!file.exists(path)) {
+      return(st_sf(
+        taxon_name = character(), iconic_taxon_name = character(),
+        observed_on = as.Date(character()), common_label = character(),
+        observation_source = character(), observation_weight = numeric(),
+        observer_id = character(), geometry = st_sfc(crs = crs_local)
+      ))
+    }
+    raw <- st_read(path, quiet = TRUE)
+    if (nrow(raw) == 0L) return(mapper(raw))
+    mapper(raw)
+  }
+
+  inat_std <- read_std(RAW_INAT, "inat", function(raw) {
+    if (!"common_name" %in% names(raw)) raw$common_name <- NA_character_
+    if (!"user.login" %in% names(raw)) raw[["user.login"]] <- NA_character_
+    raw |>
+      st_transform(crs_local) |>
+      mutate(
+        taxon_name = scientific_name,
+        observed_on = as_date(observed_on),
+        common_label = as.character(common_name),
+        observation_source = "inat",
+        observation_weight = 1,
+        observer_id = as.character(.data[["user.login"]])
+      ) |>
+      select(taxon_name, iconic_taxon_name, observed_on, common_label,
+             observation_source, observation_weight, observer_id)
+  })
+
+  gbif_std <- read_std(RAW_GBIF, "gbif", function(raw) {
+    if (!"vernacularName" %in% names(raw)) raw$vernacularName <- NA_character_
+    if (!"class" %in% names(raw)) raw$class <- NA_character_
+    if (!"recordedBy" %in% names(raw)) raw$recordedBy <- NA_character_
+    raw |>
+      st_transform(crs_local) |>
+      mutate(
+        taxon_name = species,
+        iconic_taxon_name = class,
+        observed_on = as_date(parse_date_time(eventDate, orders = c("Ymd", "Ymd HMS", "Ymd HMSz"), quiet = TRUE)),
+        common_label = as.character(vernacularName),
+        observation_source = "gbif",
+        observation_weight = 1,
+        observer_id = as.character(recordedBy)
+      ) |>
+      select(taxon_name, iconic_taxon_name, observed_on, common_label,
+             observation_source, observation_weight, observer_id)
+  })
+
+  supabase_path <- if (exists("RAW_SUPABASE_OBS")) RAW_SUPABASE_OBS else NA_character_
+  supabase_std <- if (is.character(supabase_path) && file.exists(supabase_path)) {
+    raw <- st_read(supabase_path, quiet = TRUE)
+    if (!"observer_id" %in% names(raw)) raw$observer_id <- NA_character_
+    raw |>
+      st_transform(crs_local) |>
+      mutate(
+        taxon_name = as.character(taxon_name),
+        iconic_taxon_name = as.character(iconic_taxon_name),
+        observed_on = as_date(observed_on),
+        common_label = as.character(common_label),
+        observation_source = as.character(observation_source),
+        observation_weight = case_when(
+          observation_source == "structured_survey" ~ 3,
+          observation_source == "quick_sighting" ~ 0,
+          is.na(observation_weight) ~ 1,
+          TRUE ~ as.numeric(observation_weight)
+        ),
+        observer_id = as.character(observer_id)
+      ) |>
+      select(taxon_name, iconic_taxon_name, observed_on, common_label,
+             observation_source, observation_weight, observer_id)
+  } else {
+    st_sf(
+      taxon_name = character(), iconic_taxon_name = character(),
+      observed_on = as.Date(character()), common_label = character(),
+      observation_source = character(), observation_weight = numeric(),
+      observer_id = character(), geometry = st_sfc(crs = crs_local)
+    )
+  }
+
+  bind_rows(inat_std, gbif_std, supabase_std) |>
+    filter(!is.na(taxon_name)) |>
+    mutate(observation_weight = replace_na(observation_weight, 1))
+}
+
+.tiled_cache <- new.env(parent = emptyenv())
+
+run_tiled_processing <- function(force = FALSE) {
+  cache_path <- file.path(DATA_PROC, "tiled_combined.rds")
+  if (!force && exists("combined", envir = .tiled_cache, inherits = FALSE)) {
+    return(get("combined", envir = .tiled_cache))
+  }
+  if (!force && file.exists(cache_path)) {
+    message("[tile_processing] Loading cached combined tiles: ", cache_path)
+    combined <- readRDS(cache_path)
+    assign("combined", combined, envir = .tiled_cache)
+    return(combined)
+  }
+
+  tiles_dir <- file.path(PIPELINE_ROOT, "data", "tiles", city)
+  core_path <- file.path(tiles_dir, "core_tiles.gpkg")
+  if (!file.exists(core_path)) {
+    stop("core_tiles.gpkg not found — run tile_registry.R first.", call. = FALSE)
+  }
+
+  core_tiles <- st_read(core_path, quiet = TRUE) |> st_transform(CRS_LOCAL)
+  pbf_paths <- file.path(tiles_dir, paste0(core_tiles$tile_id, ".osm.pbf"))
+  missing_pbfs <- pbf_paths[!file.exists(pbf_paths)]
+  if (length(missing_pbfs) > 0L) {
+    stop(
+      "Missing tile PBF(s): ", paste(basename(missing_pbfs), collapse = ", "),
+      " — run tile_registry.R first.",
+      call. = FALSE
+    )
+  }
+
+  cfg <- list(
+    CRS_LOCAL = CRS_LOCAL,
+    CELL_SIZE = CELL_SIZE,
+    halo_m = halo_m,
+    RAW_LANDCOVER = RAW_LANDCOVER,
+    RAW_IMPERVIOUS = RAW_IMPERVIOUS,
+    RAW_NDVI = RAW_NDVI,
+    RAW_LST = RAW_LST,
+    CANOPY_HEIGHT_FILE = if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_
+  )
+
+  obs_all <- load_obs_for_tiling(CRS_LOCAL)
+  obs_list <- lapply(seq_len(nrow(core_tiles)), function(i) {
+    halo_bb <- st_buffer(core_tiles[i, ], dist = halo_m)
+    if (nrow(obs_all) == 0L) return(obs_all)
+    obs_all[st_intersects(obs_all, halo_bb, sparse = FALSE)[, 1L], , drop = FALSE]
+  })
+
+  workers <- max(1L, parallel::detectCores() - 1L)
+  message(sprintf("[tile_processing] Processing %d tiles with %d workers…", nrow(core_tiles), workers))
+  plan(multisession, workers = workers)
+
+  core_list <- lapply(seq_len(nrow(core_tiles)), function(i) core_tiles[i, , drop = FALSE])
+
+  tile_results <- future_map2(
+    core_list,
+    obs_list,
+    function(core_row, obs_tile) {
+      pbf <- file.path(tiles_dir, paste0(core_row$tile_id[[1L]], ".osm.pbf"))
+      process_tile(core_row, pbf, obs_tile = obs_tile, cfg = cfg)
+    },
+    .options = furrr_options(seed = TRUE)
+  )
+
+  combined <- bind_rows(tile_results)
+  combined <- finish_citywide_metrics(combined)
+  assign("combined", combined, envir = .tiled_cache)
+  assign("obs_all", obs_all, envir = .tiled_cache)
+  saveRDS(combined, cache_path)
+  saveRDS(obs_all, file.path(DATA_PROC, "tiled_obs_all.rds"))
+
+  message(sprintf("[tile_processing] Combined %d core hex cells", nrow(combined)))
+  combined
+}
+
+get_tiled_results <- function(force = FALSE) {
+  run_tiled_processing(force = force)
+}
+
+get_tiled_obs <- function() {
+  cache_path <- file.path(DATA_PROC, "tiled_obs_all.rds")
+  if (exists("obs_all", envir = .tiled_cache, inherits = FALSE)) {
+    return(get("obs_all", envir = .tiled_cache))
+  }
+  if (file.exists(cache_path)) {
+    return(readRDS(cache_path))
+  }
+  run_tiled_processing()
+  if (file.exists(cache_path)) readRDS(cache_path) else get("obs_all", envir = .tiled_cache)
+}
+
+build_cell_taxa_json <- function(grid, obs_all) {
+  format_taxon_label <- function(scientific, common) {
+    sci <- as.character(scientific)
+    com <- as.character(common)
+    com <- com[!is.na(com) & nzchar(com)]
+    if (length(com) > 0L) return(paste0(com[1], " (", sci, ")"))
+    sci
+  }
+
+  if (nrow(obs_all) == 0L || nrow(grid) == 0L) {
+    write_json(list(), PROC_CELL_TAXA, auto_unbox = TRUE, null = "null")
+    return(invisible(list()))
+  }
+
+  grid_centroids <- suppressWarnings(st_centroid(grid))
+  nearest_idx <- st_nearest_feature(obs_all, grid_centroids)
+  obs_joined <- obs_all |>
+    mutate(cell_id = grid$cell_id[nearest_idx]) |>
+    filter(!is.na(taxon_name))
+
+  cell_taxa_rows <- obs_joined |>
+    st_drop_geometry() |>
+    mutate(taxon_group = classify_taxon_group(iconic_taxon_name)) |>
+    filter(!is.na(taxon_group), nzchar(taxon_name)) |>
+    group_by(cell_id, taxon_group, taxon_name) |>
+    summarise(common_label = dplyr::first(na.omit(common_label)), .groups = "drop") |>
+    rowwise() |>
+    mutate(label = format_taxon_label(taxon_name, common_label)) |>
+    ungroup() |>
+    group_by(cell_id, taxon_group) |>
+    summarise(names = list(sort(unique(label))), .groups = "drop") |>
+    pivot_wider(names_from = taxon_group, values_from = names, values_fill = list(list()))
+
+  for (col in c("plant", "bird", "insect", "mammal", "fungi")) {
+    if (!col %in% names(cell_taxa_rows)) cell_taxa_rows[[col]] <- list()
+  }
+
+  cell_taxa_out <- stats::setNames(
+    lapply(seq_len(nrow(cell_taxa_rows)), function(i) {
+      row <- cell_taxa_rows[i, ]
+      stats::setNames(
+        lapply(c("plant", "bird", "insect", "mammal", "fungi"), function(group) {
+          val <- row[[group]][[1]]
+          if (is.null(val) || length(val) == 0L) list() else as.list(as.character(unlist(val)))
+        }),
+        c("plant", "bird", "insect", "mammal", "fungi")
+      )
+    }),
+    as.character(cell_taxa_rows$cell_id)
+  )
+
+  write_json(cell_taxa_out, PROC_CELL_TAXA, auto_unbox = TRUE, null = "null")
+  cell_taxa_out
+}
