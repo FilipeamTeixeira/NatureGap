@@ -79,9 +79,16 @@ async function listExportFiles(sourceDir) {
     || name === 'park-stats.json'
     || name === 'cell_attributes.geojson'
     || name === 'cell_attributes.manifest.json'
+    || name === 'cell-details.manifest.json'
     || name === 'top_interventions.json'
     || /^cell_attributes-part-[0-9]+\.(json|geojson)$/.test(name)
   ));
+  if (await fileExists(join(sourceDir, 'cell-details'))) {
+    const detailNames = await readdir(join(sourceDir, 'cell-details'));
+    wanted.push(...detailNames
+      .filter((name) => /^cell-details-[0-9]+\.json$/.test(name))
+      .map((name) => join('cell-details', name)));
+  }
   if (!wanted.includes('hexgrid.pmtiles')) {
     throw new Error(`Missing required file: ${join(sourceDir, 'hexgrid.pmtiles')}`);
   }
@@ -121,6 +128,7 @@ async function main() {
 
   const files = await listExportFiles(sourceDir);
   for (const file of files) {
+    await mkdir(dirname(join(targetDir, file)), { recursive: true });
     await copyFile(join(sourceDir, file), join(targetDir, file));
   }
 

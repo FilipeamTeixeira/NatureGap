@@ -18,6 +18,7 @@ run_postgres_import <- function() {
 db_url <- database_url()
 required <- identical(Sys.getenv("POSTGRES_IMPORT_REQUIRED", unset = "0"), "1")
 enabled <- required || identical(Sys.getenv("POSTGRES_IMPORT_ENABLED", unset = "0"), "1")
+import_cell_attributes <- identical(Sys.getenv("POSTGRES_IMPORT_CELL_ATTRIBUTES", unset = "0"), "1")
 
 skip_postgres_import <- function(msg) {
   if (required) stop(msg, call. = FALSE)
@@ -138,6 +139,55 @@ if (!identical(manifest$datasetId %||% manifest$dataVersion, data_version)) {
   stop("Manifest datasetId/dataVersion does not match selected DATA_VERSION.", call. = FALSE)
 }
 
+register_storage_dataset <- function(con, storage_prefix, manifest_storage_path, source_layer) {
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(
+      con,
+      "
+      update public.pipeline_datasets
+      set is_active = false
+      where city_id = $1
+        and dataset_id <> $2
+      ",
+      params = list(CITY_ID, data_version)
+    )
+
+    DBI::dbExecute(
+      con,
+      "
+      insert into public.pipeline_datasets (
+        city_id, dataset_id, generated_at, storage_prefix, manifest_path, source_layer, is_active
+      )
+      values ($1, $2, $3::timestamptz, $4, $5, $6, true)
+      on conflict (city_id, dataset_id) do update
+      set generated_at = excluded.generated_at,
+          storage_prefix = excluded.storage_prefix,
+          manifest_path = excluded.manifest_path,
+          source_layer = excluded.source_layer,
+          is_active = true,
+          updated_at = now()
+      ",
+      params = list(
+        CITY_ID,
+        data_version,
+        manifest$generatedAt,
+        storage_prefix,
+        manifest_storage_path,
+        source_layer
+      )
+    )
+  })
+
+  list(
+    status = "registered_storage_dataset",
+    cityId = CITY_ID,
+    datasetId = data_version,
+    storagePrefix = storage_prefix,
+    manifestPath = manifest_storage_path,
+    importedCellAttributes = FALSE
+  )
+}
+
 list_cell_attribute_sources <- function(version_dir) {
   single_path <- file.path(version_dir, "cell_attributes.geojson")
   if (file.exists(single_path)) {
@@ -235,28 +285,40 @@ validate_geojson_features <- function(data, id_field, label, source = label) {
   data
 }
 
-cell_sources <- list_cell_attribute_sources(version_dir)
-expected_cell_count <- sum(vapply(cell_sources, count_geojson_features, integer(1L)))
-message(sprintf(
-  "Found %d cell_attributes source file(s) (%d features total)",
-  length(cell_sources),
-  expected_cell_count
-))
+if (import_cell_attributes) {
+  cell_sources <- list_cell_attribute_sources(version_dir)
+  expected_cell_count <- sum(vapply(cell_sources, count_geojson_features, integer(1L)))
+  message(sprintf(
+    "Found %d cell_attributes source file(s) (%d features total)",
+    length(cell_sources),
+    expected_cell_count
+  ))
 
-green_geojson <- if (file.exists(parks_path)) {
-  validate_geojson_features(
-    jsonlite::read_json(parks_path, simplifyVector = FALSE),
-    "id",
-    "parks",
-    parks_path
+  green_geojson <- if (file.exists(parks_path)) {
+    validate_geojson_features(
+      jsonlite::read_json(parks_path, simplifyVector = FALSE),
+      "id",
+      "parks",
+      parks_path
+    )
+  } else {
+    NULL
+  }
+  green_geojson_text <- if (is.null(green_geojson)) {
+    NA_character_
+  } else {
+    jsonlite::toJSON(green_geojson, auto_unbox = TRUE, null = "null")
+  }
+} else {
+  cell_sources <- list()
+  expected_cell_count <- as.integer(manifest$counts$cells %||% manifest$counts$renderCells %||% 0L)
+  green_geojson_text <- NA_character_
+  message(
+    paste0(
+      "POSTGRES_IMPORT_CELL_ATTRIBUTES is not enabled; ",
+      "registering the active Storage/PMTiles dataset without importing cell_attributes rows."
+    )
   )
-} else {
-  NULL
-}
-green_geojson_text <- if (is.null(green_geojson)) {
-  NA_character_
-} else {
-  jsonlite::toJSON(green_geojson, auto_unbox = TRUE, null = "null")
 }
 
 message("Connecting to PostgreSQL…")
@@ -300,6 +362,22 @@ if (!replace_import_available(con)) {
 storage_prefix <- paste0("pipeline-export/", CITY_ID, "/", data_version, "/")
 manifest_storage_path <- paste0(storage_prefix, "manifest.json")
 source_layer <- manifest$sourceLayer %||% "hexgrid"
+
+if (!import_cell_attributes) {
+  result <- register_storage_dataset(con, storage_prefix, manifest_storage_path, source_layer)
+  cat("PostgreSQL import complete:\n")
+  cat(as.character(jsonlite::toJSON(result, auto_unbox = TRUE, pretty = TRUE)), "\n")
+  assign(import_done_key, data_version, envir = .GlobalEnv)
+
+  prune_script <- here::here("07_import", "prune_stale_storage.R")
+  if (file.exists(prune_script)) {
+    source(prune_script, local = FALSE)
+    run_storage_prune_after_promotion(CITY_ID, con)
+  } else {
+    message("07_import/prune_stale_storage.R not found; stale Storage objects were not pruned.")
+  }
+  return(invisible(result))
+}
 
 if (use_batch_import(cell_sources)) {
   if (!batch_import_available(con)) {

@@ -276,13 +276,19 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
   files <- c(
     "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
-    "cell_attributes.manifest.json", "corridor-links.geojson",
+    "cell_attributes.manifest.json", "cell-details.manifest.json", "corridor-links.geojson",
     "corridor-links.manifest.json", "top_interventions.json"
   )
   for (base in c("cell_attributes", "corridor-links")) {
     parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
     files <- c(files, parts)
   }
+  detail_parts <- list.files(
+    file.path(export_dir, "cell-details"),
+    pattern = "^cell-details-[0-9]+\\.json$",
+    full.names = FALSE
+  )
+  files <- c(files, file.path("cell-details", detail_parts))
   unique(files[sapply(file.path(export_dir, files), file.exists)])
 }
 
@@ -293,6 +299,7 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
   for (file_name in files) {
     source_path <- file.path(DATA_EXPORT, file_name)
     target_path <- file.path(VERSIONED_EXPORT_DIR, file_name)
+    dir.create(dirname(target_path), recursive = TRUE, showWarnings = FALSE)
     if (!file.copy(source_path, target_path, overwrite = TRUE)) {
       stop(sprintf("Failed to stage %s to %s", source_path, target_path), call. = FALSE)
     }
@@ -357,7 +364,8 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
     products = list(
       pmtiles = list(path = "hexgrid.pmtiles", purpose = "MapLibre rendering only"),
       parks = list(path = "parks.geojson", purpose = "Green-space polygons for Storage and PostgreSQL import"),
-      cellAttributes = list(path = "cell_attributes.geojson", purpose = "Authoritative ecological cell outputs for PostgreSQL import"),
+      cellAttributes = list(path = "cell_attributes.geojson", purpose = "Full ecological cell outputs for Storage/archive use"),
+      cellDetails = list(path = "cell-details.manifest.json", purpose = "Sharded per-cell detail lookup served from Storage"),
       corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
@@ -443,6 +451,68 @@ make_slug <- function(value) {
     stringr::str_to_lower() |>
     stringr::str_replace_all("[^a-z0-9]+", "-") |>
     stringr::str_replace_all("(^-|-$)", "")
+}
+
+cell_detail_shard_index <- function(cell_ids, shard_count) {
+  local_ids <- sub(paste0("^", CITY_ID, "-"), "", as.character(cell_ids))
+  numeric_ids <- suppressWarnings(as.integer(local_ids))
+  fallback_ids <- vapply(
+    local_ids,
+    function(value) sum(utf8ToInt(value)),
+    integer(1)
+  )
+  ids <- ifelse(is.na(numeric_ids), fallback_ids, numeric_ids)
+  as.integer(ids %% shard_count)
+}
+
+write_cell_details_sharded <- function(value, output_dir, shard_count = 128L) {
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  old_parts <- list.files(output_dir, pattern = "^cell-details-[0-9]+\\.json$", full.names = TRUE)
+  if (length(old_parts) > 0L) unlink(old_parts)
+
+  rows <- value |>
+    st_drop_geometry() |>
+    mutate(.shard = cell_detail_shard_index(cell_id, shard_count))
+
+  shard_files <- character(shard_count)
+  for (shard in seq.int(0L, shard_count - 1L)) {
+    shard_name <- sprintf("cell-details-%03d.json", shard)
+    shard_path <- file.path(output_dir, shard_name)
+    shard_rows <- rows |>
+      filter(.shard == shard) |>
+      select(-.shard)
+
+    payload <- if (nrow(shard_rows) == 0L) {
+      list()
+    } else {
+      records <- split(shard_rows, shard_rows$cell_id)
+      lapply(records, function(row) as.list(row[1, , drop = TRUE]))
+    }
+
+    jsonlite::write_json(
+      payload,
+      shard_path,
+      auto_unbox = TRUE,
+      null = "null",
+      na = "null"
+    )
+    shard_files[[shard + 1L]] <- file.path("cell-details", shard_name)
+  }
+
+  manifest_path <- file.path(dirname(output_dir), "cell-details.manifest.json")
+  jsonlite::write_json(
+    list(
+      version = 1L,
+      shardCount = shard_count,
+      hash = "numeric-cell-id-mod",
+      pathTemplate = "cell-details/cell-details-{shard}.json",
+      shards = as.list(shard_files)
+    ),
+    manifest_path,
+    auto_unbox = TRUE,
+    pretty = TRUE
+  )
+  cat(sprintf("Written: %s (%d shards)\n", manifest_path, shard_count))
 }
 
 # ── Per-city normalisation helpers (for export) ────────────────────────────────
@@ -1400,6 +1470,8 @@ cell_attr <- cell_attr_base |>
 cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
 write_geojson_chunked(cell_attr, cell_attr_path)
 cat(sprintf("Written: %s\n", cell_attr_path))
+
+write_cell_details_sharded(cell_attr, file.path(DATA_EXPORT, "cell-details"))
 
 # ── 4. Per-cell stats + park aggregates + interventions ───────────────────────
 

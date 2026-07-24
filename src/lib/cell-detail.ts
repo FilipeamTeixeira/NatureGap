@@ -1,5 +1,13 @@
 import { MAX_EXPECTED_RICHNESS, CITY, CITIES } from './config';
 import { getParkStats, getParks } from './green-spaces';
+import {
+  basename,
+  dirname,
+  fetchStorageJson,
+  joinPath,
+  listActivePipelineDatasets,
+  resolveDatasetFile,
+} from './pipeline-manifest';
 import { supabase } from './supabase';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 
@@ -76,6 +84,15 @@ type CellAttributeRow = {
   interventions: unknown;
 };
 
+type CellDetailManifest = {
+  shardCount?: unknown;
+  pathTemplate?: unknown;
+  shards?: unknown;
+};
+
+const CELL_DETAIL_MANIFEST = 'cell-details.manifest.json';
+const cellDetailShardCache = new Map<string, Promise<Record<string, CellAttributeRow>>>();
+
 function pct(value: number | null | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.round(Math.max(0, Math.min(100, value <= 1 ? value * 100 : value)));
@@ -107,6 +124,58 @@ function parseMaybeJson(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function cellDetailShard(cellId: string, shardCount: number): number {
+  const localId = cellId.replace(new RegExp(`^(${CITY_ID_PREFIXES.join('|')})-`), '');
+  const numericId = Number.parseInt(localId, 10);
+  const hash = Number.isFinite(numericId)
+    ? numericId
+    : Array.from(localId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return ((hash % shardCount) + shardCount) % shardCount;
+}
+
+function formatShardPath(template: string, shard: number): string {
+  return template.replace('{shard}', String(shard).padStart(3, '0'));
+}
+
+async function fetchStorageCellDetail(cellId: string, cityId: string): Promise<CellAttributeRow | null> {
+  if (!supabase) return null;
+
+  const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
+  if (!dataset || !dataset.files[CELL_DETAIL_MANIFEST]) return null;
+
+  const manifestPath = resolveDatasetFile(dataset, CELL_DETAIL_MANIFEST);
+  const manifest = asObject(await fetchStorageJson(manifestPath)) as CellDetailManifest | null;
+  const shardCount = Number(manifest?.shardCount);
+  if (!Number.isInteger(shardCount) || shardCount <= 0) return null;
+
+  const shard = cellDetailShard(cellId, shardCount);
+  const shards = Array.isArray(manifest?.shards) ? manifest.shards : [];
+  const shardFromList = asString(shards[shard]);
+  const template = asString(manifest?.pathTemplate) ?? 'cell-details/cell-details-{shard}.json';
+  const shardPath = shardFromList ?? formatShardPath(template, shard);
+  const resolvedShardPath = joinPath(dirname(manifestPath), basename(shardPath) === shardPath ? shardPath : shardPath);
+  const cacheKey = `${dataset.cityId}/${dataset.dataVersion}/${resolvedShardPath}`;
+
+  const shardPromise = cellDetailShardCache.get(cacheKey) ?? (async () => {
+    const payload = asObject(await fetchStorageJson(resolvedShardPath));
+    return (payload ?? {}) as Record<string, CellAttributeRow>;
+  })();
+  cellDetailShardCache.set(cacheKey, shardPromise);
+
+  const records = await shardPromise;
+  return records[cellId] ?? null;
 }
 
 function speciesArray(value: unknown): Species[] {
@@ -209,6 +278,11 @@ export async function fetchCellDetail(
 
   const lookupCellId = resolveCellId(render.cellId, render.cityId);
   const lookupCityId = render.cityId ?? CITY.id;
+
+  const storageRow = await fetchStorageCellDetail(lookupCellId, lookupCityId);
+  if (storageRow) {
+    return detailFromRow(storageRow, render, coordinates);
+  }
 
   const { data, error } = await supabase
     .from('cell_attributes')

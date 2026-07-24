@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * Pull the active pipeline-export dataset from Supabase Storage and import it
- * into PostgreSQL (pipeline_datasets + cell_attributes + green_spaces).
+ * into PostgreSQL (pipeline_datasets by default; cell_attributes only on opt-in).
  *
  * Bucket upload alone does NOT update the database — this script closes that gap.
  *
  * Usage:
  *   npm run sync:pipeline-from-storage
  *   npm run sync:pipeline-from-storage -- --city yokohama-honmoku
+ *   npm run sync:pipeline-from-storage -- --with-cell-attributes
  *   npm run sync:pipeline-from-storage -- --dry-run
  */
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -33,6 +34,7 @@ const IMPORT_FILES = [
   'cell_attributes.geojson',
   'parks.geojson',
   'park-stats.json',
+  'cell-details.manifest.json',
   'hexgrid.pmtiles',
   'corridor-links.geojson',
   'top_interventions.json',
@@ -40,11 +42,12 @@ const IMPORT_FILES = [
 
 function usage() {
   console.error(`Usage:
-  npm run sync:pipeline-from-storage [-- --city <id>] [--dry-run]
+  npm run sync:pipeline-from-storage [-- --city <id>] [--with-cell-attributes] [--dry-run]
 
 Options:
-  --city <id>   Sync one city (default: all known cities with current.json in Storage)
-  --dry-run     Download and stage files only; skip PostgreSQL import
+  --city <id>             Sync one city (default: all known cities with current.json in Storage)
+  --with-cell-attributes  Also merge/import full cell_attributes into PostgreSQL
+  --dry-run               Download and stage files only; skip PostgreSQL import
 `);
   process.exit(2);
 }
@@ -57,6 +60,10 @@ function parseArgs(argv) {
       args.set('dry-run', true);
       continue;
     }
+    if (key === '--with-cell-attributes') {
+      args.set('with-cell-attributes', true);
+      continue;
+    }
     if (!key.startsWith('--')) usage();
     const value = argv[i + 1];
     if (!value || value.startsWith('--')) usage();
@@ -65,6 +72,7 @@ function parseArgs(argv) {
   }
   return {
     city: args.get('city'),
+    withCellAttributes: args.get('with-cell-attributes') === true,
     dryRun: args.get('dry-run') === true,
   };
 }
@@ -167,7 +175,7 @@ async function listCitiesToSync(supabaseUrl, requestedCity) {
   return cities;
 }
 
-async function stageCityExport(supabaseUrl, city, datasetId, current) {
+async function stageCityExport(supabaseUrl, city, datasetId, current, withCellAttributes) {
   const exportRoot = join(REPO_ROOT, 'pipeline-export', city);
   const versionDir = join(exportRoot, datasetId);
   await mkdir(versionDir, { recursive: true });
@@ -186,6 +194,7 @@ async function stageCityExport(supabaseUrl, city, datasetId, current) {
 
   for (const file of files) {
     if (file === 'cell_attributes.geojson') continue;
+    if (!withCellAttributes && /^cell_attributes-part-[0-9]+\.(json|geojson)$/.test(file)) continue;
     const objectPath = `${city}/${datasetId}/${file}`;
     const targetPath = join(versionDir, file);
     const url = supabasePublicUrl(supabaseUrl, objectPath);
@@ -206,18 +215,22 @@ async function stageCityExport(supabaseUrl, city, datasetId, current) {
     }
   }
 
-  const cellAttributes = await downloadChunkedGeoJson(
-    supabaseUrl,
-    city,
-    datasetId,
-    'cell_attributes.manifest.json',
-    'cell_attributes.geojson',
-  );
-  await writeFile(
-    join(versionDir, 'cell_attributes.geojson'),
-    `${JSON.stringify(cellAttributes)}\n`,
-  );
-  console.log(`  merged cell_attributes.geojson (${cellAttributes.features?.length ?? 0} features)`);
+  if (withCellAttributes) {
+    const cellAttributes = await downloadChunkedGeoJson(
+      supabaseUrl,
+      city,
+      datasetId,
+      'cell_attributes.manifest.json',
+      'cell_attributes.geojson',
+    );
+    await writeFile(
+      join(versionDir, 'cell_attributes.geojson'),
+      `${JSON.stringify(cellAttributes)}\n`,
+    );
+    console.log(`  merged cell_attributes.geojson (${cellAttributes.features?.length ?? 0} features)`);
+  } else {
+    console.log('  skipped merged cell_attributes.geojson (metadata-only sync)');
+  }
 
   const currentPath = join(exportRoot, 'current.json');
   await writeFile(currentPath, `${JSON.stringify(current, null, 2)}\n`);
@@ -229,7 +242,7 @@ async function stageCityExport(supabaseUrl, city, datasetId, current) {
   return { exportRoot, versionDir, currentPath };
 }
 
-async function importCityToPostgres(city) {
+async function importCityToPostgres(city, withCellAttributes) {
   const configFile = CITY_CONFIG[city];
   if (!configFile) {
     throw new Error(`No R config mapping for city "${city}". Add it to CITY_CONFIG in sync-pipeline-from-storage.mjs`);
@@ -248,6 +261,7 @@ async function importCityToPostgres(city) {
       ...process.env,
       POSTGRES_IMPORT_ENABLED: '1',
       POSTGRES_IMPORT_REQUIRED: process.env.POSTGRES_IMPORT_REQUIRED ?? '1',
+      POSTGRES_IMPORT_CELL_ATTRIBUTES: withCellAttributes ? '1' : '0',
     },
     maxBuffer: 20 * 1024 * 1024,
   });
@@ -265,7 +279,7 @@ async function importCityToPostgres(city) {
 }
 
 async function main() {
-  const { city, dryRun } = parseArgs(process.argv.slice(2));
+  const { city, withCellAttributes, dryRun } = parseArgs(process.argv.slice(2));
 
   for (const envFile of ['.env.local', '.env', 'pipeline/.env.local', 'pipeline/.env']) {
     loadEnvFile(join(REPO_ROOT, envFile));
@@ -292,7 +306,7 @@ async function main() {
 
   for (const entry of cities) {
     console.log(`\nStaging ${entry.city} (${entry.datasetId}) from Storage...`);
-    await stageCityExport(supabaseUrl, entry.city, entry.datasetId, entry.current);
+    await stageCityExport(supabaseUrl, entry.city, entry.datasetId, entry.current, withCellAttributes);
 
     if (dryRun) {
       console.log(`  dry-run: skipped PostgreSQL import for ${entry.city}`);
@@ -300,7 +314,7 @@ async function main() {
     }
 
     console.log(`Importing ${entry.city} into PostgreSQL...`);
-    await importCityToPostgres(entry.city);
+    await importCityToPostgres(entry.city, withCellAttributes);
     console.log(`  done: ${entry.city}`);
   }
 
