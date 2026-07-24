@@ -11,7 +11,7 @@
  *   npm run sync:pipeline-from-storage -- --with-cell-attributes
  *   npm run sync:pipeline-from-storage -- --dry-run
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +46,7 @@ function usage() {
 
 Options:
   --city <id>             Sync one city (default: all known cities with current.json in Storage)
-  --with-cell-attributes  Also merge/import full cell_attributes into PostgreSQL
+  --with-cell-attributes  Also stage/import full cell_attributes into PostgreSQL
   --dry-run               Download and stage files only; skip PostgreSQL import
 `);
   process.exit(2);
@@ -102,44 +102,6 @@ async function fetchJson(url) {
     throw new Error(`GET ${url} failed: ${res.status} ${res.statusText}`);
   }
   return res.json();
-}
-
-function isFeatureCollection(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    value.type === 'FeatureCollection' &&
-    Array.isArray(value.features)
-  );
-}
-
-function mergeFeatureCollections(parts) {
-  const features = parts.flatMap((part) => (isFeatureCollection(part) ? part.features : []));
-  return features.length > 0 ? { type: 'FeatureCollection', features } : null;
-}
-
-async function downloadChunkedGeoJson(supabaseUrl, city, datasetId, manifestName, singleFileName) {
-  const manifestPath = `${city}/${datasetId}/${manifestName}`;
-  const manifestUrl = supabasePublicUrl(supabaseUrl, manifestPath);
-
-  try {
-    const chunkManifest = await fetchJson(manifestUrl);
-    if (Array.isArray(chunkManifest?.chunks) && chunkManifest.chunks.length > 0) {
-      const chunks = await Promise.all(chunkManifest.chunks.map(async (chunk) => {
-        const chunkName = typeof chunk === 'string' ? chunk : chunk?.path;
-        if (!chunkName) return null;
-        const url = supabasePublicUrl(supabaseUrl, `${city}/${datasetId}/${chunkName}`);
-        return fetchJson(url);
-      }));
-      const merged = mergeFeatureCollections(chunks.filter(Boolean));
-      if (merged) return merged;
-    }
-  } catch {
-    // Fall back to single-file export below.
-  }
-
-  const singleUrl = supabasePublicUrl(supabaseUrl, `${city}/${datasetId}/${singleFileName}`);
-  return fetchJson(singleUrl);
 }
 
 async function downloadFile(url, targetPath) {
@@ -216,20 +178,24 @@ async function stageCityExport(supabaseUrl, city, datasetId, current, withCellAt
   }
 
   if (withCellAttributes) {
-    const cellAttributes = await downloadChunkedGeoJson(
-      supabaseUrl,
-      city,
-      datasetId,
-      'cell_attributes.manifest.json',
-      'cell_attributes.geojson',
-    );
-    await writeFile(
-      join(versionDir, 'cell_attributes.geojson'),
-      `${JSON.stringify(cellAttributes)}\n`,
-    );
-    console.log(`  merged cell_attributes.geojson (${cellAttributes.features?.length ?? 0} features)`);
+    const chunkManifestPath = join(versionDir, 'cell_attributes.manifest.json');
+    if (existsSync(chunkManifestPath)) {
+      const staleMergedPath = join(versionDir, 'cell_attributes.geojson');
+      await unlink(staleMergedPath).catch((error) => {
+        if (error?.code !== 'ENOENT') throw error;
+      });
+      const chunkManifest = JSON.parse(readFileSync(chunkManifestPath, 'utf8'));
+      console.log(`  staged chunked cell_attributes (${chunkManifest.chunks?.length ?? 0} chunks)`);
+    } else {
+      const objectPath = `${city}/${datasetId}/cell_attributes.geojson`;
+      await downloadFile(
+        supabasePublicUrl(supabaseUrl, objectPath),
+        join(versionDir, 'cell_attributes.geojson'),
+      );
+      console.log('  staged cell_attributes.geojson (single file)');
+    }
   } else {
-    console.log('  skipped merged cell_attributes.geojson (metadata-only sync)');
+    console.log('  skipped cell_attributes staging (metadata-only sync)');
   }
 
   const currentPath = join(exportRoot, 'current.json');

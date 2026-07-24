@@ -196,12 +196,26 @@ export function renderCellProperties(properties: maplibregl.GeoJSONFeature['prop
     corridorImportance: properties.corridorImportance == null ? null : Number(properties.corridorImportance),
     betweennessCentrality: properties.betweennessCentrality == null ? null : Number(properties.betweennessCentrality),
     treeCover: properties.treeCover == null ? null : Number(properties.treeCover),
+    treeCoverNorm: properties.treeCoverNorm == null ? null : Number(properties.treeCoverNorm),
+    canopyHeightIdx: properties.canopyHeightIdx == null ? null : Number(properties.canopyHeightIdx),
     heatExposure: properties.heatExposure == null ? null : Number(properties.heatExposure),
     meanLst: properties.meanLst == null ? null : Number(properties.meanLst),
     lstIdx: properties.lstIdx == null ? null : Number(properties.lstIdx),
     landUseGreen: properties.landUseGreen == null ? null : Number(properties.landUseGreen),
+    landUseClass: typeof properties.landUseClass === 'string'
+      ? properties.landUseClass as RenderCellProperties['landUseClass']
+      : undefined,
+    ndviNorm: properties.ndviNorm == null ? null : Number(properties.ndviNorm),
+    lstNorm: properties.lstNorm == null ? null : Number(properties.lstNorm),
+    disturbanceNorm: properties.disturbanceNorm == null ? null : Number(properties.disturbanceNorm),
+    betweennessNorm: properties.betweennessNorm == null ? null : Number(properties.betweennessNorm),
+    expectedNorm: properties.expectedNorm == null ? null : Number(properties.expectedNorm),
+    habitatQualityNorm: properties.habitatQualityNorm == null ? null : Number(properties.habitatQualityNorm),
+    residualNorm: properties.residualNorm == null ? null : Number(properties.residualNorm),
+    natureGapScoreNorm: properties.natureGapScoreNorm == null ? null : Number(properties.natureGapScoreNorm),
     interventionRank: properties.interventionRank == null ? null : Number(properties.interventionRank),
+    interventionRankNorm: properties.interventionRankNorm == null ? null : Number(properties.interventionRankNorm),
     nObs: properties.nObs == null ? undefined : Number(properties.nObs),
+    isUnsampled: properties.isUnsampled == null ? undefined : properties.isUnsampled === true,
   };
 }
-

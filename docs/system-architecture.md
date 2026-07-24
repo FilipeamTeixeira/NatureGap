@@ -464,7 +464,7 @@ hexgrid
 
 PMTiles must remain lightweight. Do not include large detail-panel JSON,
 species lists, pressure arrays, or intervention descriptions. Those belong in
-PostgreSQL `cell_attributes`.
+Storage `cell-details` shards.
 
 ### Storage
 
@@ -481,6 +481,8 @@ pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
 pipeline-export/<CITY_ID>/<DATA_VERSION>/parks.geojson
 pipeline-export/<CITY_ID>/<DATA_VERSION>/park-stats.json
 pipeline-export/<CITY_ID>/<DATA_VERSION>/cell_attributes.geojson
+pipeline-export/<CITY_ID>/<DATA_VERSION>/cell-details.manifest.json
+pipeline-export/<CITY_ID>/<DATA_VERSION>/cell-details/cell-details-*.json
 pipeline-export/<CITY_ID>/<DATA_VERSION>/top_interventions.json
 pipeline-export/<CITY_ID>/current.json
 ```
@@ -517,11 +519,10 @@ lookup. It must not calculate ecological metrics.
 
 1. Run the R pipeline for a city.
 2. Validate `hexgrid.pmtiles` exists, is non-empty, and contains source-layer `hexgrid`.
-3. Import or upsert `cell_attributes.geojson` into PostgreSQL.
-4. Upload `hexgrid.pmtiles`, `parks.geojson`, `park-stats.json`, and supporting JSON to Supabase Storage.
-5. Validate PMTiles and PostgreSQL have matching `cellId` values for sampled cells.
-6. Promote the version by updating the active manifest or configured dataset path.
-7. Smoke test MapLibre rendering and click-time `cell_attributes` lookup.
+3. Upload `hexgrid.pmtiles`, `parks.geojson`, `park-stats.json`, `cell-details` shards, and supporting JSON to Supabase Storage.
+4. Promote the version by updating `<CITY_ID>/current.json`.
+5. Optionally register/import pipeline metadata into PostgreSQL for legacy/operator workflows.
+6. Smoke test MapLibre rendering and click-time Storage detail lookup.
 
 ## 9. Frontend Contract
 
@@ -587,8 +588,9 @@ Frontend manifest discovery
 MapLibre rendering + backend detail lookup
 ```
 
-The R pipeline is the only producer of ecological outputs. PostgreSQL validates
-and stores those outputs, PMTiles remain rendering-only, and MapLibre performs
+The R pipeline is the only producer of ecological outputs. Supabase Storage is
+the published frontend data plane: PMTiles carry lightweight render/click
+properties, Storage JSON carries heavy detail payloads, and MapLibre performs
 presentation, filtering, and interaction only.
 
 ## 11. Scalability Requirements
@@ -602,11 +604,12 @@ Implemented scale controls:
   and database imports.
 - Keep immutable Storage versions and promote an active version through a
   manifest or database setting.
-- Add current-run indexes for `cell_attributes`.
+- Keep PostgreSQL imports optional for pipeline products that are already
+  published through Storage.
 - Add observation indexes for `(cell_id, timestamp)`, `(user_id, timestamp)`,
   and duplicate-detection lookups.
 - Keep PMTiles as viewport-streamed rendering products.
-- Keep detail payloads in PostgreSQL, not PMTiles.
+- Keep heavy detail payloads in Storage shards, not PMTiles.
 
 Do not introduce another analytical grid. Do not add frontend or SQL ecological
 recalculation to solve scale problems.
@@ -623,8 +626,8 @@ recalculation to solve scale problems.
 - `conservation_actions` and frontend `recommended_actions` are inconsistent.
 - `global_stats`, `wards`, `community_events`, and `recommended_actions` are
   queried by frontend code but are not present in the inspected migrations.
-- `cell_attributes` has city/version metadata; historical versions live in
-  `pipeline_cell_attributes`.
+- `cell_attributes` has city/version metadata for optional legacy imports;
+  historical versions can live in `pipeline_cell_attributes`.
 - Numeric constraints on detail fields are weaker than the model contract.
 
 ## 13. Implementation Roadmap

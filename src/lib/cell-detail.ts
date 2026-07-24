@@ -8,7 +8,6 @@ import {
   listActivePipelineDatasets,
   resolveDatasetFile,
 } from './pipeline-manifest';
-import { supabase } from './supabase';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 
 const CITY_ID_PREFIXES = Object.keys(CITIES);
@@ -46,10 +45,23 @@ export type RenderCellProperties = {
   meanLst?: number | null;
   lstIdx?: number | null;
   landUseGreen?: number | null;
+  landUseClass?: CellData['landUseClass'];
+  canopyHeightIdx?: number | null;
+  treeCoverNorm?: number | null;
+  ndviNorm?: number | null;
+  lstNorm?: number | null;
+  disturbanceNorm?: number | null;
+  betweennessNorm?: number | null;
+  expectedNorm?: number | null;
+  habitatQualityNorm?: number | null;
+  residualNorm?: number | null;
+  natureGapScoreNorm?: number | null;
   interventionRank?: number | null;
+  interventionRankNorm?: number | null;
   /** Optional map-tile fallback before Supabase load completes. */
   nObs?: number;
   speciesRichnessRaw?: number;
+  isUnsampled?: boolean;
 };
 
 type CellAttributeRow = {
@@ -76,10 +88,21 @@ type CellAttributeRow = {
   corridor_importance: number | null;
   intervention_rank: number | null;
   heat_exposure: number | null;
+  data_availability_ratio: number | null;
   fragmentation: number | null;
   connectivity_score: number | null;
   tree_cover: number | null;
+  tree_cover_norm: number | null;
   land_use_green: number | null;
+  land_use_class: CellData['landUseClass'] | null;
+  habitat_quality_norm: number | null;
+  effort_corrected_richness_norm: number | null;
+  expected_richness_norm: number | null;
+  corridor_importance_norm: number | null;
+  mean_lst_norm: number | null;
+  ecological_residual_norm: number | null;
+  nature_gap_score_norm: number | null;
+  intervention_rank_norm: number | null;
   pressures: unknown;
   interventions: unknown;
 };
@@ -150,8 +173,6 @@ function formatShardPath(template: string, shard: number): string {
 }
 
 async function fetchStorageCellDetail(cellId: string, cityId: string): Promise<CellAttributeRow | null> {
-  if (!supabase) return null;
-
   const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
   if (!dataset || !dataset.files[CELL_DETAIL_MANIFEST]) return null;
 
@@ -219,6 +240,9 @@ function detailFromRow(
   const habitatQuality = pct(row?.habitat_quality ?? render.habitatQuality);
   const corridorImportance = pct(row?.corridor_importance ?? render.corridorImportance);
   const heatExposure = pct(row?.heat_exposure ?? render.heatExposure);
+  const treeCover = pct(row?.tree_cover ?? render.treeCover ?? render.canopyHeightIdx);
+  const meanLst = pct(render.meanLst);
+  const landUseClass = row?.land_use_class ?? render.landUseClass ?? 'unknown';
   const habitatPotentialValue = row?.habitat_potential;
   const displayName = render.parkName && render.parkName !== 'city-green'
     ? render.parkName
@@ -244,7 +268,9 @@ function detailFromRow(
     expectedRichness,
     maxExpectedRichness: Number(row?.max_expected_richness ?? MAX_EXPECTED_RICHNESS),
     ecologicalResidual,
-    isUnsampled: row?.is_unsampled ?? undefined,
+    ecologicalResidualNormalized: row?.ecological_residual_norm ?? render.ecologicalResidualNormalized ?? render.residualNorm ?? undefined,
+    dataAvailabilityRatio: row?.data_availability_ratio ?? undefined,
+    isUnsampled: row?.is_unsampled ?? render.isUnsampled ?? undefined,
     temporalBiasFlag: row?.temporal_bias_flag ?? undefined,
     pathKm: row?.path_km ?? undefined,
     nObs: Number(row?.n_obs ?? render.nObs ?? 0),
@@ -258,13 +284,24 @@ function detailFromRow(
     species,
     corridorImportance,
     betweennessCentrality: pct(render.betweennessCentrality),
-    treeCover: pct(row?.tree_cover ?? render.treeCover),
+    treeCover,
+    treeCoverNorm: row?.tree_cover_norm ?? render.treeCoverNorm ?? undefined,
     heatExposure,
-    meanLst: pct(render.meanLst),
+    meanLst,
     lstIdx: pct(render.lstIdx),
     landUseGreen: pct(row?.land_use_green ?? render.landUseGreen),
+    landUseClass,
     pressures,
     interventions,
+    habitatQualityNorm: row?.habitat_quality_norm ?? render.habitatQualityNorm ?? undefined,
+    effortCorrectedRichnessNorm: row?.effort_corrected_richness_norm ?? undefined,
+    expectedRichnessNorm: row?.expected_richness_norm ?? render.expectedNorm ?? undefined,
+    corridorImportanceNorm: row?.corridor_importance_norm ?? render.betweennessNorm ?? undefined,
+    meanLstNorm: row?.mean_lst_norm ?? render.lstNorm ?? undefined,
+    ecologicalResidualNorm: row?.ecological_residual_norm ?? render.residualNorm ?? undefined,
+    natureGapScoreNorm: row?.nature_gap_score_norm ?? render.natureGapScoreNorm ?? undefined,
+    interventionRank: row?.intervention_rank ?? render.interventionRank ?? undefined,
+    interventionRankNorm: row?.intervention_rank_norm ?? render.interventionRankNorm ?? undefined,
   };
 }
 
@@ -274,8 +311,6 @@ export async function fetchCellDetail(
 ): Promise<CellData | null> {
   if (!render.cellId) return null;
 
-  if (!supabase) return detailFromRow(null, render, coordinates);
-
   const lookupCellId = resolveCellId(render.cellId, render.cityId);
   const lookupCityId = render.cityId ?? CITY.id;
 
@@ -284,50 +319,7 @@ export async function fetchCellDetail(
     return detailFromRow(storageRow, render, coordinates);
   }
 
-  const { data, error } = await supabase
-    .from('cell_attributes')
-    .select(
-      [
-        'cell_id',
-        'impact_score',
-        'nature_gap_score',
-        'habitat_quality',
-        'habitat_quality_index',
-        'species_richness_raw',
-        'observed_richness',
-        'expected_richness',
-        'effort_corrected_richness',
-        'ecological_residual',
-        'max_expected_richness',
-        'is_unsampled',
-        'temporal_bias_flag',
-        'path_km',
-        'n_obs',
-        'n_survey_dates',
-        'habitat_potential',
-        'observer_effort_score',
-        'taxonomic_diversity',
-        'species',
-        'corridor_importance',
-        'intervention_rank',
-        'heat_exposure',
-        'fragmentation',
-        'connectivity_score',
-        'tree_cover',
-        'land_use_green',
-        'pressures',
-        'interventions',
-      ].join(', '),
-    )
-    .eq('cell_id', lookupCellId)
-    .eq('city_id', lookupCityId)
-    .maybeSingle<CellAttributeRow>();
-
-  if (error) {
-    console.warn('[cell-detail] Failed to load cell detail:', error);
-  }
-
-  return detailFromRow(data ?? null, render, coordinates);
+  return detailFromRow(null, render, coordinates);
 }
 
 /** Patch-level detail from aggregated park stats (biodiversity circles / park click). */
