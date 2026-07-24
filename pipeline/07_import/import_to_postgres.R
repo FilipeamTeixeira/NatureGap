@@ -420,6 +420,14 @@ if (is.null(result)) return(invisible(NULL))
 cat("PostgreSQL import complete:\n")
 cat(as.character(result$result[[1]]), "\n")
 assign(import_done_key, data_version, envir = .GlobalEnv)
+
+prune_script <- here::here("07_import", "prune_stale_storage.R")
+if (file.exists(prune_script)) {
+  source(prune_script, local = FALSE)
+  run_storage_prune_after_promotion(CITY_ID, con)
+} else {
+  message("07_import/prune_stale_storage.R not found; stale Storage objects were not pruned.")
+}
 }
 
 run_postgres_import()

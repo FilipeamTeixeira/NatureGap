@@ -99,7 +99,8 @@ connect_database <- function(value = database_url()) {
     port = cfg$port,
     user = cfg$user,
     password = cfg$password,
-    sslmode = cfg$sslmode
+    sslmode = cfg$sslmode,
+    gssencmode = "disable"
   )
 }
 

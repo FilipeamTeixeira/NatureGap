@@ -46,7 +46,7 @@ steps <- list(
   list(n = 5L, folder = "05_residuals", label = "Residuals", file = "05_residuals/residuals.R"),
   list(n = 5L, folder = "05_patch", label = "Patch aggregation", file = "05_patch/patch_aggregation.R"),
   list(n = 6L, folder = "06_export", label = "Export", file = "06_export/export.R"),
-  list(n = 7L, folder = "07_import", label = "Spatial PostgreSQL import", file = "07_import/import_spatial_outputs.R"),
+  #list(n = 7L, folder = "07_import", label = "Spatial PostgreSQL import", file = "07_import/import_spatial_outputs.R"),
   list(n = 7L, folder = "07_import", label = "PostgreSQL import", file = "07_import/import_to_postgres.R")
 )
 
