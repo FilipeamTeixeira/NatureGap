@@ -277,7 +277,7 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
     "hexgrid.pmtiles",
     "parks.geojson", "park-stats.json", "cell_attributes.geojson",
     "cell_attributes.manifest.json", "cell-details.manifest.json", "corridor-links.geojson",
-    "corridor-links.manifest.json", "top_interventions.json"
+    "corridor-links.manifest.json", "top_interventions.json", "city_layer_stats.json"
   )
   for (base in c("cell_attributes", "corridor-links")) {
     parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
@@ -369,6 +369,7 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
+      cityLayerStats = list(path = "city_layer_stats.json", purpose = "Per-metric percentile bounds for city_layer_stats import (legend/render stretching)"),
       chunkManifest = list(path = "cell_attributes.manifest.json", purpose = "Large cell attribute chunk index when needed")
     ),
     counts = list(
@@ -545,6 +546,29 @@ norm_rank <- function(x) {
   min_rank <- min(finite_vals)
   if (max_rank == min_rank) return(rep(1.0, length(x)))
   1 - ((x - min_rank) / (max_rank - min_rank))
+}
+
+# Per-city percentile bounds for legend/render stretching (city_layer_stats).
+# One row per metric that src/lib/layer-styles.ts looks up via
+# statForMetric(cityStats, '<metric_name>') — keep LAYER_STAT_METRICS below
+# in sync with that file if a new metric/layer is added.
+compute_city_stats <- function(values, metric_name, city_id) {
+  values <- values[is.finite(values)]
+  if (length(values) == 0) return(NULL)
+  tibble(
+    city_id = city_id,
+    metric  = metric_name,
+    min_val = min(values),
+    max_val = max(values),
+    p05 = quantile(values, 0.05, names = FALSE),
+    p10 = quantile(values, 0.10, names = FALSE),
+    p25 = quantile(values, 0.25, names = FALSE),
+    p50 = quantile(values, 0.50, names = FALSE),
+    p75 = quantile(values, 0.75, names = FALSE),
+    p90 = quantile(values, 0.90, names = FALSE),
+    p95 = quantile(values, 0.95, names = FALSE),
+    bound = NA_real_
+  )
 }
 
 # ── Shared helpers for JSON export ───────────────────────────────────────────
@@ -1160,6 +1184,32 @@ grid_all <- grid_all |>
     intervention_rank_norm = norm_rank(intervention_rank),
     habitat_quality_norm  = norm_sequential(habitat_quality)
   )
+
+# ── City-wide legend stats (city_layer_stats) ───────────────────────────────
+# Computed from grid_all (every cell in the city, not just habitat_quality > 0
+# render cells) so percentiles reflect the full dataset each metric is drawn
+# from. Metric list generated via:
+#   grep -n "statForMetric(cityStats" src/lib/layer-styles.ts
+LAYER_STAT_METRICS <- c(
+  "nature_gap_score", "expected_richness", "ecological_residual",
+  "intervention_rank", "habitat_quality", "canopy_height_idx",
+  "n_obs", "betweenness_centrality", "lst_idx"
+)
+
+city_layer_stats <- LAYER_STAT_METRICS |>
+  lapply(function(metric) compute_city_stats(grid_all[[metric]], metric, CITY_ID)) |>
+  bind_rows()
+
+city_layer_stats_path <- file.path(DATA_EXPORT, "city_layer_stats.json")
+jsonlite::write_json(
+  city_layer_stats,
+  city_layer_stats_path,
+  pretty = TRUE, auto_unbox = TRUE, na = "null"
+)
+cat(sprintf(
+  "Written: %s (%d/%d metrics with finite values)\n",
+  city_layer_stats_path, nrow(city_layer_stats), length(LAYER_STAT_METRICS)
+))
 
 grid <- grid_all |> filter(habitat_quality > 0)
 

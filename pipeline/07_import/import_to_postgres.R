@@ -139,6 +139,25 @@ if (!identical(manifest$datasetId %||% manifest$dataVersion, data_version)) {
   stop("Manifest datasetId/dataVersion does not match selected DATA_VERSION.", call. = FALSE)
 }
 
+# Upsert legend/render percentile bounds. Cheap (one row per metric) and always
+# runs — independent of POSTGRES_IMPORT_CELL_ATTRIBUTES. Conflict target matches
+# primary key (city_id, metric) from 20260628120000_per_city_normalisation.sql.
+upsert_city_layer_stats <- function(stats_df, con) {
+  for (i in seq_len(nrow(stats_df))) {
+    row <- stats_df[i, ]
+    DBI::dbExecute(con, "
+      insert into public.city_layer_stats
+        (city_id, metric, min_val, max_val, p05, p10, p25, p50, p75, p90, p95, bound)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      on conflict (city_id, metric) do update set
+        min_val = excluded.min_val, max_val = excluded.max_val,
+        p05 = excluded.p05, p10 = excluded.p10, p25 = excluded.p25,
+        p50 = excluded.p50, p75 = excluded.p75, p90 = excluded.p90,
+        p95 = excluded.p95, bound = excluded.bound
+    ", params = unname(as.list(row)))
+  }
+}
+
 register_storage_dataset <- function(con, storage_prefix, manifest_storage_path, source_layer) {
   DBI::dbWithTransaction(con, {
     DBI::dbExecute(
@@ -362,6 +381,30 @@ if (!replace_import_available(con)) {
 storage_prefix <- paste0("pipeline-export/", CITY_ID, "/", data_version, "/")
 manifest_storage_path <- paste0(storage_prefix, "manifest.json")
 source_layer <- manifest$sourceLayer %||% "hexgrid"
+
+# city_layer_stats: always upsert when the file exists. Not gated by
+# POSTGRES_IMPORT_CELL_ATTRIBUTES — one row per metric, not per hex.
+city_layer_stats_path <- file.path(version_dir, "city_layer_stats.json")
+if (file.exists(city_layer_stats_path)) {
+  stats_df <- jsonlite::read_json(city_layer_stats_path, simplifyVector = TRUE)
+  if (is.data.frame(stats_df) && nrow(stats_df) > 0L) {
+    # Ensure column order matches the $1..$12 insert list.
+    stats_df <- stats_df[, c(
+      "city_id", "metric", "min_val", "max_val",
+      "p05", "p10", "p25", "p50", "p75", "p90", "p95", "bound"
+    )]
+    message(sprintf("Upserting %d city_layer_stats row(s) for %s…", nrow(stats_df), CITY_ID))
+    upsert_city_layer_stats(stats_df, con)
+    message(sprintf("Upserted city_layer_stats (%d metrics)", nrow(stats_df)))
+  } else {
+    message(sprintf("city_layer_stats.json is empty; skipping stats upsert (%s)", city_layer_stats_path))
+  }
+} else {
+  message(sprintf(
+    "city_layer_stats.json not found at %s; skipping stats upsert (re-run export.R to generate it).",
+    city_layer_stats_path
+  ))
+}
 
 if (!import_cell_attributes) {
   result <- register_storage_dataset(con, storage_prefix, manifest_storage_path, source_layer)
