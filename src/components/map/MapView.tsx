@@ -189,6 +189,7 @@ export default function MapView({
         id: PATCH_OUTLINE_LAYER_ID,
         type: 'line',
         source: 'parks',
+        maxzoom: DETAIL_ZOOM,
         paint: {
           'line-color': '#2d6a2d',
           'line-width': 0.8,
