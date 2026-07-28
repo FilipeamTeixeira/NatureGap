@@ -159,24 +159,45 @@ write_geojson_chunked <- function(value, output_path) {
   unlink(tmp)
 
   n <- nrow(value)
-  n_parts <- max(2L, as.integer(ceiling(total_size / MAX_UPLOAD_BYTES)))
-  rows_per <- ceiling(n / n_parts)
   base_name <- tools::file_path_sans_ext(basename(output_path))
   out_dir <- dirname(output_path)
-  chunk_files <- character(n_parts)
 
-  cat(sprintf("  → Chunking %s (%.1f MB) into %d parts...\n",
-              basename(output_path), total_size / 1024^2, n_parts))
+  # Row byte size varies a lot here (species/pressures are variable-length
+  # JSON arrays — sparse/unsampled cells are tiny, species-rich cells are much
+  # bigger), so a fixed rows-per-chunk split can produce wildly uneven file
+  # sizes depending on how rows happen to be sorted. Estimate each row's size
+  # instead and cut a new chunk whenever the running total approaches the
+  # limit. object.size() isn't identical to final serialized GeoJSON bytes,
+  # so a safety margin (target 85% of MAX_UPLOAD_BYTES) is used to avoid
+  # accidentally producing an oversized chunk.
+  target_bytes <- MAX_UPLOAD_BYTES * 0.85
+  row_bytes <- vapply(seq_len(n), function(i) as.numeric(object.size(value[i, ])), numeric(1))
 
-  for (i in seq_len(n_parts)) {
-    row_start <- (i - 1L) * rows_per + 1L
-    row_end <- min(i * rows_per, n)
-    part_name <- sprintf("%s-part-%03d.geojson", base_name, i)
+  chunk_files <- character(0)
+  row_start <- 1L
+  running <- 0
+  part_num <- 0L
+
+  flush_chunk <- function(start, end) {
+    part_num <<- part_num + 1L
+    part_name <- sprintf("%s-part-%03d.geojson", base_name, part_num)
     part_path <- file.path(out_dir, part_name)
-    write_geojson(value[row_start:row_end, ], part_path)
-    chunk_files[i] <- part_name
-    cat(sprintf("    part %d/%d (%d rows)\n", i, n_parts, row_end - row_start + 1L))
+    write_geojson(value[start:end, ], part_path)
+    chunk_files[[part_num]] <<- part_name
+    cat(sprintf("    part %d (%d rows, ~%.1f MB)\n", part_num, end - start + 1L, sum(row_bytes[start:end]) / 1024^2))
   }
+
+  cat(sprintf("  → Chunking %s (%.1f MB) by size...\n", basename(output_path), total_size / 1024^2))
+
+  for (i in seq_len(n)) {
+    running <- running + row_bytes[i]
+    if (running >= target_bytes && i > row_start) {
+      flush_chunk(row_start, i - 1L)
+      row_start <- i
+      running <- row_bytes[i]
+    }
+  }
+  if (row_start <= n) flush_chunk(row_start, n)
 
   manifest_path <- file.path(out_dir, paste0(base_name, ".manifest.json"))
   jsonlite::write_json(
