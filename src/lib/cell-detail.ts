@@ -114,6 +114,7 @@ type CellDetailManifest = {
 };
 
 const CELL_DETAIL_MANIFEST = 'cell-details.manifest.json';
+const cellDetailManifestCache = new Map<string, Promise<CellDetailManifest | null>>();
 const cellDetailShardCache = new Map<string, Promise<Record<string, CellAttributeRow>>>();
 
 function pct(value: number | null | undefined): number {
@@ -172,12 +173,28 @@ function formatShardPath(template: string, shard: number): string {
   return template.replace('{shard}', String(shard).padStart(3, '0'));
 }
 
+async function fetchCellDetailManifest(
+  manifestPath: string,
+  cacheKey: string,
+): Promise<CellDetailManifest | null> {
+  const cached = cellDetailManifestCache.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const manifest = asObject(await fetchStorageJson(manifestPath));
+    return manifest as CellDetailManifest | null;
+  })();
+  cellDetailManifestCache.set(cacheKey, promise);
+  return promise;
+}
+
 async function fetchStorageCellDetail(cellId: string, cityId: string): Promise<CellAttributeRow | null> {
   const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
   if (!dataset || !dataset.files[CELL_DETAIL_MANIFEST]) return null;
 
   const manifestPath = resolveDatasetFile(dataset, CELL_DETAIL_MANIFEST);
-  const manifest = asObject(await fetchStorageJson(manifestPath)) as CellDetailManifest | null;
+  const manifestCacheKey = `${dataset.cityId}/${dataset.dataVersion}/${CELL_DETAIL_MANIFEST}`;
+  const manifest = await fetchCellDetailManifest(manifestPath, manifestCacheKey);
   const shardCount = Number(manifest?.shardCount);
   if (!Number.isInteger(shardCount) || shardCount <= 0) return null;
 
@@ -303,6 +320,15 @@ function detailFromRow(
     interventionRank: row?.intervention_rank ?? render.interventionRank ?? undefined,
     interventionRankNorm: row?.intervention_rank_norm ?? render.interventionRankNorm ?? undefined,
   };
+}
+
+/** Immediate panel payload from map tile properties — no Storage fetch. */
+export function cellDetailFromRender(
+  render: RenderCellProperties,
+  coordinates: [number, number],
+): CellData | null {
+  if (!render.cellId) return null;
+  return detailFromRow(null, render, coordinates);
 }
 
 export async function fetchCellDetail(

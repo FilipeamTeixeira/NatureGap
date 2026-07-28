@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/layout/Navbar';
 import LayerControls from '@/components/map/LayerControls';
@@ -10,7 +10,12 @@ import CitizenSciencePanel from '@/components/citizen-science/CitizenSciencePane
 import { MAP_LAYERS } from '@/lib/mock-data';
 import { initParks } from '@/lib/green-spaces';
 import { initData, fetchEvents, fetchActions, type CommunityEvent, type TakeAction } from '@/lib/data';
-import { fetchCellDetail, fetchParkDetail, type RenderCellProperties } from '@/lib/cell-detail';
+import {
+  cellDetailFromRender,
+  fetchCellDetail,
+  fetchParkDetail,
+  type RenderCellProperties,
+} from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import { CITY } from '@/lib/config';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
@@ -42,6 +47,8 @@ export default function Page() {
   const [structuredSurveys, setStructuredSurveys] = useState<StructuredSurveyFeature[]>([]);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [actions, setActions] = useState<TakeAction[]>([]);
+  const [cellDetailLoading, setCellDetailLoading] = useState(false);
+  const cellClickGenerationRef = useRef(0);
 
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
   const structuredSurveysFc = useMemo(() => structuredSurveysGeoJSON(structuredSurveys), [structuredSurveys]);
@@ -108,16 +115,24 @@ export default function Page() {
     }));
   };
 
-  const handleHexClick = async (
+  const handleHexClick = (
     renderCell: RenderCellProperties,
     coordinates: [number, number],
   ) => {
-    const cell = await fetchCellDetail(renderCell, coordinates);
-    if (cell) {
-      setSelectedCell(cell);
-      setSelectedWard(null);
-      setSelectedSurveyPoint(null);
-    }
+    const preview = cellDetailFromRender(renderCell, coordinates);
+    if (!preview) return;
+
+    const clickId = ++cellClickGenerationRef.current;
+    setSelectedCell(preview);
+    setCellDetailLoading(true);
+    setSelectedWard(null);
+    setSelectedSurveyPoint(null);
+
+    void fetchCellDetail(renderCell, coordinates).then((cell) => {
+      if (clickId !== cellClickGenerationRef.current) return;
+      if (cell) setSelectedCell(cell);
+      setCellDetailLoading(false);
+    });
   };
 
   const handleParkClick = async (parkId: string, coordinates: [number, number]) => {
@@ -130,6 +145,8 @@ export default function Page() {
   };
 
   const handlePlaceSelect = (center: [number, number]) => {
+    cellClickGenerationRef.current += 1;
+    setCellDetailLoading(false);
     setSelectedWard(null);
     setSelectedCell(null);
     setSelectedSurveyPoint(null);
@@ -137,6 +154,8 @@ export default function Page() {
   };
 
   const handleClosePanel = () => {
+    cellClickGenerationRef.current += 1;
+    setCellDetailLoading(false);
     setSelectedCell(null);
     setSelectedWard(null);
   };
@@ -144,6 +163,8 @@ export default function Page() {
   const handleSurveyPointSelect = (id: string, coordinates: [number, number]) => {
     const point = surveyPoints.find((item) => item.id === id);
     if (point) {
+      cellClickGenerationRef.current += 1;
+      setCellDetailLoading(false);
       setSelectedSurveyPoint(point);
       setSelectedCell(null);
       setSelectedWard(null);
@@ -188,6 +209,7 @@ export default function Page() {
           <CellDetailPanel
             cell={selectedCell}
             activeLayer={activeLayer}
+            detailLoading={cellDetailLoading}
             events={events}
             actions={actions}
             onClose={handleClosePanel}

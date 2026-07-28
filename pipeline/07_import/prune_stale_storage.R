@@ -143,7 +143,7 @@ delete_storage_objects <- function(paths) {
     storage_api_perform(
       "DELETE",
       sprintf("/storage/v1/object/%s", PIPELINE_EXPORT_BUCKET),
-      body = chunk
+      body = list(prefixes = chunk)
     )
     deleted <- deleted + length(chunk)
   }

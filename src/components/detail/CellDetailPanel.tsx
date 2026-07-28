@@ -51,6 +51,8 @@ const SPECIES_LABELS: Record<string, string> = {
 interface CellDetailPanelProps {
   cell: CellData;
   activeLayer: HexLayerId;
+  /** True while species, interventions, and other Storage-backed fields are loading. */
+  detailLoading?: boolean;
   /** Community events — unfiltered, same list regardless of which park/cell is selected. */
   events?: CommunityEvent[];
   /** Generic conservation actions — unfiltered, same list regardless of which park/cell is selected. */
@@ -235,6 +237,7 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
 export default function CellDetailPanel({
   cell,
   activeLayer,
+  detailLoading = false,
   events = [],
   actions = [],
   onClose,
@@ -316,6 +319,12 @@ export default function CellDetailPanel({
           ))}
         </div>
       </div>
+
+      {detailLoading && (
+        <div className="px-6 py-2 bg-[#FDF6E4] border-b border-[#F0E4C8] text-[12px] text-[#9B6A1A] flex-shrink-0">
+          Loading species and actions…
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' && (
