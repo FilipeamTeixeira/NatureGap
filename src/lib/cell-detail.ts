@@ -1,4 +1,4 @@
-import { MAX_EXPECTED_RICHNESS, CITY, CITIES } from './config';
+import { MAX_EXPECTED_RICHNESS, CITY, CITIES, STORAGE } from './config';
 import { getParkStats, getParks } from './green-spaces';
 import {
   basename,
@@ -10,18 +10,39 @@ import {
 } from './pipeline-manifest';
 import type { CellData, HabitatPotential, ImpactStatus, Intervention, Species } from './types';
 
-const CITY_ID_PREFIXES = Object.keys(CITIES);
+const CITY_ID_PREFIXES = Array.from(new Set([
+  ...Object.keys(CITIES),
+  ...STORAGE.PIPELINE_CITY_IDS,
+]));
 
-/** Map tiles use local cell ids; PostgreSQL stores `{cityId}-{localId}`. */
+/** Strip a pipeline city slug prefix, leaving the local numeric cell id. */
+function localCellId(cellId: string, cityId?: string): string {
+  const city = cityId ?? CITY.id;
+  if (cellId.startsWith(`${city}-`)) {
+    return cellId.slice(city.length + 1);
+  }
+
+  for (const prefix of CITY_ID_PREFIXES) {
+    if (cellId.startsWith(`${prefix}-`)) {
+      return cellId.slice(prefix.length + 1);
+    }
+  }
+
+  return cellId;
+}
+
+/** Map tiles use local cell ids; Storage shards key rows by `{cityId}-{localId}`. */
 export function resolveCellId(cellId: string, cityId?: string): string {
   const trimmed = cellId.trim();
   if (!trimmed) return trimmed;
+
+  const city = cityId ?? CITY.id;
+  if (trimmed.startsWith(`${city}-`)) return trimmed;
 
   for (const prefix of CITY_ID_PREFIXES) {
     if (trimmed.startsWith(`${prefix}-`)) return trimmed;
   }
 
-  const city = cityId ?? CITY.id;
   return `${city}-${trimmed}`;
 }
 
@@ -160,8 +181,8 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function cellDetailShard(cellId: string, shardCount: number): number {
-  const localId = cellId.replace(new RegExp(`^(${CITY_ID_PREFIXES.join('|')})-`), '');
+function cellDetailShard(cellId: string, shardCount: number, cityId?: string): number {
+  const localId = localCellId(cellId, cityId);
   const numericId = Number.parseInt(localId, 10);
   const hash = Number.isFinite(numericId)
     ? numericId
@@ -190,7 +211,7 @@ async function fetchCellDetailManifest(
 
 async function fetchStorageCellDetail(cellId: string, cityId: string): Promise<CellAttributeRow | null> {
   const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
-  if (!dataset || !dataset.files[CELL_DETAIL_MANIFEST]) return null;
+  if (!dataset) return null;
 
   const manifestPath = resolveDatasetFile(dataset, CELL_DETAIL_MANIFEST);
   const manifestCacheKey = `${dataset.cityId}/${dataset.dataVersion}/${CELL_DETAIL_MANIFEST}`;
@@ -198,7 +219,7 @@ async function fetchStorageCellDetail(cellId: string, cityId: string): Promise<C
   const shardCount = Number(manifest?.shardCount);
   if (!Number.isInteger(shardCount) || shardCount <= 0) return null;
 
-  const shard = cellDetailShard(cellId, shardCount);
+  const shard = cellDetailShard(cellId, shardCount, cityId);
   const shards = Array.isArray(manifest?.shards) ? manifest.shards : [];
   const shardFromList = asString(shards[shard]);
   const template = asString(manifest?.pathTemplate) ?? 'cell-details/cell-details-{shard}.json';

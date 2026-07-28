@@ -6,7 +6,6 @@
  */
 
 import maplibregl from 'maplibre-gl';
-import { PMTiles } from 'pmtiles';
 import { getCityLayerStats } from '@/lib/data';
 import { CITY, MAP_CONFIG } from '@/lib/config';
 import type { HexPmtilesDataset } from '@/lib/pmtiles-storage';
@@ -164,14 +163,9 @@ export async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: Hex
   if (toFit.length === 0) return;
 
   const bounds = new maplibregl.LngLatBounds();
-  const headers = await Promise.allSettled(
-    toFit.map((dataset) => new PMTiles(dataset.publicUrl).getHeader()),
-  );
-
-  for (const headerResult of headers) {
-    if (headerResult.status !== 'fulfilled') continue;
-    const { minLon, minLat, maxLon, maxLat } = headerResult.value;
-    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) continue;
+  for (const dataset of toFit) {
+    if (!dataset.bounds) continue;
+    const [minLon, minLat, maxLon, maxLat] = dataset.bounds;
     bounds.extend([minLon, minLat]);
     bounds.extend([maxLon, maxLat]);
   }
@@ -188,7 +182,6 @@ export function refreshHexLayers(map: maplibregl.Map, layers: MapLayer[]) {
   try {
     setLayerVisibility(map, activeThematicLayerId(layers), layers);
     applyLayerPaintExpressions(map);
-    map.triggerRepaint();
   } catch {
     /* style not ready */
   }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { getCityLayerStats, wardCentroidsGeoJSON } from '@/lib/data';
 import { CITY, MAP_CONFIG } from '@/lib/config';
-import { listHexPmtilesDatasets } from '@/lib/pmtiles-storage';
+import { hexDatasetsForMapView, listHexPmtilesDatasets } from '@/lib/pmtiles-storage';
 import type { RenderCellProperties } from '@/lib/cell-detail';
 import type { MapLayer } from '@/lib/types';
 import {
@@ -208,12 +208,16 @@ export default function MapView({
           return;
         }
 
-        setHexDatasets(map, pmtilesDatasets);
+        const activeHexDatasets = hexDatasetsForMapView(pmtilesDatasets);
+        setHexDatasets(map, activeHexDatasets);
 
-        for (const dataset of pmtilesDatasets) {
+        for (const dataset of activeHexDatasets) {
           map.addSource(dataset.sourceId, {
             type: 'vector',
             url: `pmtiles://${dataset.publicUrl}`,
+            minzoom: DETAIL_ZOOM,
+            maxzoom: dataset.maxZoom,
+            bounds: dataset.bounds,
           });
 
           for (const layerId of LAYER_DRAW_ORDER) {
@@ -260,13 +264,16 @@ export default function MapView({
           });
         }
 
-        await fitMapToPmtilesDatasets(map, pmtilesDatasets);
+        await fitMapToPmtilesDatasets(map, activeHexDatasets);
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
 
+        const hexSourcesStyled = new Set<string>();
         const onHexSourceData = (event: maplibregl.MapSourceDataEvent) => {
-          if (!pmtilesDatasets.some((dataset) => dataset.sourceId === event.sourceId)) return;
-          if (!map.isSourceLoaded(event.sourceId)) return;
+          if (event.sourceDataType !== 'metadata') return;
+          if (!activeHexDatasets.some((dataset) => dataset.sourceId === event.sourceId)) return;
+          if (hexSourcesStyled.has(event.sourceId)) return;
+          hexSourcesStyled.add(event.sourceId);
           refreshHexLayers(map, layersRef.current);
         };
         map.on('sourcedata', onHexSourceData);

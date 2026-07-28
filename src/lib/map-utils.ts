@@ -15,15 +15,16 @@ import type { RenderCellProperties } from '@/lib/cell-detail';
 
 const PMTILES_PROTOCOL_KEY = '__naturegap_pmtiles_protocol__';
 
-export function registerPmtilesProtocol() {
+export function registerPmtilesProtocol(): Protocol {
   const globalState = globalThis as typeof globalThis & {
     [PMTILES_PROTOCOL_KEY]?: Protocol;
   };
-  if (globalState[PMTILES_PROTOCOL_KEY]) return;
+  if (globalState[PMTILES_PROTOCOL_KEY]) return globalState[PMTILES_PROTOCOL_KEY];
 
   const protocol = new Protocol();
   maplibregl.addProtocol('pmtiles', protocol.tile);
   globalState[PMTILES_PROTOCOL_KEY] = protocol;
+  return protocol;
 }
 
 export type ParkStats = ReturnType<typeof getParkStats>[string];

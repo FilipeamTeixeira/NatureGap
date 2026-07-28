@@ -41,6 +41,12 @@ export const CITIES: Record<string, CityMeta> = {
     badge:  'Amsterdam · Beta',
     country: 'Netherlands',
   },
+  'porto-center': {
+    name:   'Porto',
+    nameJa: 'Porto',
+    badge:  'Porto · Beta',
+    country: 'Portugal',
+  },
 };
 
 /** Looks up display metadata for a cityId, falling back to the default CITY. */
@@ -59,8 +65,8 @@ export const MAP_CONFIG = {
   maxZoom:   20,
   /** OpenFreeMap Positron — free, no API key, Carto-Positron-compatible style. */
   basemapUrl: 'https://tiles.openfreemap.org/styles/positron',
-  /** Fonts available on the OpenFreeMap tile server. */
-  mapFonts:  ['Noto Sans Regular', 'Arial Unicode MS Regular'] as string[],
+  /** Single font stack — OpenFreeMap glyph URLs reject comma-separated fallbacks. */
+  mapFonts:  ['Noto Sans Regular'] as string[],
 } as const;
 
 // ── Hex grid ─────────────────────────────────────────────────────────────────
