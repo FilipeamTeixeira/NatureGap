@@ -140,9 +140,35 @@ function unitInterval(property: string): ExpressionSpecification {
   ] as ExpressionSpecification;
 }
 
-/** Canonical canopy-height value from vector tile properties (0–1). */
+/** Canonical canopy-height value from vector tile / park aggregate properties (0–1). */
 function treeCoverValueExpression(): ExpressionSpecification {
-  return ['to-number', ['coalesce', ['get', 'canopyHeightIdx'], 0]] as ExpressionSpecification;
+  return [
+    'to-number',
+    [
+      'coalesce',
+      ['get', 'canopyHeightIdx'],
+      ['get', 'treeCoverNorm'],
+      ['/', ['coalesce', ['get', 'treeCover'], 0], 100],
+    ],
+  ] as ExpressionSpecification;
+}
+
+/** Patch parks export heatExposure (0–100); hex tiles export lstNorm (0–1). */
+function buildHeatExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
+  const stat = statForMetric(cityStats, 'lst_idx');
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const rawValue = unitInterval('heatExposure');
+  const fromRaw: ExpressionSpecification = low != null && high != null && high > low
+    ? ['max', 0, ['min', 1, ['/', ['-', rawValue, low], ['-', high, low]]]] as ExpressionSpecification
+    : rawValue;
+
+  return [
+    'interpolate',
+    ['linear'],
+    ['coalesce', ['get', 'lstNorm'], ['get', 'meanLstNorm'], fromRaw, 0],
+    ...LAYER_RAMPS.heat.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
 }
 
 /** Observation-count heatmap — darker blue = more iNaturalist/GBIF records in the hex. */
@@ -292,7 +318,7 @@ export function patchFillColorExpression(
     case 'connectivity':
       return buildSequentialExpression('corridorImportanceNorm', 'corridorImportance', LAYER_RAMPS.connectivity, stat);
     case 'heat':
-      return buildSequentialExpression('meanLstNorm', 'meanLst', LAYER_RAMPS.heat, stat);
+      return buildHeatExpression(cityStats);
     case 'landuse':
       return landUseColorExpression();
     case 'biodiversity':
@@ -367,6 +393,10 @@ export function hexFillColorExpression(
     return buildBiodiversityObsExpression();
   }
 
+  if (layerId === 'heat') {
+    return buildHeatExpression(cityStats);
+  }
+
   const spec = LAYER_STYLE_SPECS[layerId];
   const ramp = LAYER_RAMPS[layerId as keyof typeof LAYER_RAMPS];
   if (!spec.property || !ramp) {
@@ -377,7 +407,6 @@ export function hexFillColorExpression(
     intervention: 'interventionRank',
     habitat: 'habitatQuality',
     connectivity: 'betweennessCentrality',
-    heat: 'heatExposure',
   };
 
   return withUnsampledFallback(layerId, buildSequentialExpression(
