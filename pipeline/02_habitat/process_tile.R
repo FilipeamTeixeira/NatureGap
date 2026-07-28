@@ -213,8 +213,11 @@ filter_core_cells <- function(grid, core_polygon) {
 
 # ── process_tile ──────────────────────────────────────────────────────────────
 
-safe_crop <- function(r, v) {
-  tryCatch(terra::crop(r, v), error = function(e) NULL)
+safe_crop <- function(r, v, label = "raster") {
+  tryCatch(terra::crop(r, v), error = function(e) {
+    message(sprintf("[safe_crop] %s failed: %s", label, conditionMessage(e)))
+    NULL
+  })
 }
 
 process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NULL) {
@@ -238,9 +241,10 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   halo_vect <- terra::vect(st_as_sf(halo_bb))
 
   lc_path <- cfg$RAW_LANDCOVER %||% RAW_LANDCOVER
+  message(sprintf("[tile %s] RAW_LANDCOVER path: %s (exists: %s)", tile_id, lc_path, file.exists(lc_path)))
   if (file.exists(lc_path)) {
     lc_proj <- project(rast(lc_path), crs_local, method = "near")
-    lc <- safe_crop(lc_proj, halo_vect)
+    lc <- safe_crop(lc_proj, halo_vect, label = "landcover")
     if (!is.null(lc)) {
     lc_vals <- terra::extract(lc, vect(grid))
     lc_fracs <- lc_vals |>
@@ -294,9 +298,10 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   grid$ndvi_mean <- NA_real_
   grid$ndvi_idx <- NA_real_
   ndvi_path <- cfg$RAW_NDVI %||% RAW_NDVI
+  message(sprintf("[tile %s] RAW_NDVI path: %s (exists: %s)", tile_id, ndvi_path, file.exists(ndvi_path)))
   if (file.exists(ndvi_path)) {
     ndvi_proj <- project(rast(ndvi_path), crs_local, method = "bilinear")
-    ndvi <- safe_crop(ndvi_proj, halo_vect)
+    ndvi <- safe_crop(ndvi_proj, halo_vect, label = "ndvi")
     if (!is.null(ndvi)) {
       ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
       grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
@@ -307,9 +312,14 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   grid$canopy_height_m <- NA_real_
   grid$canopy_height_idx <- NA_real_
   canopy_path <- cfg$CANOPY_HEIGHT_FILE %||% if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_
+  message(sprintf(
+    "[tile %s] CANOPY_HEIGHT_FILE path: %s (exists: %s)",
+    tile_id, canopy_path,
+    is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)
+  ))
   if (is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)) {
     canopy_proj <- project(rast(canopy_path), crs_local, method = "bilinear")
-    canopy_height <- safe_crop(canopy_proj, halo_vect)
+    canopy_height <- safe_crop(canopy_proj, halo_vect, label = "canopy_height")
     if (!is.null(canopy_height)) {
       canopy_height_mean <- terra::extract(canopy_height, vect(grid), fun = mean, na.rm = TRUE)
       grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
@@ -319,9 +329,10 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
 
   grid$lst_celsius <- NA_real_
   lst_path <- cfg$RAW_LST %||% RAW_LST
+  message(sprintf("[tile %s] RAW_LST path: %s (exists: %s)", tile_id, lst_path, file.exists(lst_path)))
   if (file.exists(lst_path)) {
     lst_proj <- project(rast(lst_path), crs_local, method = "bilinear")
-    lst <- safe_crop(lst_proj, halo_vect)
+    lst <- safe_crop(lst_proj, halo_vect, label = "lst")
     if (!is.null(lst)) {
       lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
       grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
