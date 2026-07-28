@@ -77,7 +77,7 @@ write_geojson <- function(value, output_path) {
 }
 
 # Supabase Storage file limit — chunk outputs above this size (bytes).
-MAX_UPLOAD_BYTES <- 5 * 1024^2
+MAX_UPLOAD_BYTES <- 45 * 1024^2
 
 cleanup_chunked_outputs <- function(output_path, extension_pattern) {
   base_name <- tools::file_path_sans_ext(basename(output_path))
@@ -120,6 +120,7 @@ write_json_chunked <- function(obj, output_path, ...) {
   n_parts <- max(2L, as.integer(ceiling(total_size / MAX_UPLOAD_BYTES)))
   base_name <- tools::file_path_sans_ext(basename(output_path))
   out_dir <- dirname(output_path)
+  cleanup_chunked_outputs(output_path, "json")
   key_groups <- split(keys, cut(seq_along(keys), breaks = n_parts, labels = FALSE))
   chunk_files <- character(length(key_groups))
 
@@ -161,17 +162,13 @@ write_geojson_chunked <- function(value, output_path) {
   n <- nrow(value)
   base_name <- tools::file_path_sans_ext(basename(output_path))
   out_dir <- dirname(output_path)
+  cleanup_chunked_outputs(output_path, "geojson")
 
-  # Row byte size varies a lot here (species/pressures are variable-length
-  # JSON arrays — sparse/unsampled cells are tiny, species-rich cells are much
-  # bigger), so a fixed rows-per-chunk split can produce wildly uneven file
-  # sizes depending on how rows happen to be sorted. Estimate each row's size
-  # instead and cut a new chunk whenever the running total approaches the
-  # limit. object.size() isn't identical to final serialized GeoJSON bytes,
-  # so a safety margin (target 85% of MAX_UPLOAD_BYTES) is used to avoid
-  # accidentally producing an oversized chunk.
+  # Row byte size varies (species/pressures are variable-length JSON arrays).
+  # object.size() reflects R in-memory overhead, not serialized GeoJSON bytes,
+  # and can be ~10x too large — use the measured full-file size instead.
   target_bytes <- MAX_UPLOAD_BYTES * 0.85
-  row_bytes <- vapply(seq_len(n), function(i) as.numeric(object.size(value[i, ])), numeric(1))
+  avg_row_bytes <- total_size / n
 
   chunk_files <- character(0)
   row_start <- 1L
@@ -183,18 +180,28 @@ write_geojson_chunked <- function(value, output_path) {
     part_name <- sprintf("%s-part-%03d.geojson", base_name, part_num)
     part_path <- file.path(out_dir, part_name)
     write_geojson(value[start:end, ], part_path)
+    actual <- file.info(part_path)$size
+    if (actual > MAX_UPLOAD_BYTES && end > start) {
+      unlink(part_path)
+      part_num <<- part_num - 1L
+      mid <- start + floor((end - start) / 2L)
+      flush_chunk(start, mid)
+      flush_chunk(mid + 1L, end)
+      return(invisible(NULL))
+    }
     chunk_files[[part_num]] <<- part_name
-    cat(sprintf("    part %d (%d rows, ~%.1f MB)\n", part_num, end - start + 1L, sum(row_bytes[start:end]) / 1024^2))
+    cat(sprintf("    part %d (%d rows, %.1f MB)\n", part_num, end - start + 1L, actual / 1024^2))
   }
 
-  cat(sprintf("  → Chunking %s (%.1f MB) by size...\n", basename(output_path), total_size / 1024^2))
+  cat(sprintf("  → Chunking %s (%.1f MB) into ~%.0f MB parts...\n",
+              basename(output_path), total_size / 1024^2, target_bytes / 1024^2))
 
   for (i in seq_len(n)) {
-    running <- running + row_bytes[i]
+    running <- running + avg_row_bytes
     if (running >= target_bytes && i > row_start) {
       flush_chunk(row_start, i - 1L)
       row_start <- i
-      running <- row_bytes[i]
+      running <- avg_row_bytes
     }
   }
   if (row_start <= n) flush_chunk(row_start, n)

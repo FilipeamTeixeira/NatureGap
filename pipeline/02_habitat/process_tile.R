@@ -220,6 +220,23 @@ safe_crop <- function(r, v, label = "raster") {
   })
 }
 
+# Crop in the raster's native CRS, then project only the tile-sized subset.
+# Avoids projecting whole-city rasters inside every tile worker (canopy is ~30M cells).
+crop_project_to_halo <- function(r, halo_extent, crs_local, method = "bilinear", label = "raster") {
+  if (is.character(r)) {
+    if (!file.exists(r)) return(NULL)
+    r <- rast(r)
+  }
+  halo_src <- st_transform(st_as_sf(halo_extent), crs(r))
+  cropped <- safe_crop(r, terra::vect(halo_src), label = paste(label, "crop"))
+  if (is.null(cropped)) return(NULL)
+  if (terra::crs(cropped) == crs_local) return(cropped)
+  tryCatch(project(cropped, crs_local, method = method), error = function(e) {
+    message(sprintf("[crop_project_to_halo] %s project failed: %s", label, conditionMessage(e)))
+    NULL
+  })
+}
+
 process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NULL) {
   if (is.null(cfg)) cfg <- list()
   crs_local <- cfg$CRS_LOCAL %||% CRS_LOCAL
@@ -235,16 +252,16 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     mutate(cell_id = row_number())
 
   tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
+  message(sprintf("[tile %s] start %s", tile_id, format(Sys.time(), "%H:%M:%S")))
 
   # ── Rasters (crop to halo bbox) ───────────────────────────────────────────
-  halo_bb <- st_transform(halo_extent, 4326)
-  halo_vect <- terra::vect(st_as_sf(halo_bb))
+  # Halo must be in crs_local when cropping an already-projected raster.
+  halo_vect <- terra::vect(st_as_sf(halo_extent))
 
   lc_path <- cfg$RAW_LANDCOVER %||% RAW_LANDCOVER
   message(sprintf("[tile %s] RAW_LANDCOVER path: %s (exists: %s)", tile_id, lc_path, file.exists(lc_path)))
   if (file.exists(lc_path)) {
-    lc_proj <- project(rast(lc_path), crs_local, method = "near")
-    lc <- safe_crop(lc_proj, halo_vect, label = "landcover")
+    lc <- crop_project_to_halo(lc_path, halo_extent, crs_local, method = "near", label = "landcover")
     if (!is.null(lc)) {
     lc_vals <- terra::extract(lc, vect(grid))
     lc_fracs <- lc_vals |>
@@ -283,8 +300,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
 
   imp_path <- cfg$RAW_IMPERVIOUS %||% RAW_IMPERVIOUS
   if (file.exists(imp_path)) {
-    imp_proj <- project(rast(imp_path), crs_local, method = "bilinear")
-    imp <- safe_crop(imp_proj, halo_vect)
+    imp <- crop_project_to_halo(imp_path, halo_extent, crs_local, method = "bilinear", label = "impervious")
     if (!is.null(imp)) {
       imp_mean <- terra::extract(imp, vect(grid), fun = mean, na.rm = TRUE)
       grid$impervious_fraction <- replace_na(imp_mean[[2]], 0)
@@ -300,8 +316,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   ndvi_path <- cfg$RAW_NDVI %||% RAW_NDVI
   message(sprintf("[tile %s] RAW_NDVI path: %s (exists: %s)", tile_id, ndvi_path, file.exists(ndvi_path)))
   if (file.exists(ndvi_path)) {
-    ndvi_proj <- project(rast(ndvi_path), crs_local, method = "bilinear")
-    ndvi <- safe_crop(ndvi_proj, halo_vect, label = "ndvi")
+    ndvi <- crop_project_to_halo(ndvi_path, halo_extent, crs_local, method = "bilinear", label = "ndvi")
     if (!is.null(ndvi)) {
       ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
       grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
@@ -318,8 +333,12 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)
   ))
   if (is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)) {
-    canopy_proj <- project(rast(canopy_path), crs_local, method = "bilinear")
-    canopy_height <- safe_crop(canopy_proj, halo_vect, label = "canopy_height")
+    canopy_local_path <- cfg$CANOPY_LOCAL_PATH %||% NA_character_
+    canopy_height <- if (is.character(canopy_local_path) && !is.na(canopy_local_path) && file.exists(canopy_local_path)) {
+      safe_crop(rast(canopy_local_path), halo_vect, label = "canopy_height")
+    } else {
+      crop_project_to_halo(canopy_path, halo_extent, crs_local, method = "bilinear", label = "canopy_height")
+    }
     if (!is.null(canopy_height)) {
       canopy_height_mean <- terra::extract(canopy_height, vect(grid), fun = mean, na.rm = TRUE)
       grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
@@ -331,8 +350,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   lst_path <- cfg$RAW_LST %||% RAW_LST
   message(sprintf("[tile %s] RAW_LST path: %s (exists: %s)", tile_id, lst_path, file.exists(lst_path)))
   if (file.exists(lst_path)) {
-    lst_proj <- project(rast(lst_path), crs_local, method = "bilinear")
-    lst <- safe_crop(lst_proj, halo_vect, label = "lst")
+    lst <- crop_project_to_halo(lst_path, halo_extent, crs_local, method = "bilinear", label = "lst")
     if (!is.null(lst)) {
       lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
       grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
@@ -555,6 +573,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   core_out <- filter_core_cells(grid, core_local) |>
     mutate(tile_id = tile_id)
 
+  message(sprintf("[tile %s] done %s (%d core cells)", tile_id, format(Sys.time(), "%H:%M:%S"), nrow(core_out)))
   core_out
 }
 
@@ -764,8 +783,30 @@ run_tiled_processing <- function(force = FALSE) {
     RAW_IMPERVIOUS = RAW_IMPERVIOUS,
     RAW_NDVI = RAW_NDVI,
     RAW_LST = RAW_LST,
-    CANOPY_HEIGHT_FILE = if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_
+    CANOPY_HEIGHT_FILE = if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_,
+    CANOPY_LOCAL_PATH = NA_character_
   )
+
+  canopy_path <- cfg$CANOPY_HEIGHT_FILE
+  if (is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)) {
+    canopy_local_path <- file.path(DATA_PROC, "canopy_height_local.tif")
+    cfg$CANOPY_LOCAL_PATH <- canopy_local_path
+    message("[tile_processing] Pre-projecting canopy height once for all tiles…")
+    t0 <- proc.time()
+    if (!file.exists(canopy_local_path)) {
+      writeRaster(
+        project(rast(canopy_path), CRS_LOCAL, method = "bilinear"),
+        canopy_local_path,
+        overwrite = TRUE
+      )
+    } else {
+      message("[tile_processing] Reusing cached ", basename(canopy_local_path))
+    }
+    message(sprintf(
+      "[tile_processing] Canopy ready in %.1f s",
+      (proc.time() - t0)[["elapsed"]]
+    ))
+  }
 
   obs_all <- load_obs_for_tiling(CRS_LOCAL)
   obs_list <- lapply(seq_len(nrow(core_tiles)), function(i) {
@@ -774,7 +815,11 @@ run_tiled_processing <- function(force = FALSE) {
     obs_all[st_intersects(obs_all, halo_bb, sparse = FALSE)[, 1L], , drop = FALSE]
   })
 
-  workers <- max(1L, parallel::detectCores() - 1L)
+  workers <- suppressWarnings(as.integer(Sys.getenv("TILED_WORKERS", unset = "")))
+  if (is.na(workers) || workers < 1L) {
+    workers <- max(1L, parallel::detectCores() - 1L)
+    if (!is.null(cfg$CANOPY_LOCAL_PATH)) workers <- min(workers, 4L)
+  }
   message(sprintf("[tile_processing] Processing %d tiles with %d workers…", nrow(core_tiles), workers))
   plan(multisession, workers = workers)
 

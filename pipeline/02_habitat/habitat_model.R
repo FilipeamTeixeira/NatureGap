@@ -21,7 +21,7 @@ if (!file.exists(file.path(tiles_dir, "core_tiles.gpkg"))) {
   )
 }
 
-grid <- get_tiled_results()
+grid <- get_tiled_results(force = isTRUE(as.logical(Sys.getenv("FORCE_TILED_REPROCESS", unset = "FALSE"))))
 
 cat(sprintf(
   "Habitat quality: min=%.3f, mean=%.3f, max=%.3f\n",
