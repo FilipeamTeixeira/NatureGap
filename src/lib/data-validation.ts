@@ -101,9 +101,11 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     (value.betweennessCentrality === undefined || isNumber(value.betweennessCentrality)) &&
     (value.treeCover === undefined || isNumber(value.treeCover)) &&
     (value.treeCoverNorm === undefined || isNumber(value.treeCoverNorm)) &&
+    (value.canopyHeightIdx === undefined || isNumber(value.canopyHeightIdx)) &&
     (value.heatExposure === undefined || isNumber(value.heatExposure)) &&
     (value.meanLst === undefined || isNumber(value.meanLst)) &&
     (value.lstIdx === undefined || isNumber(value.lstIdx)) &&
+    (value.lstNorm === undefined || isNumber(value.lstNorm)) &&
     (value.landUseGreen === undefined || isNumber(value.landUseGreen)) &&
     (value.landUseClass === undefined ||
       (typeof value.landUseClass === 'string' && LAND_USE_CLASSES.includes(value.landUseClass))) &&

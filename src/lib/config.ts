@@ -8,11 +8,11 @@
 
 export const CITY = {
   /** Pipeline city slug — must match pipeline-export/<id>/ and city_layer_stats.city_id. */
-  id:     'yokohama-honmoku',
-  name:   'Yokohama',
-  nameJa: '横浜市',
-  badge:  'Yokohama · Beta',
-  country: 'Japan',
+  id:     'porto-center',
+  name:   'Porto',
+  nameJa: 'Porto',
+  badge:  'Porto · Beta',
+  country: 'Portugal',
 } as const;
 
 // ── Multi-city registry ──────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ export function cityMeta(cityId: string | null | undefined): CityMeta {
 // ── Map defaults ─────────────────────────────────────────────────────────────
 
 export const MAP_CONFIG = {
-  /** Initial map center — Honmoku Sancho Park centroid. */
-  center:    [139.6606, 35.4255] as [number, number],
+  /** Initial map center — Porto analysis extent centroid. */
+  center:    [-8.6123, 41.1593] as [number, number],
   /** Overview zoom — patch fills visible below DETAIL_ZOOM (14). */
   zoom:      12,
   minZoom:   0,
@@ -117,7 +117,7 @@ export const SCORE_COLORS = {
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
   /** Cities to try without relying on Supabase Storage list permissions. */
-  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'yokohama-honmoku,amsterdam-schimmelstraat,porto-center')
+  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'porto-center')
     .split(',')
     .map((city) => city.trim())
     .filter(Boolean),

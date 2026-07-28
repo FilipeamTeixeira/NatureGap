@@ -72,10 +72,13 @@ export interface CellStatsFields {
   treeCover?: number;
   /** Per-city p5–p95 normalised canopy height (0–1). */
   treeCoverNorm?: number;
+  /** Per-city canopy height index exported for hex/park rendering. */
+  canopyHeightIdx?: number;
   /** 0–100 heat exposure rank (from Landsat LST when available). */
   heatExposure?: number;
   meanLst?: number;
   lstIdx?: number;
+  lstNorm?: number;
   /** 0–100 vegetated land-cover fraction. */
   landUseGreen?: number;
   /** Dominant categorical land-cover class used for map fills. */

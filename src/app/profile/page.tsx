@@ -22,8 +22,11 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) {
-      setHistory([]);
-      return;
+      const timeout = window.setTimeout(() => {
+        setHistory([]);
+        setHistoryLoading(false);
+      }, 0);
+      return () => window.clearTimeout(timeout);
     }
     let cancelled = false;
     setHistoryLoading(true);

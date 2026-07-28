@@ -207,8 +207,6 @@ async function listStoragePointerDatasets(): Promise<ActivePipelineDataset[]> {
   return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
 }
 
-let activePipelineDatasetsCache: Promise<ActivePipelineDataset[]> | null = null;
-
 async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
   const storageDatasets = await listStoragePointerDatasets();
   if (storageDatasets.length > 0) return storageDatasets;
@@ -218,11 +216,7 @@ async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
 
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
   if (!supabase) return [];
-
-  if (!activePipelineDatasetsCache) {
-    activePipelineDatasetsCache = loadActivePipelineDatasets();
-  }
-  return activePipelineDatasetsCache;
+  return loadActivePipelineDatasets();
 }
 
 export function resolveHexgridPath(dataset: ActivePipelineDataset): string {

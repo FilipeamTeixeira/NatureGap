@@ -19,18 +19,17 @@ function sourceId(datasetId: string): string {
   return `hexgrid-${datasetId.replace(/[^a-z0-9_-]/gi, '-')}`;
 }
 
-/** One hexgrid source per session — avoids cross-city empty tile requests while panning. */
+/** One city-scoped hexgrid source per session — avoids cross-city empty tile requests while panning. */
 export function hexDatasetsForMapView(
   datasets: HexPmtilesDataset[],
   preferredCityId: string = CITY.id,
 ): HexPmtilesDataset[] {
   const preferred = datasets.filter((dataset) => dataset.cityId === preferredCityId);
   if (preferred.length > 0) return preferred;
-  if (datasets.length === 0) return [];
   console.warn(
-    `[pmtiles-storage] No readable hexgrid for ${preferredCityId}; using ${datasets[0].cityId}.`,
+    `[pmtiles-storage] No readable hexgrid for ${preferredCityId}.`,
   );
-  return [datasets[0]];
+  return [];
 }
 
 export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
