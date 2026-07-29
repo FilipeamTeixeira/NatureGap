@@ -141,25 +141,45 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
     stop("regional_pbf not found: ", regional_pbf, call. = FALSE)
   }
 
+  # status_codes <- vapply(config_paths, function(config_path) {
+  #   message("[tile_registry] osmium extract -c ", config_path)
+  #   result <- system2(
+  #     "osmium",
+  #     c("extract", "-v", "-c", config_path, "-S", "smart", regional_pbf),
+  #     stdout = TRUE,
+  #     stderr = TRUE,
+  #     wd = PIPELINE_ROOT
+  #   )
+  #   exit_code <- attr(result, "status")
+  #   if (!is.null(exit_code) && exit_code != 0L) {
+  #     stop(
+  #       "osmium extract failed for ", config_path, " (exit ", exit_code, ")\n",
+  #       paste(result, collapse = "\n"),
+  #       call. = FALSE
+  #     )
+  #   }
+  #   0L
+  # }, integer(1L))
+
+
   status_codes <- vapply(config_paths, function(config_path) {
     message("[tile_registry] osmium extract -c ", config_path)
-    result <- system2(
-      "osmium",
-      c("extract", "-v", "-c", config_path, "-S", "smart", regional_pbf),
-      stdout = TRUE,
-      stderr = TRUE,
-      wd = PIPELINE_ROOT
-    )
-    exit_code <- attr(result, "status")
-    if (!is.null(exit_code) && exit_code != 0L) {
-      stop(
-        "osmium extract failed for ", config_path, " (exit ", exit_code, ")\n",
-        paste(result, collapse = "\n"),
-        call. = FALSE
+
+    # Run system2 inside PIPELINE_ROOT using withr
+    result <- withr::with_dir(PIPELINE_ROOT, {
+      system2(
+        "osmium",
+        c("extract", "-v", "-O", "-c", config_path, "-S", "smart", regional_pbf),
+        stdout = TRUE,
+        stderr = TRUE
       )
-    }
-    0L
-  }, integer(1L))
+    })
+
+    # Return exit status (0 for success, non-zero attribute for error)
+    status <- attr(result, "status")
+    if (is.null(status)) 0L else status
+  }, integer(1))
+
 
   invisible(status_codes)
 }

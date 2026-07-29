@@ -150,10 +150,10 @@ BBOX_FETCH <- c(
 
 # ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
 city <- "noord-holland"
-regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "netherlands-latest.osm.pbf")
+regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "noord-holland-latest.osm.pbf")
 
 aoi_mode <- "relation"            # "relation" or "bbox"
-relation_id <- 11960504L         # Amsterdam — uncomment + set aoi_mode <- "relation"
+relation_id <- 15419236L         # Amsterdam — uncomment + set aoi_mode <- "relation"
 bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
 
 halo_m <- 750                 # buffer used for tile halos (Task 3)
@@ -270,7 +270,7 @@ WC_FILE <- file.path(
 )
 
 # EMC-BUILT (Copernicus impervious surface fraction):
-#   Download manually: https://human-settlement.emergency.copernicus.eu/
+#   Download manually: https://human-settlement.emergency.copernicus.eu/dataDownload.php?ds=EMCbuiltS
 #   File name expected by the pipeline: EMC_CITY_ID.tif
 #   Example: EMC_amsterdam-schimmelstraat.tif
 
