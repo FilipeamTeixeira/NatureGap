@@ -208,12 +208,32 @@ osm_cache_resolved_path <- function(path) {
   path
 }
 
+# osm_cache_ok <- function(path, min_features = 1L) {
+#   resolved <- osm_cache_resolved_path(path)
+#   if (!file.exists(resolved)) return(FALSE)
+#   tryCatch({
+#     sf_obj <- st_read(resolved, quiet = TRUE)
+#     nrow(sf_obj) >= min_features
+#   }, error = function(e) FALSE)
+# }
+
 osm_cache_ok <- function(path, min_features = 1L) {
   resolved <- osm_cache_resolved_path(path)
   if (!file.exists(resolved)) return(FALSE)
   tryCatch({
     sf_obj <- st_read(resolved, quiet = TRUE)
-    nrow(sf_obj) >= min_features
+    if (nrow(sf_obj) < min_features) return(FALSE)
+
+    # Also confirm the cached data's extent actually overlaps
+    # the CURRENT city bbox — a cache with real features from an
+    # earlier, different bbox should not be considered valid.
+    cached_bbox <- st_bbox(st_transform(sf_obj, 4326))
+    current_bbox <- st_bbox(c(
+      xmin = unname(BBOX_CITY["xmin"]), ymin = unname(BBOX_CITY["ymin"]),
+      xmax = unname(BBOX_CITY["xmax"]), ymax = unname(BBOX_CITY["ymax"])
+    ), crs = 4326)
+
+    st_intersects(st_as_sfc(cached_bbox), st_as_sfc(current_bbox), sparse = FALSE)[1, 1]
   }, error = function(e) FALSE)
 }
 

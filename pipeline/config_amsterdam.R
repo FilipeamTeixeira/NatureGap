@@ -134,11 +134,12 @@ CITY_COUNTRY <- "The Netherlands"
 # BBOX_FETCH — the window for iNaturalist / GBIF API calls.
 #              Can be wider than BBOX_CITY to capture edge observations.
 
+#aoi_bbox <- sf::st_bbox(sf::st_transform(aoi, 4326))
 BBOX_CITY <- c(
-  xmin = 4.854712,
-  ymin = 52.366756,
-  xmax = 4.870934,
-  ymax = 52.372259
+  xmin = unname(aoi_bbox["xmin"]),
+  ymin = unname(aoi_bbox["ymin"]),
+  xmax = unname(aoi_bbox["xmax"]),
+  ymax = unname(aoi_bbox["ymax"])
 )
 
 BBOX_FETCH <- c(
@@ -146,7 +147,7 @@ BBOX_FETCH <- c(
   ymin = unname(BBOX_CITY["ymin"]) - 0.004,
   xmax = unname(BBOX_CITY["xmax"]) + 0.004,
   ymax = unname(BBOX_CITY["ymax"]) + 0.004
-)   # slightly wider than analysis domain to capture edge observations
+)   # slightly wider than analysis domain to capture edge observations # slightly wider than analysis domain to capture edge observations
 
 # ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
 city <- "noord-holland"
@@ -154,7 +155,7 @@ regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "noord-holla
 
 aoi_mode <- "relation"            # "relation" or "bbox"
 relation_id <- 15419236L         # Amsterdam — uncomment + set aoi_mode <- "relation"
-bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
+#bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
 
 halo_m <- 750                 # buffer used for tile halos (Task 3)
 tile_size_m <- 2000           # core tile edge length before buffering
@@ -169,8 +170,8 @@ aoi <- load_city_aoi(
   city = city,
   aoi_mode = aoi_mode,
   boundaries_dir = BOUNDARIES_DIR,
-  relation_id = if (aoi_mode == "relation" && exists("relation_id")) relation_id else NULL,
-  bbox = if (aoi_mode == "bbox") bbox else NULL
+  relation_id = relation_id,
+  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL
 )
 
 if (!file.exists(regional_pbf)) {
