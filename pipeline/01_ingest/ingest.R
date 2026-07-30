@@ -208,32 +208,12 @@ osm_cache_resolved_path <- function(path) {
   path
 }
 
-# osm_cache_ok <- function(path, min_features = 1L) {
-#   resolved <- osm_cache_resolved_path(path)
-#   if (!file.exists(resolved)) return(FALSE)
-#   tryCatch({
-#     sf_obj <- st_read(resolved, quiet = TRUE)
-#     nrow(sf_obj) >= min_features
-#   }, error = function(e) FALSE)
-# }
-
 osm_cache_ok <- function(path, min_features = 1L) {
   resolved <- osm_cache_resolved_path(path)
   if (!file.exists(resolved)) return(FALSE)
   tryCatch({
     sf_obj <- st_read(resolved, quiet = TRUE)
-    if (nrow(sf_obj) < min_features) return(FALSE)
-
-    # Also confirm the cached data's extent actually overlaps
-    # the CURRENT city bbox — a cache with real features from an
-    # earlier, different bbox should not be considered valid.
-    cached_bbox <- st_bbox(st_transform(sf_obj, 4326))
-    current_bbox <- st_bbox(c(
-      xmin = unname(BBOX_CITY["xmin"]), ymin = unname(BBOX_CITY["ymin"]),
-      xmax = unname(BBOX_CITY["xmax"]), ymax = unname(BBOX_CITY["ymax"])
-    ), crs = 4326)
-
-    st_intersects(st_as_sfc(cached_bbox), st_as_sfc(current_bbox), sparse = FALSE)[1, 1]
+    nrow(sf_obj) >= min_features
   }, error = function(e) FALSE)
 }
 
@@ -247,6 +227,26 @@ overpass_pause_before_query <- function() {
   }
   .overpass_queries_this_run <<- .overpass_queries_this_run + 1L
   invisible(NULL)
+}
+
+# osmdata_sf() splits results across $osm_polygons (simple way-mapped areas)
+# and $osm_multipolygons (relations — used for larger/irregular parks, and
+# anything with an interior hole/courtyard). Every OSM polygon fetch in this
+# file was only reading $osm_polygons, silently missing anything mapped as a
+# relation. Cast both to MULTIPOLYGON before combining so a single fetch
+# doesn't end up with mixed POLYGON/MULTIPOLYGON geometry types, which can
+# behave inconsistently in later st_* operations and st_write.
+combine_osm_polygons <- function(osm_result) {
+  polys  <- osm_result$osm_polygons
+  multis <- osm_result$osm_multipolygons
+
+  polys  <- if (!is.null(polys)  && nrow(polys)  > 0L) sf::st_cast(polys,  "MULTIPOLYGON") else NULL
+  multis <- if (!is.null(multis) && nrow(multis) > 0L) sf::st_cast(multis, "MULTIPOLYGON") else NULL
+
+  if (is.null(polys) && is.null(multis)) return(NULL)
+  if (is.null(polys)) return(multis)
+  if (is.null(multis)) return(polys)
+  dplyr::bind_rows(polys, multis)
 }
 
 use_osm_cache <- function(path, min_features, label) {
@@ -533,8 +533,8 @@ if (!use_osm_cache(RAW_OSM_GREEN, 1L, "OSM green spaces")) {
       osmdata_sf()
   }, "OSM green spaces")
 
-  green_polygons <- if (!is.null(osm_green$osm_polygons)) {
-    osm_green$osm_polygons |> st_transform(CRS_LOCAL)
+  green_polygons <- if (!is.null(combine_osm_polygons(osm_green))) {
+    combine_osm_polygons(osm_green) |> st_transform(CRS_LOCAL)
   } else {
     warning("No OSM green space polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
@@ -551,8 +551,8 @@ if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
       osmdata_sf()
   }, "OSM ground vegetation")
 
-  ground_veg_polygons <- if (!is.null(osm_ground_veg$osm_polygons)) {
-    osm_ground_veg$osm_polygons |> st_transform(CRS_LOCAL)
+  ground_veg_polygons <- if (!is.null(combine_osm_polygons(osm_ground_veg))) {
+    combine_osm_polygons(osm_ground_veg) |> st_transform(CRS_LOCAL)
   } else {
     warning("No OSM ground vegetation polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
@@ -567,8 +567,8 @@ if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
       osmdata_sf()
   }, "OSM ground vegetation (landuse)")
 
-  ground_veg_polygons2 <- if (!is.null(osm_ground_veg2$osm_polygons)) {
-    osm_ground_veg2$osm_polygons |> st_transform(CRS_LOCAL)
+  ground_veg_polygons2 <- if (!is.null(combine_osm_polygons(osm_ground_veg2))) {
+    combine_osm_polygons(osm_ground_veg2) |> st_transform(CRS_LOCAL)
   } else {
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
@@ -682,7 +682,7 @@ if (!use_osm_cache(RAW_OSM_AMENITIES, 0L, "OSM amenities")) {
 
   amenity_points <- bind_rows(
     if (!is.null(osm_amenities$osm_points)) osm_amenities$osm_points else NULL,
-    if (!is.null(osm_amenities$osm_polygons)) st_centroid(osm_amenities$osm_polygons) else NULL
+    if (!is.null(combine_osm_polygons(osm_amenities))) st_centroid(combine_osm_polygons(osm_amenities)) else NULL
   )
   amenity_points <- if (!is.null(amenity_points) && nrow(amenity_points) > 0L) {
     amenity_points |> st_transform(CRS_LOCAL)
@@ -702,8 +702,8 @@ if (!use_osm_cache(RAW_OSM_WATER_POLY, 0L, "OSM water bodies")) {
       osmdata_sf()
   }, "OSM water bodies")
 
-  water_polygons <- if (!is.null(osm_water_bodies$osm_polygons)) {
-    osm_water_bodies$osm_polygons |> st_transform(CRS_LOCAL)
+  water_polygons <- if (!is.null(combine_osm_polygons(osm_water_bodies))) {
+    combine_osm_polygons(osm_water_bodies) |> st_transform(CRS_LOCAL)
   } else {
     warning("No OSM water polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
