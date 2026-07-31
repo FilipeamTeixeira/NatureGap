@@ -128,33 +128,14 @@ CITY_ID      <- "amsterdam-schimmelstraat"
 CITY_NAME    <- "Amsterdam"
 CITY_COUNTRY <- "The Netherlands"
 
-
-# ── Spatial extent (WGS84) ────────────────────────────────────────────────────
-# BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
-# BBOX_FETCH — the window for iNaturalist / GBIF API calls.
-#              Can be wider than BBOX_CITY to capture edge observations.
-
-#aoi_bbox <- sf::st_bbox(sf::st_transform(aoi, 4326))
-BBOX_CITY <- c(
-  xmin = unname(aoi_bbox["xmin"]),
-  ymin = unname(aoi_bbox["ymin"]),
-  xmax = unname(aoi_bbox["xmax"]),
-  ymax = unname(aoi_bbox["ymax"])
-)
-
-BBOX_FETCH <- c(
-  xmin = unname(BBOX_CITY["xmin"]) - 0.004,
-  ymin = unname(BBOX_CITY["ymin"]) - 0.004,
-  xmax = unname(BBOX_CITY["xmax"]) + 0.004,
-  ymax = unname(BBOX_CITY["ymax"]) + 0.004
-)   # slightly wider than analysis domain to capture edge observations # slightly wider than analysis domain to capture edge observations
+#Removed bbox and aoi from here
 
 # ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
 city <- "noord-holland"
 regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "noord-holland-latest.osm.pbf")
 
 aoi_mode <- "relation"            # "relation" or "bbox"
-relation_id <- c(11960504L)      # Amsterdam. Add adjacent relation IDs here,
+relation_id <- c(11960504L, 15419236L)      # Amsterdam. Add adjacent relation IDs here,
 # e.g. c(15419236L, <Amstelveen>, <Diemen>)
 # — all IDs are unioned into one AOI polygon.
 #bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
@@ -180,11 +161,32 @@ if (!file.exists(regional_pbf)) {
   warning("[config] regional_pbf not found: ", regional_pbf, call. = FALSE)
 }
 
+# ── Spatial extent (WGS84) ────────────────────────────────────────────────────
+# BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
+# BBOX_FETCH — the window for iNaturalist / GBIF API calls.
+#              Can be wider than BBOX_CITY to capture edge observations.
+
+aoi_bbox <- sf::st_bbox(sf::st_transform(aoi, 4326))
+BBOX_CITY <- c(
+  xmin = unname(aoi_bbox["xmin"]),
+  ymin = unname(aoi_bbox["ymin"]),
+  xmax = unname(aoi_bbox["xmax"]),
+  ymax = unname(aoi_bbox["ymax"])
+)
+
+BBOX_FETCH <- c(
+  xmin = unname(BBOX_CITY["xmin"]) - 0.004,
+  ymin = unname(BBOX_CITY["ymin"]) - 0.004,
+  xmax = unname(BBOX_CITY["xmax"]) + 0.004,
+  ymax = unname(BBOX_CITY["ymax"]) + 0.004
+)   # slightly wider than analysis domain to capture edge observations # slightly wider than analysis domain to capture edge observations
+
+
 # ── Observation ingest ────────────────────────────────────────────────────────
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
 # Fetched via api.inaturalist.org (rinat does not support needs_id).
 INAT_QUALITY_GRADES <- c("research", "needs_id")
-INAT_MAX_RESULTS    <- 10000L   # total cap for bbox pagination
+INAT_MAX_RESULTS    <- 30000L   # total cap for bbox pagination
 GBIF_MAX_RESULTS    <- 10000L
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
