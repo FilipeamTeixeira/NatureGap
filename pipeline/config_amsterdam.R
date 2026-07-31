@@ -154,7 +154,7 @@ city <- "noord-holland"
 regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "noord-holland-latest.osm.pbf")
 
 aoi_mode <- "relation"            # "relation" or "bbox"
-relation_id <- c(15419236L)      # Amsterdam. Add adjacent relation IDs here,
+relation_id <- c(11960504L, 15419236L)      # Amsterdam. Add adjacent relation IDs here,
 # e.g. c(15419236L, <Amstelveen>, <Diemen>)
 # — all IDs are unioned into one AOI polygon.
 #bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
