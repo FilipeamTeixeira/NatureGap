@@ -1,5 +1,5 @@
 import { PMTiles } from 'pmtiles';
-import { CITY, STORAGE } from './config';
+import { STORAGE } from './config';
 import { listActivePipelineDatasets, resolveHexgridPath } from './pipeline-manifest';
 import { supabase } from './supabase';
 
@@ -19,17 +19,22 @@ function sourceId(datasetId: string): string {
   return `hexgrid-${datasetId.replace(/[^a-z0-9_-]/gi, '-')}`;
 }
 
-/** One city-scoped hexgrid source per session — avoids cross-city empty tile requests while panning. */
-export function hexDatasetsForMapView(
-  datasets: HexPmtilesDataset[],
-  preferredCityId: string = CITY.id,
-): HexPmtilesDataset[] {
-  const preferred = datasets.filter((dataset) => dataset.cityId === preferredCityId);
-  if (preferred.length > 0) return preferred;
-  console.warn(
-    `[pmtiles-storage] No readable hexgrid for ${preferredCityId}.`,
-  );
-  return [];
+/**
+ * Every hex source/layer id is namespaced per dataset (see sourceId() below,
+ * hexFillLayerIdForDataset, cityIdFromHexLayerId), and refreshHexLayers()
+ * already toggles visibility across every dataset returned here — so there
+ * is no reason to filter down to one city. Doing so used to silently drop
+ * every non-default city's hex layer the moment a viewer zoomed in past
+ * DETAIL_ZOOM, even though the aggregated overview layer (which is not
+ * filtered) showed that city fine. PMTiles sources declare `bounds`, so a
+ * city's source simply returns no tiles while panned elsewhere — there's no
+ * real cost to keeping all of them registered.
+ */
+export function hexDatasetsForMapView(datasets: HexPmtilesDataset[]): HexPmtilesDataset[] {
+  if (datasets.length === 0) {
+    console.warn('[pmtiles-storage] No readable hexgrid datasets.');
+  }
+  return datasets;
 }
 
 export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {

@@ -157,8 +157,14 @@ export function cityIdFromHexLayerId(map: maplibregl.Map, layerId: string): stri
   return undefined;
 }
 
-export async function fitMapToPmtilesDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
-  const primary = datasets.filter((dataset) => dataset.cityId === CITY.id);
+export async function fitMapToPmtilesDatasets(
+  map: maplibregl.Map,
+  datasets: HexPmtilesDataset[],
+  preferredCityId?: string,
+) {
+  const primary = preferredCityId
+    ? datasets.filter((dataset) => dataset.cityId === preferredCityId)
+    : [];
   const toFit = primary.length > 0 ? primary : datasets;
   if (toFit.length === 0) return;
 

@@ -154,7 +154,9 @@ city <- "noord-holland"
 regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "noord-holland-latest.osm.pbf")
 
 aoi_mode <- "relation"            # "relation" or "bbox"
-relation_id <- 15419236L         # Amsterdam — uncomment + set aoi_mode <- "relation"
+relation_id <- c(15419236L)      # Amsterdam. Add adjacent relation IDs here,
+# e.g. c(15419236L, <Amstelveen>, <Diemen>)
+# — all IDs are unioned into one AOI polygon.
 #bbox <- BBOX_CITY             # study area is a neighbourhood bbox, not full municipality
 
 halo_m <- 750                 # buffer used for tile halos (Task 3)
@@ -356,4 +358,3 @@ CONFIG_LOADED <- TRUE
 
 message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s | aoi_mode: %s",
                 CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID, aoi_mode))
-

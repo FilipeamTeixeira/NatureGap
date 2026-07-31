@@ -114,7 +114,12 @@ export async function initParks(): Promise<void> {
   initParksCalled = true;
 
   try {
-    const cityIds = [...STORAGE.PIPELINE_CITY_IDS];
+    // Drive this from the dynamic dataset registry (pipeline_datasets), not
+    // just the hardcoded PIPELINE_CITY_IDS env var — otherwise a city that's
+    // active in the DB/storage but missing from that env var silently never
+    // gets its parks layer loaded, even though its hex tiles render fine.
+    const activeCityIds = (await listActivePipelineDatasets()).map((dataset) => dataset.cityId);
+    const cityIds = Array.from(new Set([...activeCityIds, ...STORAGE.PIPELINE_CITY_IDS]));
     const perCity = await Promise.all(cityIds.map((cityId) => loadParksForCity(cityId)));
     const parks = perCity.flat();
     if (parks.length > 0) {

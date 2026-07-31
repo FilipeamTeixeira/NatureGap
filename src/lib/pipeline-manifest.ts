@@ -208,10 +208,18 @@ async function listStoragePointerDatasets(): Promise<ActivePipelineDataset[]> {
 }
 
 async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
-  const storageDatasets = await listStoragePointerDatasets();
-  if (storageDatasets.length > 0) return storageDatasets;
+  // pipeline_datasets is the dynamic source of truth: import_to_postgres.R
+  // promotes a row here on every export, and the "public_pipeline_dataset_
+  // discovery" migration grants anon SELECT specifically so the frontend can
+  // list every active city without a hardcoded id list. Storage pointers
+  // (STORAGE.PIPELINE_CITY_IDS) are checked too, but only to fill in a city
+  // that predates DB promotion — they never take priority over the registry.
+  const [databaseDatasets, storageDatasets] = await Promise.all([
+    listDatabaseActiveDatasets(),
+    listStoragePointerDatasets(),
+  ]);
 
-  return mergeDatasets(await listDatabaseActiveDatasets());
+  return mergeDatasets([...databaseDatasets, ...storageDatasets]);
 }
 
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
