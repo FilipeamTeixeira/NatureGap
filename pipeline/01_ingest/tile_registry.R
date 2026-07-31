@@ -141,27 +141,6 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
     stop("regional_pbf not found: ", regional_pbf, call. = FALSE)
   }
 
-  # status_codes <- vapply(config_paths, function(config_path) {
-  #   message("[tile_registry] osmium extract -c ", config_path)
-  #   result <- system2(
-  #     "osmium",
-  #     c("extract", "-v", "-c", config_path, "-S", "smart", regional_pbf),
-  #     stdout = TRUE,
-  #     stderr = TRUE,
-  #     wd = PIPELINE_ROOT
-  #   )
-  #   exit_code <- attr(result, "status")
-  #   if (!is.null(exit_code) && exit_code != 0L) {
-  #     stop(
-  #       "osmium extract failed for ", config_path, " (exit ", exit_code, ")\n",
-  #       paste(result, collapse = "\n"),
-  #       call. = FALSE
-  #     )
-  #   }
-  #   0L
-  # }, integer(1L))
-
-
   status_codes <- vapply(config_paths, function(config_path) {
     message("[tile_registry] osmium extract -c ", config_path)
 
@@ -177,9 +156,26 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
 
     # Return exit status (0 for success, non-zero attribute for error)
     status <- attr(result, "status")
-    if (is.null(status)) 0L else status
+    status <- if (is.null(status)) 0L else status
+    if (status != 0L) {
+      message(
+        "[tile_registry] osmium extract FAILED for ", config_path,
+        " (exit ", status, "):\n", paste(result, collapse = "\n")
+      )
+    }
+    status
   }, integer(1))
 
+  failed <- config_paths[status_codes != 0L]
+  if (length(failed) > 0L) {
+    stop(
+      sprintf(
+        "osmium extract failed for %d of %d tile(s): %s\nSee messages above for each tile's actual osmium error. Fix the underlying cause and re-run — a silent failure here means the affected tiles have no local .osm.pbf, and downstream steps (e.g. connectivity) will silently fall back to slower/less-consistent Overpass-sourced data instead of failing loudly.",
+        length(failed), length(config_paths), paste(basename(failed), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
 
   invisible(status_codes)
 }

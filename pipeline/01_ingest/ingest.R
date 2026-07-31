@@ -243,10 +243,21 @@ combine_osm_polygons <- function(osm_result) {
   polys  <- if (!is.null(polys)  && nrow(polys)  > 0L) sf::st_cast(polys,  "MULTIPOLYGON") else NULL
   multis <- if (!is.null(multis) && nrow(multis) > 0L) sf::st_cast(multis, "MULTIPOLYGON") else NULL
 
-  if (is.null(polys) && is.null(multis)) return(NULL)
-  if (is.null(polys)) return(multis)
-  if (is.null(multis)) return(polys)
-  dplyr::bind_rows(polys, multis)
+  combined <- if (is.null(polys) && is.null(multis)) {
+    return(NULL)
+  } else if (is.null(polys)) {
+    multis
+  } else if (is.null(multis)) {
+    polys
+  } else {
+    dplyr::bind_rows(polys, multis)
+  }
+
+  # Real-world OSM relations frequently have minor topology issues
+  # (self-intersections, unclosed rings) that st_cast alone does not
+  # repair. Fix these before the result reaches any st_intersection/
+  # st_union call downstream, or GEOS throws a TopologyException.
+  sf::st_make_valid(combined)
 }
 
 use_osm_cache <- function(path, min_features, label) {
