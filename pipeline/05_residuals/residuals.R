@@ -89,8 +89,8 @@ grid <- grid |>
     ),
     expected_richness = SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (
       0.65 * habitat_component +
-      0.20 * connectivity_component +
-      0.15 * accessibility_component
+        0.20 * connectivity_component +
+        0.15 * accessibility_component
     ),
     ecological_residual = if_else(
       is_unsampled,
@@ -143,8 +143,8 @@ if (!is.finite(city_residual_max) || city_residual_max <= 0) {
         NA_real_,
         (
           0.50 * bio_residual_norm +
-          0.30 * habitat_quality_deficit +
-          0.20 * connectivity_deficit
+            0.30 * habitat_quality_deficit +
+            0.20 * connectivity_deficit
         ) * 100
       )
     )
@@ -251,7 +251,8 @@ top_cells <- top_cells |>
 
 if (!"green_space_id" %in% names(grid) && file.exists(PROC_GREEN_SPACES)) {
   green_spaces_link <- st_read(PROC_GREEN_SPACES, quiet = TRUE) |>
-    st_transform(st_crs(grid))
+    st_transform(st_crs(grid)) |>
+    st_make_valid()
   overlap <- suppressWarnings(st_intersection(
     grid |> select(cell_id),
     green_spaces_link |> select(green_space_id)

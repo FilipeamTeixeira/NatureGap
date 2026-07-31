@@ -56,9 +56,17 @@ read_green_spaces <- function(path, source_name) {
   value <- st_read(path, quiet = TRUE)
   if (nrow(value) == 0L) return(empty_green_spaces())
 
+  # Real-world park polygons (esp. canal-threaded parks with holes) frequently
+  # have self-touching rings or duplicate vertices that survive st_transform
+  # and st_collection_extract but blow up GEOS's overlay engine downstream in
+  # st_intersection() with "TopologyException: Ring edge missing". Validate
+  # BEFORE extracting, since st_make_valid() can itself emit a
+  # GEOMETRYCOLLECTION for badly broken input — collection_extract cleans
+  # that up afterwards.
   value <- suppressWarnings(
     value |>
       st_transform(CRS_LOCAL) |>
+      st_make_valid() |>
       st_collection_extract("POLYGON", warn = FALSE)
   )
 
@@ -123,6 +131,8 @@ if (nrow(green_spaces) > 0L) {
     ) |>
     ungroup() |>
     select(-dupe_group_size)
+
+  green_spaces <- st_make_valid(green_spaces)
 
   overlap <- suppressWarnings(st_intersection(
     hex_cells |> select(cell_id),
