@@ -21,6 +21,7 @@ data/export/
 pipeline/data/
 pipeline-export/
 pipeline-export/porto-center
+pipeline/.RDataTmp1
 
 # Raster files (large)
 *.tif
