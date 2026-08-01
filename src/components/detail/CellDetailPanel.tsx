@@ -92,37 +92,39 @@ function CardSubtitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SpeciesGroupList({ species }: { species: CellData['species'] }) {
+function SpeciesGroupList({
+  species,
+  coordinates,
+}: {
+  species: CellData['species'];
+  coordinates: [number, number];
+}) {
   const groups = species.filter((s) => s.count > 0);
   if (groups.length === 0) return null;
+
+  const [lng, lat] = coordinates;
+  const inatUrl = `https://www.inaturalist.org/observations?lat=${lat}&lng=${lng}&radius=0.15`;
 
   return (
     <div className="flex flex-col gap-4">
       {groups.map((s) => (
-        <div key={s.type}>
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="text-[12px] font-medium text-[#1F2A1F]">
-              {SPECIES_LABELS[s.type]}
-            </span>
-            <span className="text-[11px] text-[#667066]">
-              {s.count} {s.count === 1 ? 'species' : 'species'}
-            </span>
-          </div>
-          {s.names && s.names.length > 0 ? (
-            <ul className="flex flex-col gap-1 pl-3 border-l-2 border-[#DDEAD8]">
-              {s.names.map((name) => (
-                <li key={name} className="text-[12px] text-[#667066] leading-snug">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[11px] text-[#A8B4A8] italic pl-3">
-              Species names will appear after the next pipeline export.
-            </p>
-          )}
+        <div key={s.type} className="flex items-baseline justify-between">
+          <span className="text-[12px] font-medium text-[#1F2A1F]">
+            {SPECIES_LABELS[s.type]}
+          </span>
+          <span className="text-[11px] text-[#667066]">
+            {s.count} {s.count === 1 ? 'species' : 'species'}
+          </span>
         </div>
       ))}
+      <a
+        href={inatUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[12px] text-[#2E6F40] underline underline-offset-2 hover:text-[#1F2A1F] mt-1"
+      >
+        See individual sightings on iNaturalist →
+      </a>
     </div>
   );
 }
@@ -570,7 +572,7 @@ export default function CellDetailPanel({
                     </div>
                   ))}
                 </div>
-                <SpeciesGroupList species={cell.species} />
+                <SpeciesGroupList species={cell.species} coordinates={cell.coordinates} />
               </Card>
             )}
 

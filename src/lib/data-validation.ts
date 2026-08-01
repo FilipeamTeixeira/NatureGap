@@ -44,15 +44,10 @@ function isLngLat(value: unknown): value is [number, number] {
 
 function isSpecies(value: unknown): value is Species {
   if (!isRecord(value)) return false;
-  const namesOk =
-    value.names === undefined ||
-    (Array.isArray(value.names) && value.names.every((n) => typeof n === 'string')) ||
-    typeof value.names === 'string';
   return (
     typeof value.type === 'string' &&
     SPECIES_TYPES.includes(value.type) &&
-    isNumber(value.count) &&
-    namesOk
+    isNumber(value.count)
   );
 }
 
@@ -127,17 +122,6 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
   if (!valid) throw new Error(`Invalid stats entry for ${id}`);
 }
 
-function normalizeSpeciesNames(species: Species[]): Species[] {
-  return species.map((s) => ({
-    ...s,
-    names: s.names
-      ? Array.isArray(s.names)
-        ? s.names
-        : [s.names]
-      : undefined,
-  }));
-}
-
 function normalizeCellStats(value: Record<string, unknown>): CellStatsFields {
   assertCellStats(value, 'entry');
   const stats = value as CellStatsFields;
@@ -145,7 +129,7 @@ function normalizeCellStats(value: Record<string, unknown>): CellStatsFields {
     ...stats,
     impactScore: stats.impactScore ?? 0,
     natureGapScore: stats.natureGapScore ?? null,
-    species: normalizeSpeciesNames(stats.species),
+    species: stats.species,
     pressures: normalizeStringArray(value.pressures),
   };
 }

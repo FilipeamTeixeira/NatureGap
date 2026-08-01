@@ -779,21 +779,14 @@ build_intervention <- function(cell_id, rank, action, composite, note, gain = NA
 # jsonlite::write_json needs scalars unboxed for some fields
 unbox <- function(x) x
 
-species_list <- function(plant, bird, insect, mammal, fungi, taxa = NULL) {
+species_list <- function(plant, bird, insect, mammal, fungi) {
   types <- c("plant", "bird", "insect", "mammal", "fungi")
   counts <- list(plant, bird, insect, mammal, fungi)
   lapply(seq_along(types), function(i) {
-    entry <- list(
+    list(
       type  = types[i],
       count = as.integer(replace_na(counts[[i]], 0L))
     )
-    if (!is.null(taxa)) {
-      nm <- taxa[[types[i]]]
-      if (!is.null(nm) && length(nm) > 0L) {
-        entry$names <- I(as.list(as.character(unlist(nm))))
-      }
-    }
-    entry
   })
 }
 
@@ -833,8 +826,6 @@ normalize_cell_taxa <- function(taxa) {
 
 cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
   hq <- replace_na(row$habitat_quality, 0)
-  local_id <- sub(paste0("^", CITY_ID, "-"), "", row$cell_id)
-  taxa <- normalize_cell_taxa(cell_taxa_lookup[[local_id]])
   nature_gap <- if (isTRUE(row$is_unsampled)) NA_real_ else round(replace_na(row$nature_gap_score, 0), 1)
   list(
     parkId               = row$park_id,
@@ -862,7 +853,7 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     ),
     taxonomicDiversity = round(replace_na(row$taxonomic_shannon, 0), 1),
     species            = species_list(
-      row$plant, row$bird, row$insect, row$mammal, row$fungi, taxa = taxa
+      row$plant, row$bird, row$insect, row$mammal, row$fungi
     ),
     corridorImportance = pct_index(row$corridor_importance),
     betweennessCentrality = pct_index(row$betweenness_centrality),
@@ -947,8 +938,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
       length(park_taxa$bird),
       length(park_taxa$insect),
       length(park_taxa$mammal),
-      length(park_taxa$fungi),
-      taxa = park_taxa
+      length(park_taxa$fungi)
     ),
     corridorImportance = pct_index(if (is.finite(patch_corridor)) patch_corridor else finite_max(rows$corridor_importance)),
     betweennessCentrality = pct_index(if (is.finite(patch_betweenness)) patch_betweenness else finite_max(rows$betweenness_centrality)),
@@ -1487,9 +1477,7 @@ if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
 cell_detail_attrs <- grid_all |>
   rowwise() |>
   mutate(
-    species = list(species_list(plant, bird, insect, mammal, fungi, taxa = normalize_cell_taxa(
-      cell_taxa_lookup[[sub(paste0("^", CITY_ID, "-"), "", cell_id)]]
-    ))),
+    species = list(species_list(plant, bird, insect, mammal, fungi)),
     pressures = list(derive_pressures(
       n_obs, n_survey_dates, observed_richness,
       expected_richness, ecological_residual,

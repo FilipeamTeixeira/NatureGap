@@ -29,8 +29,6 @@ export type SpeciesType = 'plant' | 'bird' | 'insect' | 'mammal' | 'fungi';
 export interface Species {
   type: SpeciesType;
   count: number;
-  /** Distinct taxon labels (common name + scientific name when available). */
-  names?: string[];
 }
 
 export interface Intervention {
