@@ -347,6 +347,53 @@ PROC_TOP_INTER    <- file.path(DATA_PROC, "top_interventions.csv")
 PROC_HABITAT_TIF  <- file.path(DATA_PROC, "habitat_quality.tif")
 PROC_CELL_TAXA    <- file.path(DATA_PROC, "cell_taxa.json")
 
+# ── Robust geometry helpers ────────────────────────────────────────────────────
+# st_intersection()/st_union() on real-world OSM geometry against the hex grid
+# can throw a GEOS TopologyException ("Ring edge missing") even when both
+# inputs pass st_is_valid() — this is a numerical precision issue in the
+# intersection algorithm itself (OSM coordinates carry far more decimal
+# precision than a 20m hex grid needs), not just an input-validity problem.
+# Snapping both operands to 1mm precision before validating fixes this in
+# nearly all cases; a zero-width buffer is a last-resort fallback that forces
+# GEOS to rebuild geometry topology from scratch. Use these in place of raw
+# st_intersection()/st_union() wherever hex cells meet OSM-derived polygons.
+geom_precision_snap <- function(x, snap_precision_m = 0.001) {
+  x |>
+    sf::st_set_precision(1 / snap_precision_m) |>
+    sf::st_make_valid()
+}
+
+safe_st_intersection <- function(x, y, snap_precision_m = 0.001, y_prepared = FALSE) {
+  x_safe <- geom_precision_snap(x, snap_precision_m)
+  # y_prepared lets callers reuse an already validity/precision-fixed y across
+  # many calls (e.g. the same hex grid) instead of repeating that work each time.
+  y_safe <- if (y_prepared) y else geom_precision_snap(y, snap_precision_m)
+  tryCatch(
+    sf::st_intersection(x_safe, y_safe),
+    error = function(e) {
+      message(
+        "[safe_st_intersection] failed after validity+precision fix: ",
+        conditionMessage(e), " — retrying with a zero-width buffer."
+      )
+      sf::st_intersection(sf::st_buffer(x_safe, 0), sf::st_buffer(y_safe, 0))
+    }
+  )
+}
+
+safe_st_union <- function(x, snap_precision_m = 0.001) {
+  x_safe <- geom_precision_snap(x, snap_precision_m)
+  tryCatch(
+    sf::st_union(x_safe),
+    error = function(e) {
+      message(
+        "[safe_st_union] failed after validity+precision fix: ",
+        conditionMessage(e), " — retrying with a zero-width buffer."
+      )
+      sf::st_union(sf::st_buffer(x_safe, 0))
+    }
+  )
+}
+
 # ── Mark config as loaded ─────────────────────────────────────────────────────
 # Each pipeline script checks for this flag before re-sourcing config.
 CONFIG_LOADED <- TRUE
