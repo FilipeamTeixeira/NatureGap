@@ -52,7 +52,7 @@ line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight 
   } else {
     lines$.weight <- default_weight
   }
-  inter <- suppressWarnings(safe_st_intersection(lines |> select(.weight), grid |> select(cell_id)))
+  inter <- suppressWarnings(safe_st_intersection(lines |> select(.weight), grid |> select(cell_id), y_prepared = TRUE))
   if (nrow(inter) == 0L) return(rep(0, nrow(grid)))
   inter$weighted_len_m <- as.numeric(st_length(inter)) * replace_na(inter$.weight, default_weight)
   density <- inter |>
@@ -120,7 +120,7 @@ polygon_area_by_cell <- function(polygons, grid) {
   if (nrow(polygons) == 0L) {
     return(tibble(cell_id = grid$cell_id, area_m2 = 0))
   }
-  inter <- suppressWarnings(safe_st_intersection(polygons, grid))
+  inter <- suppressWarnings(safe_st_intersection(polygons, grid, y_prepared = TRUE))
   if (nrow(inter) == 0L) {
     return(tibble(cell_id = grid$cell_id, area_m2 = 0))
   }
@@ -250,6 +250,9 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   grid <- st_make_grid(halo_extent, cellsize = cell_size, square = FALSE) |>
     st_as_sf() |>
     mutate(cell_id = row_number())
+  # Grid geometry never changes after this point; validate/snap it once and
+  # reuse for every OSM intersection below instead of repeating it per call.
+  grid_valid <- geom_precision_snap(grid |> select(cell_id))
 
   tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
   message(sprintf("[tile %s] start %s", tile_id, format(Sys.time(), "%H:%M:%S")))
@@ -405,7 +408,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   water_features <- bind_rows(water_lines, water_polygons)
 
   cell_area <- cell_size^2
-  green_area <- polygon_area_by_cell(green, grid)
+  green_area <- polygon_area_by_cell(green, grid_valid)
   grid <- grid |>
     left_join(green_area, by = "cell_id") |>
     mutate(
@@ -414,7 +417,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     ) |>
     select(-green_area_m2, -area_m2)
 
-  ground_veg_area <- polygon_area_by_cell(ground_veg, grid)
+  ground_veg_area <- polygon_area_by_cell(ground_veg, grid_valid)
   grid <- grid |>
     left_join(ground_veg_area, by = "cell_id") |>
     mutate(
@@ -423,7 +426,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     ) |>
     select(-ground_veg_area_m2, -area_m2)
 
-  water_poly_area <- polygon_area_by_cell(water_polygons, grid)
+  water_poly_area <- polygon_area_by_cell(water_polygons, grid_valid)
   grid <- grid |>
     left_join(water_poly_area, by = "cell_id") |>
     mutate(
@@ -433,7 +436,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     select(-water_poly_area_m2, -area_m2)
 
   if (nrow(paths) > 0L) {
-    inter <- suppressWarnings(safe_st_intersection(paths, grid))
+    inter <- suppressWarnings(safe_st_intersection(paths, grid_valid, y_prepared = TRUE))
     inter$len_m <- as.numeric(st_length(st_geometry(inter)))
     path_length <- inter |>
       st_drop_geometry() |>
@@ -457,8 +460,8 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   cell_area_ha <- as.numeric(st_area(grid)) / 10000
   if (nrow(roads) > 0L) roads$.road_weight <- road_weight(roads$highway)
 
-  road_density <- line_density_by_cell(roads, grid, ".road_weight")
-  rail_density <- line_density_by_cell(rail, grid, default_weight = 3)
+  road_density <- line_density_by_cell(roads, grid_valid, ".road_weight")
+  rail_density <- line_density_by_cell(rail, grid_valid, default_weight = 3)
   road_proximity <- distance_weighted_lines(
     roads, cell_centroids, 150, 60,
     if (nrow(roads) > 0L) roads$.road_weight else NULL
@@ -466,7 +469,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   rail_proximity <- distance_weighted_lines(rail, cell_centroids, 200, 80, rep(3, nrow(rail)))
   lamp_density <- point_density_by_cell(lamps, grid)
   lamp_proximity <- distance_weighted_points(lamps, cell_centroids, 80, 30)
-  lit_road_density <- line_density_by_cell(lit_roads, grid)
+  lit_road_density <- line_density_by_cell(lit_roads, grid_valid)
   path_density <- (grid$path_km * 1000) / pmax(cell_area_ha, 0.0001)
   amenity_proximity <- distance_weighted_points(amenities, cell_centroids, 120, 50)
   water_prox <- nearest_proximity(water_features, cell_centroids, 250)
@@ -667,8 +670,8 @@ load_obs_for_tiling <- function(crs_local) {
   }
 
   inat_std <- read_std(RAW_INAT, "inat", function(raw) {
-    if (!"common_name" %in% names(raw)) raw$common_name <- NA_character_
-    if (!"user.login" %in% names(raw)) raw[["user.login"]] <- NA_character_
+    if (!"common_name" %in% names(raw)) raw$common_name <- rep(NA_character_, nrow(raw))
+    if (!"user.login" %in% names(raw)) raw[["user.login"]] <- rep(NA_character_, nrow(raw))
     raw |>
       st_transform(crs_local) |>
       mutate(
@@ -684,9 +687,9 @@ load_obs_for_tiling <- function(crs_local) {
   })
 
   gbif_std <- read_std(RAW_GBIF, "gbif", function(raw) {
-    if (!"vernacularName" %in% names(raw)) raw$vernacularName <- NA_character_
-    if (!"class" %in% names(raw)) raw$class <- NA_character_
-    if (!"recordedBy" %in% names(raw)) raw$recordedBy <- NA_character_
+    if (!"vernacularName" %in% names(raw)) raw$vernacularName <- rep(NA_character_, nrow(raw))
+    if (!"class" %in% names(raw)) raw$class <- rep(NA_character_, nrow(raw))
+    if (!"recordedBy" %in% names(raw)) raw$recordedBy <- rep(NA_character_, nrow(raw))
     raw |>
       st_transform(crs_local) |>
       mutate(
@@ -711,7 +714,7 @@ load_obs_for_tiling <- function(crs_local) {
     file.exists(supabase_path)
   ) {
     raw <- st_read(supabase_path, quiet = TRUE)
-    if (!"observer_id" %in% names(raw)) raw$observer_id <- NA_character_
+    if (!"observer_id" %in% names(raw)) raw$observer_id <- rep(NA_character_, nrow(raw))
     raw |>
       st_transform(crs_local) |>
       mutate(

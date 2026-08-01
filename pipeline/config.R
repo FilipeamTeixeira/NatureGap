@@ -313,15 +313,19 @@ PROC_CELL_TAXA    <- file.path(DATA_PROC, "cell_taxa.json")
 # config.R rather than duplicated per-file — use these in place of raw
 # st_intersection()/st_union() wherever hex cells meet OSM-derived polygons.
 
-.geom_precision_snap <- function(x, snap_precision_m = 0.001) {
+# No leading dot: future/globals treats dot-prefixed names as hidden and
+# won't auto-export them to multisession workers.
+geom_precision_snap <- function(x, snap_precision_m = 0.001) {
   x |>
     sf::st_set_precision(1 / snap_precision_m) |>
     sf::st_make_valid()
 }
 
-safe_st_intersection <- function(x, y, snap_precision_m = 0.001) {
-  x_safe <- .geom_precision_snap(x, snap_precision_m)
-  y_safe <- .geom_precision_snap(y, snap_precision_m)
+safe_st_intersection <- function(x, y, snap_precision_m = 0.001, y_prepared = FALSE) {
+  x_safe <- geom_precision_snap(x, snap_precision_m)
+  # y_prepared lets callers reuse an already validity/precision-fixed y across
+  # many calls (e.g. the same hex grid) instead of repeating that work each time.
+  y_safe <- if (y_prepared) y else geom_precision_snap(y, snap_precision_m)
   tryCatch(
     sf::st_intersection(x_safe, y_safe),
     error = function(e) {
@@ -335,7 +339,7 @@ safe_st_intersection <- function(x, y, snap_precision_m = 0.001) {
 }
 
 safe_st_union <- function(x, snap_precision_m = 0.001) {
-  x_safe <- .geom_precision_snap(x, snap_precision_m)
+  x_safe <- geom_precision_snap(x, snap_precision_m)
   tryCatch(
     sf::st_union(x_safe),
     error = function(e) {
