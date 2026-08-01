@@ -434,7 +434,18 @@ export default function MapView({
         map.getCanvas().style.cursor = hexFeatures.length > 0 ? 'pointer' : '';
 
         const f = hexFeatures[0];
-        if (!f) return;
+        if (!f) {
+          // Leaving a tile onto empty map clears the popup — the 'park-area'
+          // handlers only fire while the cursor is over that layer.
+          const parkFeatures = map.getLayer('park-area')
+            ? map.queryRenderedFeatures(e.point, { layers: ['park-area'] })
+            : [];
+          if (parkFeatures.length === 0) {
+            popupRef.current?.remove();
+            popupRef.current = null;
+          }
+          return;
+        }
 
         const props = renderCellProperties(f.properties);
         if (!props) return;
