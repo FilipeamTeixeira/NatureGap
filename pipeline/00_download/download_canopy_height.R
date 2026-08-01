@@ -73,7 +73,10 @@ download_canopy_height <- function(bbox = BBOX_CITY,
   ))
   names(chm) <- "canopy_height_m"
 
-  writeRaster(chm, out_file, overwrite = TRUE, datatype = "FLT4S")
+  writeRaster(
+    chm, out_file, overwrite = TRUE, datatype = "FLT4S",
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
 
   message(sprintf(
     "Written: %s (%d × %d pixels at %.2fm)",

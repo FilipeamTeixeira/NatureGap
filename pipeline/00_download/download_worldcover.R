@@ -51,7 +51,10 @@ download_worldcover <- function(bbox = BBOX_CITY,
     bbox["ymax"]
   ))
 
-  writeRaster(wc, out_file, overwrite = TRUE)
+  writeRaster(
+    wc, out_file, overwrite = TRUE,
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
   message("Written: ", out_file)
   invisible(out_file)
 }

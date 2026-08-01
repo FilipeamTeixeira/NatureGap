@@ -43,7 +43,7 @@ empty_sf <- function(crs) {
   st_sf(geometry = st_sfc(crs = crs))
 }
 
-line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight = 1, cell_area_ha = NULL) {
+line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight = 1) {
   if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
   lines <- suppressWarnings(st_collection_extract(lines, "LINESTRING", warn = FALSE))
   if (nrow(lines) == 0L) return(rep(0, nrow(grid)))
@@ -61,11 +61,10 @@ line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight 
     summarise(weighted_len_m = sum(weighted_len_m), .groups = "drop")
   out <- rep(0, nrow(grid))
   out[match(density$cell_id, grid$cell_id)] <- density$weighted_len_m
-  if (is.null(cell_area_ha)) cell_area_ha <- as.numeric(st_area(grid)) / 10000
-  out / cell_area_ha
+  out / (as.numeric(st_area(grid)) / 10000)
 }
 
-point_density_by_cell <- function(points, grid, cell_area_ha = NULL) {
+point_density_by_cell <- function(points, grid) {
   if (nrow(points) == 0L) return(rep(0, nrow(grid)))
   points <- suppressWarnings(st_collection_extract(points, "POINT", warn = FALSE))
   if (nrow(points) == 0L) return(rep(0, nrow(grid)))
@@ -75,8 +74,7 @@ point_density_by_cell <- function(points, grid, cell_area_ha = NULL) {
   counts <- joined |> st_drop_geometry() |> count(cell_id, name = "n")
   out <- rep(0, nrow(grid))
   out[match(counts$cell_id, grid$cell_id)] <- counts$n
-  if (is.null(cell_area_ha)) cell_area_ha <- as.numeric(st_area(grid)) / 10000
-  out / cell_area_ha
+  out / (as.numeric(st_area(grid)) / 10000)
 }
 
 distance_weighted_points <- function(points, centroids, radius_m, decay_m) {
@@ -207,8 +205,8 @@ wkt_filter_from_sf <- function(x, crs_local = CRS_LOCAL) {
   st_as_text(st_as_sfc(bb), trim = TRUE)
 }
 
-filter_core_cells <- function(grid, core_polygon, centroids = NULL) {
-  if (is.null(centroids)) centroids <- suppressWarnings(st_centroid(grid))
+filter_core_cells <- function(grid, core_polygon) {
+  centroids <- suppressWarnings(st_centroid(grid))
   inside <- st_intersects(centroids, core_polygon, sparse = FALSE)[, 1L]
   grid[inside, , drop = FALSE]
 }
@@ -271,28 +269,28 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   if (file.exists(lc_path)) {
     lc <- crop_project_to_halo(lc_path, halo_extent, crs_local, method = "near", label = "landcover")
     if (!is.null(lc)) {
-    lc_vals <- terra::extract(lc, grid_vect)
-    lc_fracs <- lc_vals |>
-      as_tibble() |>
-      rename(row_idx = ID, lc_class = 2) |>
-      filter(!is.na(lc_class)) |>
-      group_by(row_idx) |>
-      summarise(
-        tree_fraction = mean(lc_class == WC_TREE),
-        shrub_fraction = mean(lc_class == WC_SHRUB),
-        grass_fraction = mean(lc_class == WC_GRASS),
-        built_fraction_wc = mean(lc_class == WC_BUILT),
-        green_fraction_wc = mean(lc_class %in% WC_GREEN),
-        water_fraction = mean(lc_class == WC_WATER),
-        .groups = "drop"
-      ) |>
-      mutate(cell_id = grid$cell_id[row_idx]) |>
-      select(-row_idx)
-    grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
-      mutate(across(
-        c(tree_fraction, shrub_fraction, grass_fraction, built_fraction_wc, green_fraction_wc, water_fraction),
-        \(x) replace_na(x, 0)
-      ))
+      lc_vals <- terra::extract(lc, grid_vect)
+      lc_fracs <- lc_vals |>
+        as_tibble() |>
+        rename(row_idx = ID, lc_class = 2) |>
+        filter(!is.na(lc_class)) |>
+        group_by(row_idx) |>
+        summarise(
+          tree_fraction = mean(lc_class == WC_TREE),
+          shrub_fraction = mean(lc_class == WC_SHRUB),
+          grass_fraction = mean(lc_class == WC_GRASS),
+          built_fraction_wc = mean(lc_class == WC_BUILT),
+          green_fraction_wc = mean(lc_class %in% WC_GREEN),
+          water_fraction = mean(lc_class == WC_WATER),
+          .groups = "drop"
+        ) |>
+        mutate(cell_id = grid$cell_id[row_idx]) |>
+        select(-row_idx)
+      grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
+        mutate(across(
+          c(tree_fraction, shrub_fraction, grass_fraction, built_fraction_wc, green_fraction_wc, water_fraction),
+          \(x) replace_na(x, 0)
+        ))
     } else {
       grid <- grid |> mutate(
         tree_fraction = NA_real_, shrub_fraction = NA_real_, grass_fraction = NA_real_,
@@ -470,16 +468,16 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   if (nrow(rail) > 0L) rail <- suppressWarnings(st_collection_extract(rail, "LINESTRING", warn = FALSE))
   if (nrow(lamps) > 0L) lamps <- suppressWarnings(st_collection_extract(lamps, "POINT", warn = FALSE))
 
-  road_density <- line_density_by_cell(roads, grid_valid, ".road_weight", cell_area_ha = cell_area_ha)
-  rail_density <- line_density_by_cell(rail, grid_valid, default_weight = 3, cell_area_ha = cell_area_ha)
+  road_density <- line_density_by_cell(roads, grid_valid, ".road_weight")
+  rail_density <- line_density_by_cell(rail, grid_valid, default_weight = 3)
   road_proximity <- distance_weighted_lines(
     roads, cell_centroids, 150, 60,
     if (nrow(roads) > 0L) roads$.road_weight else NULL
   )
   rail_proximity <- distance_weighted_lines(rail, cell_centroids, 200, 80, rep(3, nrow(rail)))
-  lamp_density <- point_density_by_cell(lamps, grid, cell_area_ha = cell_area_ha)
+  lamp_density <- point_density_by_cell(lamps, grid)
   lamp_proximity <- distance_weighted_points(lamps, cell_centroids, 80, 30)
-  lit_road_density <- line_density_by_cell(lit_roads, grid_valid, cell_area_ha = cell_area_ha)
+  lit_road_density <- line_density_by_cell(lit_roads, grid_valid)
   path_density <- (grid$path_km * 1000) / pmax(cell_area_ha, 0.0001)
   amenity_proximity <- distance_weighted_points(amenities, cell_centroids, 120, 50)
   water_prox <- nearest_proximity(water_features, cell_centroids, 250)
@@ -583,8 +581,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   }
 
   # ── Keep core cells only ──────────────────────────────────────────────────
-  # grid geometry/row order is unchanged since cell_centroids was computed above.
-  core_out <- filter_core_cells(grid, core_local, centroids = cell_centroids) |>
+  core_out <- filter_core_cells(grid, core_local) |>
     mutate(tile_id = tile_id)
 
   message(sprintf("[tile %s] done %s (%d core cells)", tile_id, format(Sys.time(), "%H:%M:%S"), nrow(core_out)))
@@ -811,7 +808,8 @@ run_tiled_processing <- function(force = FALSE) {
       writeRaster(
         project(rast(canopy_path), CRS_LOCAL, method = "bilinear"),
         canopy_local_path,
-        overwrite = TRUE
+        overwrite = TRUE,
+        gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
       )
     } else {
       message("[tile_processing] Reusing cached ", basename(canopy_local_path))
@@ -832,7 +830,16 @@ run_tiled_processing <- function(force = FALSE) {
   workers <- suppressWarnings(as.integer(Sys.getenv("TILED_WORKERS", unset = "")))
   if (is.na(workers) || workers < 1L) {
     workers <- max(1L, parallel::detectCores() - 1L)
-    if (!is.null(cfg$CANOPY_LOCAL_PATH)) workers <- min(workers, 4L)
+    canopy_active <- is.character(cfg$CANOPY_LOCAL_PATH) && !is.na(cfg$CANOPY_LOCAL_PATH)
+    if (canopy_active) {
+      # Memory-safety cap when large pre-projected rasters are in play —
+      # scales with available cores instead of a hard 4, so this doesn't
+      # needlessly throttle machines with more headroom. Was previously
+      # checking !is.null(cfg$CANOPY_LOCAL_PATH), which is always TRUE (the
+      # unset default is NA_character_, not NULL) — so this cap silently
+      # applied on every run regardless of whether canopy was even in use.
+      workers <- min(workers, max(4L, parallel::detectCores() %/% 2L))
+    }
   }
   message(sprintf("[tile_processing] Processing %d tiles with %d workers…", nrow(core_tiles), workers))
   plan(multisession, workers = workers)

@@ -41,7 +41,10 @@ download_landsat_temp <- function(bbox = BBOX_CITY,
   st_celsius <- st_kelvin - 273.15
   names(st_celsius) <- "lst_celsius"
 
-  writeRaster(st_celsius, out_file, overwrite = TRUE)
+  writeRaster(
+    st_celsius, out_file, overwrite = TRUE,
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
   message("Written: ", out_file)
   invisible(out_file)
 }

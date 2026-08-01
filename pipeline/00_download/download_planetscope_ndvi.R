@@ -214,7 +214,10 @@ download_planetscope_ndvi <- function(bbox = BBOX_CITY,
     unname(bbox["ymin"]), unname(bbox["ymax"])
   ))
 
-  writeRaster(ndvi, out_file, overwrite = TRUE, datatype = "FLT4S")
+  writeRaster(
+    ndvi, out_file, overwrite = TRUE, datatype = "FLT4S",
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
   unlink(tmp_tif)
 
   message(sprintf(

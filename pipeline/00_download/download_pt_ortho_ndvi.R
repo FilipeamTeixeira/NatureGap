@@ -139,7 +139,10 @@ download_pt_ortho_ndvi <- function(bbox = BBOX_CITY, out_file = PT_ORTHO_NDVI_FI
   ndvi <- (mosaic[[1]] - mosaic[[2]]) / (mosaic[[1]] + mosaic[[2]])
   names(ndvi) <- "pt_ortho_ndvi_dn"
 
-  writeRaster(ndvi, out_file, overwrite = TRUE, datatype = "FLT4S")
+  writeRaster(
+    ndvi, out_file, overwrite = TRUE, datatype = "FLT4S",
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
 
   message(sprintf(
     "Written: %s (%d x %d px at %.2fm, CRS %s)",
