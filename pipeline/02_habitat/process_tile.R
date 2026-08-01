@@ -260,13 +260,16 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   # ── Rasters (crop to halo bbox) ───────────────────────────────────────────
   # Halo must be in crs_local when cropping an already-projected raster.
   halo_vect <- terra::vect(st_as_sf(halo_extent))
+  # grid geometry is unchanged through the raster block below; convert once
+  # instead of re-converting sf -> SpatVector for every terra::extract() call.
+  grid_vect <- vect(grid)
 
   lc_path <- cfg$RAW_LANDCOVER %||% RAW_LANDCOVER
   message(sprintf("[tile %s] RAW_LANDCOVER path: %s (exists: %s)", tile_id, lc_path, file.exists(lc_path)))
   if (file.exists(lc_path)) {
     lc <- crop_project_to_halo(lc_path, halo_extent, crs_local, method = "near", label = "landcover")
     if (!is.null(lc)) {
-    lc_vals <- terra::extract(lc, vect(grid))
+    lc_vals <- terra::extract(lc, grid_vect)
     lc_fracs <- lc_vals |>
       as_tibble() |>
       rename(row_idx = ID, lc_class = 2) |>
@@ -305,7 +308,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   if (file.exists(imp_path)) {
     imp <- crop_project_to_halo(imp_path, halo_extent, crs_local, method = "bilinear", label = "impervious")
     if (!is.null(imp)) {
-      imp_mean <- terra::extract(imp, vect(grid), fun = mean, na.rm = TRUE)
+      imp_mean <- terra::extract(imp, grid_vect, fun = mean, na.rm = TRUE)
       grid$impervious_fraction <- replace_na(imp_mean[[2]], 0)
     } else {
       grid$impervious_fraction <- NA_real_
@@ -321,7 +324,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   if (file.exists(ndvi_path)) {
     ndvi <- crop_project_to_halo(ndvi_path, halo_extent, crs_local, method = "bilinear", label = "ndvi")
     if (!is.null(ndvi)) {
-      ndvi_mean <- terra::extract(ndvi, vect(grid), fun = mean, na.rm = TRUE)
+      ndvi_mean <- terra::extract(ndvi, grid_vect, fun = mean, na.rm = TRUE)
       grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
       grid$ndvi_idx <- fixed_rescale01(grid$ndvi_mean, -0.2, 1.0)
     }
@@ -343,7 +346,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
       crop_project_to_halo(canopy_path, halo_extent, crs_local, method = "bilinear", label = "canopy_height")
     }
     if (!is.null(canopy_height)) {
-      canopy_height_mean <- terra::extract(canopy_height, vect(grid), fun = mean, na.rm = TRUE)
+      canopy_height_mean <- terra::extract(canopy_height, grid_vect, fun = mean, na.rm = TRUE)
       grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
       grid$canopy_height_idx <- fixed_rescale01(grid$canopy_height_m, 0, 30)
     }
@@ -355,7 +358,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   if (file.exists(lst_path)) {
     lst <- crop_project_to_halo(lst_path, halo_extent, crs_local, method = "bilinear", label = "lst")
     if (!is.null(lst)) {
-      lst_mean <- terra::extract(lst, vect(grid), fun = mean, na.rm = TRUE)
+      lst_mean <- terra::extract(lst, grid_vect, fun = mean, na.rm = TRUE)
       grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
     }
   }
@@ -459,6 +462,11 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   cell_centroids <- suppressWarnings(st_centroid(grid))
   cell_area_ha <- as.numeric(st_area(grid)) / 10000
   if (nrow(roads) > 0L) roads$.road_weight <- road_weight(roads$highway)
+  # Pre-extract once; both the density and proximity helpers below would
+  # otherwise each redo this same LINESTRING/POINT extraction independently.
+  if (nrow(roads) > 0L) roads <- suppressWarnings(st_collection_extract(roads, "LINESTRING", warn = FALSE))
+  if (nrow(rail) > 0L) rail <- suppressWarnings(st_collection_extract(rail, "LINESTRING", warn = FALSE))
+  if (nrow(lamps) > 0L) lamps <- suppressWarnings(st_collection_extract(lamps, "POINT", warn = FALSE))
 
   road_density <- line_density_by_cell(roads, grid_valid, ".road_weight")
   rail_density <- line_density_by_cell(rail, grid_valid, default_weight = 3)
@@ -502,8 +510,8 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   )
 
   if (!is.null(obs_tile) && nrow(obs_tile) > 0L && nrow(grid) > 0L) {
-    grid_centroids <- suppressWarnings(st_centroid(grid))
-    nearest_idx <- st_nearest_feature(obs_tile, grid_centroids)
+    # grid geometry hasn't changed since cell_centroids was computed above.
+    nearest_idx <- st_nearest_feature(obs_tile, cell_centroids)
     obs_joined <- obs_tile |>
       mutate(
         cell_id = grid$cell_id[nearest_idx],
