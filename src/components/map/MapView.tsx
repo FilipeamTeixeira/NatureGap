@@ -71,7 +71,7 @@ interface MapViewProps {
   onSurveyPointSelect?: (id: string, coordinates: [number, number]) => void;
 }
 
-const DETAIL_ZOOM = 14;
+const DETAIL_ZOOM = 13;
 
 export default function MapView({
   layers,
