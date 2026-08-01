@@ -52,7 +52,7 @@ line_density_by_cell <- function(lines, grid, weight_col = NULL, default_weight 
   } else {
     lines$.weight <- default_weight
   }
-  inter <- suppressWarnings(st_intersection(lines |> select(.weight), grid |> select(cell_id)))
+  inter <- suppressWarnings(safe_st_intersection(lines |> select(.weight), grid |> select(cell_id)))
   if (nrow(inter) == 0L) return(rep(0, nrow(grid)))
   inter$weighted_len_m <- as.numeric(st_length(inter)) * replace_na(inter$.weight, default_weight)
   density <- inter |>
@@ -120,7 +120,7 @@ polygon_area_by_cell <- function(polygons, grid) {
   if (nrow(polygons) == 0L) {
     return(tibble(cell_id = grid$cell_id, area_m2 = 0))
   }
-  inter <- suppressWarnings(st_intersection(polygons, grid))
+  inter <- suppressWarnings(safe_st_intersection(polygons, grid))
   if (nrow(inter) == 0L) {
     return(tibble(cell_id = grid$cell_id, area_m2 = 0))
   }
@@ -433,7 +433,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     select(-water_poly_area_m2, -area_m2)
 
   if (nrow(paths) > 0L) {
-    inter <- suppressWarnings(st_intersection(paths, grid))
+    inter <- suppressWarnings(safe_st_intersection(paths, grid))
     inter$len_m <- as.numeric(st_length(st_geometry(inter)))
     path_length <- inter |>
       st_drop_geometry() |>
@@ -837,6 +837,7 @@ run_tiled_processing <- function(force = FALSE) {
 
   combined <- bind_rows(tile_results)
   combined <- finish_citywide_metrics(combined)
+
   assign("combined", combined, envir = .tiled_cache)
   assign("obs_all", obs_all, envir = .tiled_cache)
   saveRDS(combined, cache_path)
