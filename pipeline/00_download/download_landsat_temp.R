@@ -71,6 +71,8 @@ download_landsat_temp <- function(bbox = BBOX_CITY,
   for (i in seq_along(lst_urls)) {
     if (is.na(lst_urls[i]) || is.na(qa_urls[i])) next
 
+    message(sprintf("[LST] Processing scene %d/%d...", i, length(lst_urls)))
+
     scene_result <- tryCatch({
       lst_r <- rast(lst_urls[i])
       qa_r  <- rast(qa_urls[i])

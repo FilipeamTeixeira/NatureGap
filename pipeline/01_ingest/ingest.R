@@ -867,6 +867,15 @@ if (config_path_exists(LST_FILE)) {
   lst_source <- LST_FILE
 } else if (config_path_exists(LST_DIR)) {
   matches <- list.files(LST_DIR, pattern = LST_BAND_PATTERN, full.names = TRUE)
+  # LST_DIR is shared across every city processed on this machine, and
+  # LST_BAND_PATTERN matches any lst_*.tif with no city filtering — without
+  # this check, a stale lst_<other_city>.tif left over from a previous run
+  # gets silently picked up for the wrong city. Exclude any city-tagged file
+  # that isn't this city's own; untagged raw scenes (e.g. manually-placed
+  # *_ST_B10.TIF) are unaffected, since those were never city-tagged anyway.
+  wrong_city_lst <- grepl("^lst_.*\\.tif$", basename(matches), ignore.case = TRUE) &
+    !grepl(paste0("^lst_", CITY_ID, "\\.tif$"), basename(matches), ignore.case = TRUE)
+  matches <- matches[!wrong_city_lst]
   if (length(matches) > 0L) lst_source <- matches[1]
 }
 
