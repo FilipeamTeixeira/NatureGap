@@ -242,14 +242,27 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   crs_local <- cfg$CRS_LOCAL %||% CRS_LOCAL
   cell_size <- cfg$CELL_SIZE %||% CELL_SIZE
   halo_m <- cfg$halo_m %||% halo_m
+  hex_grid_origin <- cfg$HEX_GRID_ORIGIN %||% HEX_GRID_ORIGIN
 
   core_local <- st_transform(st_as_sf(core_polygon), crs_local)
   halo_extent <- st_buffer(core_local, dist = halo_m)
   wkt_filter <- wkt_filter_from_sf(halo_extent, crs_local)
 
-  grid <- st_make_grid(halo_extent, cellsize = cell_size, square = FALSE) |>
-    st_as_sf() |>
-    mutate(cell_id = row_number())
+  # offset is fixed city-wide (not derived from this tile's own halo bbox) so
+  # every tile's hexagons share one lattice phase and tile seamlessly.
+  grid <- st_make_grid(halo_extent, cellsize = cell_size, square = FALSE, offset = hex_grid_origin) |>
+    st_as_sf()
+
+  # row_number() is only unique within this tile's own halo grid — two tiles
+  # can independently produce the same integer for two different physical
+  # hexes. Key on the (now lattice-aligned) centroid instead, so the same
+  # physical hex always gets the same id no matter which tile built it.
+  centroid_xy <- suppressWarnings(st_coordinates(st_centroid(grid)))
+  grid$cell_id <- sprintf(
+    "h%.0f_%.0f",
+    round(centroid_xy[, "X"] * 1000),
+    round(centroid_xy[, "Y"] * 1000)
+  )
   # Grid geometry never changes after this point; validate/snap it once and
   # reuse for every OSM intersection below instead of repeating it per call.
   grid_valid <- geom_precision_snap(grid |> select(cell_id))
@@ -825,6 +838,7 @@ run_tiled_processing <- function(force = FALSE) {
     CRS_LOCAL = CRS_LOCAL,
     CELL_SIZE = CELL_SIZE,
     halo_m = halo_m,
+    HEX_GRID_ORIGIN = HEX_GRID_ORIGIN,
     RAW_LANDCOVER = RAW_LANDCOVER,
     RAW_IMPERVIOUS = RAW_IMPERVIOUS,
     RAW_NDVI = RAW_NDVI,

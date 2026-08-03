@@ -108,7 +108,7 @@ bbox_sf <- st_bbox(
   st_as_sfc() |>
   st_transform(CRS_LOCAL)
 
-hex_cells <- st_make_grid(bbox_sf, cellsize = 20, square = FALSE) |>
+hex_cells <- st_make_grid(bbox_sf, cellsize = 20, square = FALSE, offset = HEX_GRID_ORIGIN) |>
   st_as_sf() |>
   mutate(cell_id = row_number())
 

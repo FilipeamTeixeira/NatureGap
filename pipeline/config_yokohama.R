@@ -217,6 +217,20 @@ CRS_LOCAL <- "EPSG:6674"
 
 CELL_SIZE <- 20   # metres
 
+# Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
+# process_tile.R (per-tile halo grid) must both offset from this exact point,
+# or adjacent tiles' hexagons fall out of phase and leave a seam along every
+# core_tiles.gpkg boundary.
+HEX_GRID_ORIGIN <- sf::st_bbox(
+  sf::st_transform(
+    sf::st_as_sfc(sf::st_bbox(c(
+      xmin = unname(BBOX_CITY["xmin"]), ymin = unname(BBOX_CITY["ymin"]),
+      xmax = unname(BBOX_CITY["xmax"]), ymax = unname(BBOX_CITY["ymax"])
+    ), crs = 4326)),
+    CRS_LOCAL
+  )
+)[c("xmin", "ymin")]
+
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.
 # Used in residuals.R and exported to the frontend for transparency.
