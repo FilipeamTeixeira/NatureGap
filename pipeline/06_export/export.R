@@ -1333,10 +1333,17 @@ park_interventions <- top |>
   )
 park_intervention_lookup <- setNames(park_interventions$interventions, park_interventions$park_id)
 
-# Keep unmapped-but-vegetated hexes (park_id NA, already passed habitat_quality > 0
-# above) for hex-level display; only the "no park data at all" fallback is dropped.
+# Keep unmapped hexes only if they carry real measured vegetation cover — the
+# same >= 0.10 tree/green-fraction presence bar residuals.R already uses to
+# flag low-vegetation cells (see "Increase canopy and green cover" above).
+# habitat_quality > 0 is NOT a vegetation test: it blends in lst_idx and
+# disturbance_idx, both continuous and rarely exactly 0, so nearly every cell
+# in the city clears it regardless of actual tree/shrub/grass cover.
 hexgrid_render <- grid |>
-  filter(is.na(park_id) | park_id != "city-green")
+  filter(
+    (!is.na(park_id) & park_id != "city-green") |
+      coalesce(tree_fraction, shrub_fraction, grass_fraction, green_fraction_wc, 0) >= 0.10
+  )
 
 if (!is.null(green)) {
   metric_park_ids <- unique(hexgrid_render$park_id)
