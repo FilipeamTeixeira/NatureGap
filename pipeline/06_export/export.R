@@ -1333,8 +1333,10 @@ park_interventions <- top |>
   )
 park_intervention_lookup <- setNames(park_interventions$interventions, park_interventions$park_id)
 
+# Keep unmapped-but-vegetated hexes (park_id NA, already passed habitat_quality > 0
+# above) for hex-level display; only the "no park data at all" fallback is dropped.
 hexgrid_render <- grid |>
-  filter(!is.na(park_id), park_id != "city-green")
+  filter(is.na(park_id) | park_id != "city-green")
 
 if (!is.null(green)) {
   metric_park_ids <- unique(hexgrid_render$park_id)
@@ -1347,7 +1349,7 @@ if (!is.null(green)) {
 }
 
 cat(sprintf(
-  "  → PMTiles render grid: %d / %d cells inside named green spaces\n",
+  "  → PMTiles render grid: %d / %d cells retained (named green spaces + unmapped vegetated hexes)\n",
   nrow(hexgrid_render), nrow(grid)
 ))
 

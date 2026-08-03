@@ -254,6 +254,17 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   # reuse for every OSM intersection below instead of repeating it per call.
   grid_valid <- geom_precision_snap(grid |> select(cell_id))
 
+  # Local-only metrics (landcover, NDVI, canopy, LST, impervious) don't need
+  # halo context at all — a hex's own habitat quality doesn't depend on its
+  # neighbors. Only connectivity/path density genuinely needs the full halo.
+  # Since adjacent tiles' halos overlap heavily (~3x core area at current
+  # tile_size_m/halo_m), computing these for the full halo grid means a lot
+  # of redundant work gets thrown away when filter_core_cells() runs at the
+  # end anyway. Restrict extraction to core cells only; halo-only rows stay
+  # NA for these columns, which is fine since they get discarded regardless.
+  core_grid <- filter_core_cells(grid, core_local)
+  core_vect <- vect(core_grid)
+
   tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
   message(sprintf("[tile %s] start %s", tile_id, format(Sys.time(), "%H:%M:%S")))
 
@@ -267,9 +278,13 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   lc_path <- cfg$RAW_LANDCOVER %||% RAW_LANDCOVER
   message(sprintf("[tile %s] RAW_LANDCOVER path: %s (exists: %s)", tile_id, lc_path, file.exists(lc_path)))
   if (file.exists(lc_path)) {
+    t_crop <- proc.time()
     lc <- crop_project_to_halo(lc_path, halo_extent, crs_local, method = "near", label = "landcover")
+    message(sprintf("[tile %s] landcover crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(lc)) {
-      lc_vals <- terra::extract(lc, grid_vect)
+      t_extract <- proc.time()
+      lc_vals <- terra::extract(lc, core_vect)
+      message(sprintf("[tile %s] landcover extract (%d core cells): %.1fs", tile_id, nrow(core_grid), (proc.time() - t_extract)[["elapsed"]]))
       lc_fracs <- lc_vals |>
         as_tibble() |>
         rename(row_idx = ID, lc_class = 2) |>
@@ -284,7 +299,7 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
           water_fraction = mean(lc_class == WC_WATER),
           .groups = "drop"
         ) |>
-        mutate(cell_id = grid$cell_id[row_idx]) |>
+        mutate(cell_id = core_grid$cell_id[row_idx]) |>
         select(-row_idx)
       grid <- grid |> left_join(lc_fracs, by = "cell_id") |>
         mutate(across(
@@ -306,10 +321,15 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
 
   imp_path <- cfg$RAW_IMPERVIOUS %||% RAW_IMPERVIOUS
   if (file.exists(imp_path)) {
+    t_crop <- proc.time()
     imp <- crop_project_to_halo(imp_path, halo_extent, crs_local, method = "bilinear", label = "impervious")
+    message(sprintf("[tile %s] impervious crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(imp)) {
-      imp_mean <- terra::extract(imp, grid_vect, fun = mean, na.rm = TRUE)
-      grid$impervious_fraction <- replace_na(imp_mean[[2]], 0)
+      t_extract <- proc.time()
+      imp_mean <- terra::extract(imp, core_vect, fun = mean, na.rm = TRUE)
+      message(sprintf("[tile %s] impervious extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
+      grid$impervious_fraction <- NA_real_
+      grid$impervious_fraction[match(core_grid$cell_id, grid$cell_id)] <- replace_na(imp_mean[[2]], 0)
     } else {
       grid$impervious_fraction <- NA_real_
     }
@@ -322,11 +342,16 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   ndvi_path <- cfg$RAW_NDVI %||% RAW_NDVI
   message(sprintf("[tile %s] RAW_NDVI path: %s (exists: %s)", tile_id, ndvi_path, file.exists(ndvi_path)))
   if (file.exists(ndvi_path)) {
+    t_crop <- proc.time()
     ndvi <- crop_project_to_halo(ndvi_path, halo_extent, crs_local, method = "bilinear", label = "ndvi")
+    message(sprintf("[tile %s] ndvi crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(ndvi)) {
-      ndvi_mean <- terra::extract(ndvi, grid_vect, fun = mean, na.rm = TRUE)
-      grid$ndvi_mean <- replace_na(ndvi_mean[[2]], NA_real_)
-      grid$ndvi_idx <- fixed_rescale01(grid$ndvi_mean, -0.2, 1.0)
+      t_extract <- proc.time()
+      ndvi_mean <- terra::extract(ndvi, core_vect, fun = mean, na.rm = TRUE)
+      message(sprintf("[tile %s] ndvi extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
+      idx <- match(core_grid$cell_id, grid$cell_id)
+      grid$ndvi_mean[idx] <- replace_na(ndvi_mean[[2]], NA_real_)
+      grid$ndvi_idx[idx] <- fixed_rescale01(grid$ndvi_mean[idx], -0.2, 1.0)
     }
   }
 
@@ -340,15 +365,20 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   ))
   if (is.character(canopy_path) && !is.na(canopy_path) && file.exists(canopy_path)) {
     canopy_local_path <- cfg$CANOPY_LOCAL_PATH %||% NA_character_
+    t_crop <- proc.time()
     canopy_height <- if (is.character(canopy_local_path) && !is.na(canopy_local_path) && file.exists(canopy_local_path)) {
       safe_crop(rast(canopy_local_path), halo_vect, label = "canopy_height")
     } else {
       crop_project_to_halo(canopy_path, halo_extent, crs_local, method = "bilinear", label = "canopy_height")
     }
+    message(sprintf("[tile %s] canopy_height crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(canopy_height)) {
-      canopy_height_mean <- terra::extract(canopy_height, grid_vect, fun = mean, na.rm = TRUE)
-      grid$canopy_height_m <- replace_na(canopy_height_mean[[2]], NA_real_)
-      grid$canopy_height_idx <- fixed_rescale01(grid$canopy_height_m, 0, 30)
+      t_extract <- proc.time()
+      canopy_height_mean <- terra::extract(canopy_height, core_vect, fun = mean, na.rm = TRUE)
+      message(sprintf("[tile %s] canopy_height extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
+      idx <- match(core_grid$cell_id, grid$cell_id)
+      grid$canopy_height_m[idx] <- replace_na(canopy_height_mean[[2]], NA_real_)
+      grid$canopy_height_idx[idx] <- fixed_rescale01(grid$canopy_height_m[idx], 0, 30)
     }
   }
 
@@ -356,10 +386,15 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   lst_path <- cfg$RAW_LST %||% RAW_LST
   message(sprintf("[tile %s] RAW_LST path: %s (exists: %s)", tile_id, lst_path, file.exists(lst_path)))
   if (file.exists(lst_path)) {
+    t_crop <- proc.time()
     lst <- crop_project_to_halo(lst_path, halo_extent, crs_local, method = "bilinear", label = "lst")
+    message(sprintf("[tile %s] lst crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(lst)) {
-      lst_mean <- terra::extract(lst, grid_vect, fun = mean, na.rm = TRUE)
-      grid$lst_celsius <- replace_na(lst_mean[[2]], NA_real_)
+      t_extract <- proc.time()
+      lst_mean <- terra::extract(lst, core_vect, fun = mean, na.rm = TRUE)
+      message(sprintf("[tile %s] lst extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
+      idx <- match(core_grid$cell_id, grid$cell_id)
+      grid$lst_celsius[idx] <- replace_na(lst_mean[[2]], NA_real_)
     }
   }
 
@@ -838,7 +873,7 @@ run_tiled_processing <- function(force = FALSE) {
       # checking !is.null(cfg$CANOPY_LOCAL_PATH), which is always TRUE (the
       # unset default is NA_character_, not NULL) — so this cap silently
       # applied on every run regardless of whether canopy was even in use.
-      workers <- min(workers, max(4L, parallel::detectCores() %/% 2L))
+      workers <- min(workers, max(6L, parallel::detectCores() %/% 2L))
     }
   }
   message(sprintf("[tile_processing] Processing %d tiles with %d workers…", nrow(core_tiles), workers))
