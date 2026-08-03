@@ -128,33 +128,13 @@ CITY_ID      <- "yokohama-honmoku"
 CITY_NAME    <- "Honmoku, Yokohama"
 CITY_COUNTRY <- "Japan"
 
-
-# ── Spatial extent (WGS84) ────────────────────────────────────────────────────
-# BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
-# BBOX_FETCH — the window for iNaturalist / GBIF API calls.
-#              Can be wider than BBOX_CITY to capture edge observations.
-
-BBOX_CITY <- c(
-  xmin = 139.640415,
-  ymin = 35.415460,
-  xmax = 139.672859,
-  ymax = 35.430148
-)
-
-BBOX_FETCH <- c(
-  xmin = unname(BBOX_CITY["xmin"]) - 0.004,
-  ymin = unname(BBOX_CITY["ymin"]) - 0.004,
-  xmax = unname(BBOX_CITY["xmax"]) + 0.004,
-  ymax = unname(BBOX_CITY["ymax"]) + 0.004
-)   # slightly wider than analysis domain to capture edge observations
-
 # ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
 city <- "yokohama-honmoku"
-regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "japan-latest.osm.pbf")
+regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", "kanto-latest.osm.pbf")
 
-aoi_mode <- "bbox"            # "relation" or "bbox"
-# relation_id <- 2697888L       # Yokohama — uncomment + set aoi_mode <- "relation"
-bbox <- BBOX_CITY             # study area is Honmoku neighbourhood
+aoi_mode <- "relation"            # "relation" or "bbox"
+relation_id <- c(2689447L)       # Yokohama — uncomment + set aoi_mode <- "relation"
+#bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # fallback — uncomment + set aoi_mode <- "bbox"
 
 halo_m <- 750                 # buffer used for tile halos (Task 3)
 tile_size_m <- 2000           # core tile edge length before buffering
@@ -170,18 +150,42 @@ aoi <- load_city_aoi(
   aoi_mode = aoi_mode,
   boundaries_dir = BOUNDARIES_DIR,
   relation_id = if (aoi_mode == "relation" && exists("relation_id")) relation_id else NULL,
-  bbox = if (aoi_mode == "bbox") bbox else NULL
+  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL
 )
 
 if (!file.exists(regional_pbf)) {
   warning("[config] regional_pbf not found: ", regional_pbf, call. = FALSE)
 }
 
+# ── Spatial extent (WGS84) ────────────────────────────────────────────────────
+# BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
+# BBOX_FETCH — the window for iNaturalist / GBIF API calls.
+#              Can be wider than BBOX_CITY to capture edge observations.
+# Derived from aoi's own extent (not hardcoded) so raster downloads, which are
+# all bbox-scoped, cover the same area build_core_tiles() clips from the
+# relation — otherwise tiles outside a smaller hardcoded box get no raster
+# data and drop out of habitat_quality entirely.
+
+aoi_bbox <- sf::st_bbox(sf::st_transform(aoi, 4326))
+BBOX_CITY <- c(
+  xmin = unname(aoi_bbox["xmin"]),
+  ymin = unname(aoi_bbox["ymin"]),
+  xmax = unname(aoi_bbox["xmax"]),
+  ymax = unname(aoi_bbox["ymax"])
+)
+
+BBOX_FETCH <- c(
+  xmin = unname(BBOX_CITY["xmin"]) - 0.004,
+  ymin = unname(BBOX_CITY["ymin"]) - 0.004,
+  xmax = unname(BBOX_CITY["xmax"]) + 0.004,
+  ymax = unname(BBOX_CITY["ymax"]) + 0.004
+)   # slightly wider than analysis domain to capture edge observations
+
 # ── Observation ingest ────────────────────────────────────────────────────────
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
 # Fetched via api.inaturalist.org (rinat does not support needs_id).
 INAT_QUALITY_GRADES <- c("research", "needs_id")
-INAT_MAX_RESULTS    <- 10000L   # total cap for bbox pagination
+INAT_MAX_RESULTS    <- 30000L   # total cap for bbox pagination
 GBIF_MAX_RESULTS    <- 10000L
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
