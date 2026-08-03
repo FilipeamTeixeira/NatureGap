@@ -602,9 +602,9 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
         pivot_wider(names_from = taxon_name, values_from = n, values_fill = 0) |>
         column_to_rownames("cell_id")
       shannon <- vegan::diversity(species_matrix, index = "shannon")
-      diversity_df <- tibble(cell_id = as.integer(rownames(species_matrix)), species_shannon = shannon)
+      diversity_df <- tibble(cell_id = rownames(species_matrix), species_shannon = shannon)
     } else {
-      diversity_df <- tibble(cell_id = integer(), species_shannon = numeric())
+      diversity_df <- tibble(cell_id = character(), species_shannon = numeric())
     }
 
     taxon_counts <- obs_joined |>
