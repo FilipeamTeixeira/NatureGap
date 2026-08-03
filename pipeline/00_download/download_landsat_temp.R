@@ -74,6 +74,8 @@ download_landsat_temp <- function(bbox = BBOX_CITY,
     message(sprintf("[LST] Processing scene %d/%d...", i, length(lst_urls)))
 
     scene_result <- tryCatch({
+      setTimeLimit(elapsed = 120, transient = TRUE)
+
       lst_r <- rast(lst_urls[i])
       qa_r  <- rast(qa_urls[i])
 
@@ -87,29 +89,37 @@ download_landsat_temp <- function(bbox = BBOX_CITY,
       lst_r[bad] <- NA
 
       lst_c <- lst_r * LST_DN_SCALE + LST_DN_OFFSET - 273.15
-
       n_valid <- global(!is.na(lst_c), "sum", na.rm = TRUE)[1, 1]
-      if (is.na(n_valid) || n_valid == 0) return(NULL)
 
-      # Per-scene spatial anomaly relative to this scene's own valid
-      # study-area pixels, so date-to-date weather differences cancel out
-      # rather than dominating the composite.
-      scene_mean <- global(lst_c, "mean", na.rm = TRUE)[1, 1]
-      anomaly <- lst_c - scene_mean
-      names(anomaly) <- "lst_anomaly_c"
-
-      if (is.null(ref_template)) {
-        ref_template <- rast(anomaly)
+      # NB: no return() here — this block is evaluated directly in
+      # download_landsat_temp()'s own frame (tryCatch doesn't introduce a
+      # new function scope), so return() would exit the whole function, not
+      # just this scene. The if/else result is the block's value instead.
+      if (is.na(n_valid) || n_valid == 0) {
+        NULL
       } else {
-        anomaly <- resample(anomaly, ref_template, method = "bilinear")
+        # Per-scene spatial anomaly relative to this scene's own valid
+        # study-area pixels, so date-to-date weather differences cancel out
+        # rather than dominating the composite.
+        scene_mean <- global(lst_c, "mean", na.rm = TRUE)[1, 1]
+        anomaly <- lst_c - scene_mean
+        names(anomaly) <- "lst_anomaly_c"
+
+        if (is.null(ref_template)) {
+          ref_template <- rast(anomaly)
+        } else {
+          anomaly <- resample(anomaly, ref_template, method = "bilinear")
+        }
+        anomaly
       }
-      anomaly
     }, error = function(err) {
       message(sprintf(
         "[LST] Skipping scene %d/%d (%s): %s",
         i, length(lst_urls), basename(lst_urls[i]), conditionMessage(err)
       ))
       NULL
+    }, finally = {
+      setTimeLimit(elapsed = Inf, transient = FALSE)
     })
 
     if (!is.null(scene_result)) {

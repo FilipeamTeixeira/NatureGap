@@ -182,7 +182,7 @@ if (!file.exists(regional_pbf)) {
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
 # Fetched via api.inaturalist.org (rinat does not support needs_id).
 INAT_QUALITY_GRADES <- c("research", "needs_id")
-INAT_MAX_RESULTS    <- 10000L   # total cap for bbox pagination
+INAT_MAX_RESULTS    <- 30000L   # total cap for bbox pagination
 GBIF_MAX_RESULTS    <- 10000L
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
