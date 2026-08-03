@@ -319,6 +319,16 @@ LST_BAND_PATTERN  <- "(^[Ll][Ss][Tt]_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
 
+# Sub-windows of the same growing season used for Sentinel-2 NDVI
+# (2023-04-01–2023-09-30, see download_sentinel2.R). Split into seasons so a
+# single unusual weather event on one acquisition date can't dominate the
+# thermal composite — each window is queried and processed independently.
+LST_SEASON_WINDOWS <- c(
+  "2023-04-01/2023-05-31",  # spring
+  "2023-06-01/2023-08-31",  # summer
+  "2023-09-01/2023-09-30"   # early autumn
+)
+
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
 # data/raw/ is shared for source rasters; city-specific outputs live under

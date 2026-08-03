@@ -186,20 +186,6 @@ CRS_LOCAL <- "EPSG:6674"
 
 CELL_SIZE <- 20   # metres
 
-# Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
-# process_tile.R (per-tile halo grid) must both offset from this exact point,
-# or adjacent tiles' hexagons fall out of phase and leave a seam along every
-# core_tiles.gpkg boundary.
-HEX_GRID_ORIGIN <- sf::st_bbox(
-  sf::st_transform(
-    sf::st_as_sfc(sf::st_bbox(c(
-      xmin = unname(BBOX_CITY["xmin"]), ymin = unname(BBOX_CITY["ymin"]),
-      xmax = unname(BBOX_CITY["xmax"]), ymax = unname(BBOX_CITY["ymax"])
-    ), crs = 4326)),
-    CRS_LOCAL
-  )
-)[c("xmin", "ymin")]
-
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.
 # Used in residuals.R and exported to the frontend for transparency.
@@ -265,6 +251,16 @@ LST_DIR           <- file.path(DATA_IMPORT, "landsat")
 LST_BAND_PATTERN  <- "(^[Ll][Ss][Tt]_.*\\.tif$|ST_B10\\.TIF$)"
 LST_DN_SCALE      <- 0.00341802
 LST_DN_OFFSET     <- 149
+
+# Sub-windows of the same growing season used for Sentinel-2 NDVI
+# (2023-04-01–2023-09-30, see download_sentinel2.R). Split into seasons so a
+# single unusual weather event on one acquisition date can't dominate the
+# thermal composite — each window is queried and processed independently.
+LST_SEASON_WINDOWS <- c(
+  "2023-04-01/2023-05-31",  # spring
+  "2023-06-01/2023-08-31",  # summer
+  "2023-09-01/2023-09-30"   # early autumn
+)
 
 # ── Derived data paths ────────────────────────────────────────────────────────
 # Each city gets its own sub-folder so cities never overwrite each other's data.
