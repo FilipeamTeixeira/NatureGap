@@ -165,14 +165,14 @@ osm_tag_from_other <- function(other_tags, key) {
 }
 
 read_osm_layer <- function(pbf_path, layer, wkt_filter = NULL) {
-  if (!file.exists(pbf_path)) return(empty_sf(4326))
+  if (!file.exists(pbf_path)) return(empty_sf(CRS_LOCAL))
   args <- list(dsn = pbf_path, layer = layer, quiet = TRUE, int64_as_string = TRUE)
   if (!is.null(wkt_filter)) args$wkt_filter <- wkt_filter
-  out <- tryCatch(do.call(st_read, args), error = function(e) empty_sf(4326))
-  if (nrow(out) == 0L) return(empty_sf(4326))
+  out <- tryCatch(do.call(st_read, args), error = function(e) empty_sf(CRS_LOCAL))
+  if (nrow(out) == 0L) return(empty_sf(CRS_LOCAL))
   out <- st_make_valid(out)
   out <- out[!st_is_empty(out), , drop = FALSE]
-  if (nrow(out) == 0L) return(empty_sf(4326))
+  if (nrow(out) == 0L) return(empty_sf(CRS_LOCAL))
   if ("other_tags" %in% names(out)) {
     for (col in c("highway", "railway", "leisure", "landuse", "natural", "amenity", "lit", "waterway")) {
       if (!col %in% names(out)) out[[col]] <- NA_character_
@@ -185,19 +185,32 @@ read_osm_layer <- function(pbf_path, layer, wkt_filter = NULL) {
   st_transform(out, CRS_LOCAL)
 }
 
+# read_osm_layer() only backfills tag columns when its OGR read returns rows;
+# a tile with zero features of a layer (e.g. open water/bay) comes back with
+# just a geometry column, so downstream filter(leisure %in% ...) etc. would
+# error on a missing column instead of just matching zero rows.
+ensure_tag_cols <- function(x, cols) {
+  for (col in cols) {
+    if (!col %in% names(x)) x[[col]] <- rep(NA_character_, nrow(x))
+  }
+  x
+}
+
 read_osm_lines <- function(pbf_path, wkt_filter) {
   bind_rows(
     read_osm_layer(pbf_path, "lines", wkt_filter),
     read_osm_layer(pbf_path, "multilinestrings", wkt_filter)
-  )
+  ) |> ensure_tag_cols(c("highway", "railway", "lit", "waterway"))
 }
 
 read_osm_polygons <- function(pbf_path, wkt_filter) {
-  read_osm_layer(pbf_path, "multipolygons", wkt_filter)
+  read_osm_layer(pbf_path, "multipolygons", wkt_filter) |>
+    ensure_tag_cols(c("leisure", "natural", "landuse", "amenity"))
 }
 
 read_osm_points <- function(pbf_path, wkt_filter) {
-  read_osm_layer(pbf_path, "points", wkt_filter)
+  read_osm_layer(pbf_path, "points", wkt_filter) |>
+    ensure_tag_cols(c("highway", "amenity"))
 }
 
 wkt_filter_from_sf <- function(x, crs_local = CRS_LOCAL) {
