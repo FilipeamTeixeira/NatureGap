@@ -71,9 +71,22 @@ validate_render_fields <- function(value) {
   invisible(TRUE)
 }
 
-write_geojson <- function(value, output_path) {
+write_geojson <- function(value, output_path, precise = TRUE) {
   if (file.exists(output_path)) unlink(output_path)
-  st_write(value, output_path, delete_dsn = FALSE)
+  # GDAL's default GeoJSON coordinate precision is far higher than this
+  # project needs — 7 decimal degrees is ~1.1cm at the equator, safely more
+  # precise than anything meaningful at 20m hex resolution, but every vertex
+  # in every hex/park/water polygon carries that many fewer digits. This is
+  # the single shared write point for every GeoJSON this pipeline produces,
+  # so this one change applies everywhere at once. Explicit precision control
+  # is measurably slower than GDAL's default fast path (per-coordinate
+  # rounding vs. raw double-to-string) — precise = FALSE skips it for
+  # throwaway writes where only the byte count is used, not the file itself.
+  if (precise) {
+    st_write(value, output_path, delete_dsn = FALSE, layer_options = "COORDINATE_PRECISION=7")
+  } else {
+    st_write(value, output_path, delete_dsn = FALSE)
+  }
 }
 
 # Supabase Storage file limit — chunk outputs above this size (bytes).
@@ -148,7 +161,7 @@ write_json_chunked <- function(obj, output_path, ...) {
 
 write_geojson_chunked <- function(value, output_path) {
   tmp <- tempfile(fileext = ".geojson")
-  write_geojson(value, tmp)
+  write_geojson(value, tmp, precise = FALSE)  # content discarded below, only the byte count matters
   total_size <- file.info(tmp)$size
 
   if (total_size <= MAX_UPLOAD_BYTES) {
@@ -264,7 +277,12 @@ write_hexgrid_pmtiles <- function(value, output_path) {
 
   tmp <- tempfile(fileext = ".geojson")
   on.exit(unlink(tmp), add = TRUE)
-  write_geojson(value, tmp)
+  # tippecanoe re-quantizes every coordinate into its own tile-relative
+  # integer system, so the source GeoJSON's coordinate precision has no
+  # effect on the final PMTiles output — precision control here is pure
+  # wasted formatting cost on what's likely the largest dataset in the
+  # pipeline, for zero benefit.
+  write_geojson(value, tmp, precise = FALSE)
 
   tmp_pmtiles <- tempfile(fileext = ".pmtiles")
   on.exit(unlink(tmp_pmtiles), add = TRUE)
@@ -280,7 +298,13 @@ write_hexgrid_pmtiles <- function(value, output_path) {
     "--no-feature-limit",
     "--no-tile-size-limit",
     "--no-tiny-polygon-reduction",
-    "--minimum-zoom", "0",
+    # Matches the frontend's own minzoom on this source (src/components/map/
+    # MapView.tsx: DETAIL_ZOOM = 14) — MapLibre never requests tiles below
+    # that, so generating zoom 0-13 was pure wasted storage/upload/transfer,
+    # and likely a disproportionately large chunk of it: at low zoom the
+    # whole city fits in a handful of tiles, and with simplification
+    # disabled those few tiles were cramming in every hex at full detail.
+    "--minimum-zoom", "14",
     "--maximum-zoom", "18",
     tmp
   )
