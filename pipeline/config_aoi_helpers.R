@@ -1,4 +1,4 @@
-# Shared AOI helpers — sourced by city config files (config_porto.R, etc.)
+# Shared AOI helpers — sourced by config.R once a city file has been loaded.
 
 ring_to_geojson_coords <- function(ring) {
   lapply(seq_len(nrow(ring)), function(i) as.numeric(ring[i, ]))

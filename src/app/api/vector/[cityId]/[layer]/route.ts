@@ -25,11 +25,32 @@ type ChunkManifest = {
   chunks: unknown[];
 };
 
+// 'hex-cells' is deliberately absent. Hex geometry renders from
+// hexgrid.pmtiles, and per-cell attributes come from the sharded cell-details
+// lookup in lib/cell-detail.ts — nothing needs this route to serve them.
+// cell_attributes.geojson is the full ecological export (450 MB across 13
+// chunks for yokohama-honmoku), so answering a request here would merge every
+// chunk into a single function response: one unauthenticated GET would exhaust
+// a large share of the Storage egress budget and almost certainly exceed
+// function memory. Keep hex cells out of the chunk-merging path entirely.
 const LAYER_FILES = {
   'green-spaces': { fileName: 'parks.geojson', manifestName: null },
-  'hex-cells': { fileName: 'cell_attributes.geojson', manifestName: 'cell_attributes.manifest.json' },
   'corridor-links': { fileName: 'corridor-links.geojson', manifestName: 'corridor-links.manifest.json' },
-} as const satisfies Record<VectorLayer, { fileName: string; manifestName: string | null }>;
+} as const satisfies Partial<Record<VectorLayer, { fileName: string; manifestName: string | null }>>;
+
+type ServableLayer = keyof typeof LAYER_FILES;
+
+function isServableLayer(value: VectorLayer): value is ServableLayer {
+  return value in LAYER_FILES;
+}
+
+// Backstop for the same failure mode on any layer that does get served: a
+// manifest is an untrusted input here, and loadStorageGeoJSON fans out over it
+// with Promise.all. Chunking only kicks in above 45 MB per part, so a
+// legitimate corridor-links export is a single file — anything past this cap
+// means the export grew large enough that merging it in one response is no
+// longer safe.
+const MAX_MERGE_CHUNKS = 4;
 
 function isSafeCityId(value: string): boolean {
   return /^[a-z0-9][a-z0-9-]*$/i.test(value);
@@ -66,7 +87,7 @@ function mergeFeatureCollections(parts: unknown[]): GeoJSON.FeatureCollection | 
   return features.length > 0 ? { type: 'FeatureCollection', features } : null;
 }
 
-async function loadStorageGeoJSON(cityId: string, layer: VectorLayer): Promise<GeoJSON.FeatureCollection | null> {
+async function loadStorageGeoJSON(cityId: string, layer: ServableLayer): Promise<GeoJSON.FeatureCollection | null> {
   const dataset = (await listActivePipelineDatasets()).find((item) => item.cityId === cityId);
   if (!dataset) return null;
 
@@ -76,13 +97,24 @@ async function loadStorageGeoJSON(cityId: string, layer: VectorLayer): Promise<G
     const chunkManifest = await fetchStorageJson(chunkManifestPath);
     if (isChunkManifest(chunkManifest) && chunkManifest.chunks.length > 0) {
       const basePath = dirname(chunkManifestPath);
-      const chunks = await Promise.all(chunkManifest.chunks
+      const chunkPaths = chunkManifest.chunks
         .map((chunk) => asString(chunk))
-        .filter((chunk): chunk is string => chunk !== null)
-        .map((chunk) => fetchStorageJson(joinPath(basePath, basename(chunk)))));
+        .filter((chunk): chunk is string => chunk !== null);
 
-      const merged = mergeFeatureCollections(chunks);
-      if (merged) return merged;
+      if (chunkPaths.length > MAX_MERGE_CHUNKS) {
+        // The unchunked file is removed once an export is split, so falling
+        // through here normally ends in a 404 rather than a partial answer.
+        console.error(
+          `[api/vector] Refusing to merge ${chunkPaths.length} chunks for ${cityId}/${layer} `
+          + `(cap ${MAX_MERGE_CHUNKS}); falling back to unchunked ${fileName}.`,
+        );
+      } else {
+        const chunks = await Promise.all(chunkPaths
+          .map((chunk) => fetchStorageJson(joinPath(basePath, basename(chunk)))));
+
+        const merged = mergeFeatureCollections(chunks);
+        if (merged) return merged;
+      }
     }
   }
 
@@ -90,7 +122,7 @@ async function loadStorageGeoJSON(cityId: string, layer: VectorLayer): Promise<G
   return isFeatureCollection(data) ? data : null;
 }
 
-async function loadGeoJSON(cityId: string, layer: VectorLayer): Promise<GeoJSON.FeatureCollection | null> {
+async function loadGeoJSON(cityId: string, layer: ServableLayer): Promise<GeoJSON.FeatureCollection | null> {
   return loadStorageGeoJSON(cityId, layer);
 }
 
@@ -106,6 +138,16 @@ export async function GET(
 
   if (!isVectorLayer(layer)) {
     return NextResponse.json({ error: 'Unknown vector layer' }, { status: 404 });
+  }
+
+  if (!isServableLayer(layer)) {
+    return NextResponse.json(
+      {
+        error: 'Vector layer is not served by this endpoint',
+        detail: 'Hex cells render from hexgrid.pmtiles; per-cell attributes come from the cell-details shards.',
+      },
+      { status: 404 },
+    );
   }
 
   const geojson = await loadGeoJSON(cityId, layer);

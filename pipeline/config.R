@@ -1,15 +1,25 @@
-# NatureGap — City configuration
+# NatureGap — Shared pipeline configuration
 #
-# Edit this file to analyse a new area, then run run_pipeline.R.
-# Every city-specific variable lives here; the pipeline scripts read them
-# and never need to be edited themselves.
+# Everything that is identical for every city lives in this file. The handful of
+# values that actually change per city live in one small file each under
+# pipeline/cities/ (CITY_ID, CRS, OSM relation, regional PBF, extra downloaders).
 #
-# To add a second city:
-#   1. Copy this file to e.g. config_amsterdam.R
-#   2. Edit all values below
-#   3. Run: source("pipeline/config_amsterdam.R"); source("pipeline/run_pipeline.R")
+# Run a city:
+#   CITY <- "porto-center"
+#   source("config.R")
+#   source("run_pipeline.R")
+#
+#   # or from the shell, without editing anything:
+#   NATUREGAP_CITY=porto-center Rscript run_pipeline.R
+#
+# Add a city:
+#   1. Copy pipeline/cities/porto-center.R to pipeline/cities/<city-id>.R
+#   2. Edit the values in it (nothing else needs editing)
+#   3. Run it as above
 
 library(here)
+library(sf)
+library(jsonlite)
 
 # pipeline.Rproj lives in pipeline/, so here() may be the pipeline folder or the
 # repo root. Resolve paths from the directory that contains 01_ingest/.
@@ -115,29 +125,101 @@ for (env_file in c(
 
 DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 
-# ── City identity ─────────────────────────────────────────────────────────────
-# CITY_ID must be a stable slug — it is used as a primary-key prefix in
-# Supabase and as the folder name in Storage (pipeline-export/<CITY_ID>/).
-# Changing it later means migrating existing database rows.
-
 #START_STEP <- 1
 
-CITY_ID      <- "yokohama-honmoku"
-CITY_NAME    <- "Honmoku, Yokohama"
-CITY_COUNTRY <- "Japan"
+# ── City selection ────────────────────────────────────────────────────────────
+# The city is chosen by the CITY variable if it is already defined, otherwise by
+# the NATUREGAP_CITY environment variable, otherwise DEFAULT_CITY. CITY is the
+# file name (without .R) under pipeline/cities/ and matches CITY_ID.
 
+CITIES_DIR   <- file.path(PIPELINE_ROOT, "cities")
+DEFAULT_CITY <- "yokohama-honmoku"
+
+CITY <- local({
+  if (exists("CITY", envir = globalenv(), inherits = FALSE)) {
+    slug <- get("CITY", envir = globalenv())
+    if (is.character(slug) && length(slug) == 1L && nzchar(slug)) return(slug)
+  }
+  slug <- trimws(Sys.getenv("NATUREGAP_CITY", unset = ""))
+  if (nzchar(slug)) slug else DEFAULT_CITY
+})
+
+CITY_FILE <- file.path(CITIES_DIR, paste0(CITY, ".R"))
+if (!file.exists(CITY_FILE)) {
+  stop(sprintf(
+    "Unknown city '%s'. Available: %s",
+    CITY,
+    paste(sub("\\.R$", "", list.files(CITIES_DIR, pattern = "\\.R$")), collapse = ", ")
+  ), call. = FALSE)
+}
+
+# Drop optional values left behind by a previously loaded city, so switching
+# cities in one R session cannot inherit the previous city's settings.
+local({
+  optional <- c("relation_id", "bbox", "BBOX_CITY", "halo_m", "tile_size_m",
+                "RASTER_DOWNLOADERS_EXTRA")
+  stale <- intersect(optional, ls(envir = globalenv()))
+  if (length(stale)) rm(list = stale, envir = globalenv())
+})
+
+source(CITY_FILE)
+
+local({
+  required <- c("CITY_ID", "CITY_NAME", "CITY_COUNTRY", "CRS_LOCAL", "city",
+                "REGIONAL_PBF", "aoi_mode")
+  missing <- required[!vapply(required, exists, logical(1))]
+  if (length(missing)) {
+    stop(sprintf("%s does not define: %s", CITY_FILE, paste(missing, collapse = ", ")),
+         call. = FALSE)
+  }
+})
+
+# ── OSM regional extract (aoi + osmium) ───────────────────────────────────────
+# The AOI polygon drives tiling (01_ingest/tile_registry.R) and the analysis
+# bounding box below. Boundaries are cached under data/boundaries/.
+
+if (!exists("halo_m"))      halo_m      <- 750    # buffer used for tile halos
+if (!exists("tile_size_m")) tile_size_m <- 2000   # core tile edge length before buffering
+
+regional_pbf <- file.path(PIPELINE_ROOT, "data", "raw", "regional", REGIONAL_PBF)
+
+BOUNDARIES_DIR <- file.path(PIPELINE_ROOT, "data", "boundaries")
+dir.create(BOUNDARIES_DIR, recursive = TRUE, showWarnings = FALSE)
+if (!exists("CONFIG_AOI_HELPERS_LOADED")) {
+  source(file.path(PIPELINE_ROOT, "config_aoi_helpers.R"))
+}
+
+aoi <- load_city_aoi(
+  city = city,
+  aoi_mode = aoi_mode,
+  boundaries_dir = BOUNDARIES_DIR,
+  relation_id = if (aoi_mode == "relation" && exists("relation_id")) relation_id else NULL,
+  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL
+)
+
+if (!file.exists(regional_pbf)) {
+  warning("[config] regional_pbf not found: ", regional_pbf, call. = FALSE)
+}
 
 # ── Spatial extent (WGS84) ────────────────────────────────────────────────────
 # BBOX_CITY  — the analysis domain; the hex grid is built inside this box.
 # BBOX_FETCH — the window for iNaturalist / GBIF API calls.
 #              Can be wider than BBOX_CITY to capture edge observations.
+# Derived from aoi's own extent (not hardcoded) so raster downloads, which are
+# all bbox-scoped, cover the same area build_core_tiles() clips from the
+# relation — otherwise tiles outside a smaller hardcoded box get no raster
+# data and drop out of habitat_quality entirely. A city file may still set
+# BBOX_CITY itself to analyse a sub-area of its AOI.
 
-BBOX_CITY <- c(
-  xmin = 139.640415,
-  ymin = 35.415460,
-  xmax = 139.672859,
-  ymax = 35.430148
-)
+if (!exists("BBOX_CITY")) {
+  aoi_bbox <- sf::st_bbox(sf::st_transform(aoi, 4326))
+  BBOX_CITY <- c(
+    xmin = unname(aoi_bbox["xmin"]),
+    ymin = unname(aoi_bbox["ymin"]),
+    xmax = unname(aoi_bbox["xmax"]),
+    ymax = unname(aoi_bbox["ymax"])
+  )
+}
 
 BBOX_FETCH <- c(
   xmin = unname(BBOX_CITY["xmin"]) - 0.004,
@@ -150,7 +232,7 @@ BBOX_FETCH <- c(
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
 # Fetched via api.inaturalist.org (rinat does not support needs_id).
 INAT_QUALITY_GRADES <- c("research", "needs_id")
-INAT_MAX_RESULTS    <- 10000L   # total cap for bbox pagination
+INAT_MAX_RESULTS    <- 30000L   # total cap for bbox pagination
 GBIF_MAX_RESULTS    <- 10000L
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
@@ -170,21 +252,25 @@ OVERPASS_QUERY_DELAY  <- 20L   # pause between successive Overpass queries
 # Re-use existing OSM extracts on re-runs instead of hitting Overpass again.
 OSM_SKIP_IF_EXISTS   <- TRUE
 
-# ── Local projection ──────────────────────────────────────────────────────────
-# Use a metre-based CRS for your analysis area:
-#   Japan          EPSG:6674  (JGD2011 / Japan Plane Rectangular CS VI)
-#   Western Europe EPSG:3035  (ETRS89-LAEA)
-#   UK             EPSG:27700 (British National Grid)
-#   US (general)   EPSG:5070  (Albers Equal-Area Conic)
-#   UTM zones      EPSG:32600 + zone number (e.g. 32654 for Yokohama)
-
-CRS_LOCAL <- "EPSG:6674"
-
 # ── Grid resolution ───────────────────────────────────────────────────────────
 # Primary spatial unit. All modelling, analysis, storage, and display use this
 # single 20 m hex grid; do not introduce secondary analytical grid resolutions.
 
 CELL_SIZE <- 20   # metres
+
+# Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
+# process_tile.R (per-tile halo grid) must both offset from this exact point,
+# or adjacent tiles' hexagons fall out of phase and leave a seam along every
+# core_tiles.gpkg boundary.
+HEX_GRID_ORIGIN <- sf::st_bbox(
+  sf::st_transform(
+    sf::st_as_sfc(sf::st_bbox(c(
+      xmin = unname(BBOX_CITY["xmin"]), ymin = unname(BBOX_CITY["ymin"]),
+      xmax = unname(BBOX_CITY["xmax"]), ymax = unname(BBOX_CITY["ymax"])
+    ), crs = 4326)),
+    CRS_LOCAL
+  )
+)[c("xmin", "ymin")]
 
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.
@@ -204,16 +290,35 @@ SPECIES_AREA_C <- 12
 # ── Input raster files ────────────────────────────────────────────────────────
 # Raster inputs are downloaded/prepared by the scripts listed below before
 # ingest reads them. Shared raster inputs live under pipeline/data/raw/.
+# A city adds optional sources (canopy height, PlanetScope) through
+# RASTER_DOWNLOADERS_EXTRA in its own file.
 
 AUTO_DOWNLOAD_RASTER_INPUTS <- TRUE
+
+if (!exists("RASTER_DOWNLOADERS_EXTRA")) RASTER_DOWNLOADERS_EXTRA <- character(0)
 
 RASTER_INPUT_DOWNLOADERS <- file.path(
   PIPELINE_ROOT,
   c(
     "00_download/download_worldcover.R",
     "00_download/download_sentinel2.R",
-    "00_download/download_landsat_temp.R"
+    "00_download/download_landsat_temp.R",
+    RASTER_DOWNLOADERS_EXTRA
   )
+)
+
+# PLANETSCOPE NDVI Data
+
+PLANET_NDVI_FILE <- file.path(
+  DATA_IMPORT, "planetscope",
+  paste0("planet_ndvi_", CITY_ID, ".tif")
+)
+
+# CANOPY HEIGHT META/WRI Data
+
+CANOPY_HEIGHT_FILE <- file.path(
+  DATA_IMPORT, "canopy_height",
+  paste0("canopy_height_", CITY_ID, ".tif")
 )
 
 WC_FILE <- file.path(
@@ -222,9 +327,9 @@ WC_FILE <- file.path(
 )
 
 # EMC-BUILT (Copernicus impervious surface fraction):
-#   Download manually: https://human-settlement.emergency.copernicus.eu/
+#   Download manually: https://human-settlement.emergency.copernicus.eu/dataDownload.php?ds=EMCbuiltS
 #   File name expected by the pipeline: EMC_CITY_ID.tif
-#   Example: EMC_yokohama-honmoku.tif
+#   Example: EMC_porto-center.tif
 
 EMC_FILE <- file.path(
   PIPELINE_ROOT, "data", "raw", "emc_built",
@@ -366,5 +471,5 @@ safe_st_union <- function(x, snap_precision_m = 0.001) {
 # Each pipeline script checks for this flag before re-sourcing config.
 CONFIG_LOADED <- TRUE
 
-message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s",
-                CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID))
+message(sprintf("[config] City: %s (%s) | Cell size: %d m | CITY_ID: %s | aoi_mode: %s",
+                CITY_NAME, CRS_LOCAL, CELL_SIZE, CITY_ID, aoi_mode))

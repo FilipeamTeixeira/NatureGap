@@ -2,7 +2,7 @@
 #
 # Builds path-network betweenness over the full AOI (not per tile).
 # Run on an independent schedule:
-#   source("pipeline/config_porto.R")
+#   CITY <- "porto-center"; source("pipeline/config.R")
 #   source("pipeline/04_connectivity/connectivity.R")
 #
 # Skips automatically when the path network fingerprint is unchanged.
