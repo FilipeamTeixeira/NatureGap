@@ -46,6 +46,7 @@ import {
   hexOutlineLayerId,
   hexSelectedLayerId,
   refreshHexLayers,
+  cityIdForViewport,
   cityIdFromHexLayerId,
   selectedHexFilter,
   setHexDatasets,
@@ -69,9 +70,15 @@ interface MapViewProps {
   surveyPointsGeoJSON?: GeoJSON.FeatureCollection;
   selectedSurveyPointId?: string | null;
   onSurveyPointSelect?: (id: string, coordinates: [number, number]) => void;
+  /** Fires when the view moves over a different city's exported extent. */
+  onViewCityChange?: (cityId: string | undefined) => void;
 }
 
-const DETAIL_ZOOM = 13;
+// Must match --minimum-zoom in pipeline/06_export/export.R: the hexgrid
+// PMTiles archives contain no tiles below this zoom, so lowering it here
+// alone leaves a band where patch fills are already off (layer maxzoom is
+// exclusive) and no hex tiles exist yet.
+const DETAIL_ZOOM = 14;
 
 export default function MapView({
   layers,
@@ -85,6 +92,7 @@ export default function MapView({
   surveyPointsGeoJSON,
   selectedSurveyPointId,
   onSurveyPointSelect,
+  onViewCityChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -97,6 +105,8 @@ export default function MapView({
   const structuredSurveysRef = useRef<GeoJSON.FeatureCollection | undefined>(structuredSurveysGeoJSON);
   const surveyPointsRef = useRef<GeoJSON.FeatureCollection | undefined>(surveyPointsGeoJSON);
   const displayCityIdRef = useRef(displayCityId ?? CITY.id);
+  const onViewCityChangeRef = useRef(onViewCityChange);
+  const viewCityIdRef = useRef<string | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
   const enabledLayerIds = getEnabledLayerIds(layers);
   const activeThematic = activeThematicLayerId(layers);
@@ -123,6 +133,10 @@ export default function MapView({
   }, [onSurveyPointSelect]);
 
   useEffect(() => {
+    onViewCityChangeRef.current = onViewCityChange;
+  }, [onViewCityChange]);
+
+  useEffect(() => {
     structuredSurveysRef.current = structuredSurveysGeoJSON;
     surveyPointsRef.current = surveyPointsGeoJSON;
   }, [structuredSurveysGeoJSON, surveyPointsGeoJSON]);
@@ -143,6 +157,14 @@ export default function MapView({
     });
 
     mapRef.current = map;
+
+    const reportViewCity = () => {
+      const cityId = cityIdForViewport(map);
+      if (cityId === viewCityIdRef.current) return;
+      viewCityIdRef.current = cityId;
+      onViewCityChangeRef.current?.(cityId);
+    };
+
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
@@ -267,6 +289,9 @@ export default function MapView({
         await fitMapToPmtilesDatasets(map, activeHexDatasets);
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
+        // Datasets only become known here, so the initial view has to be
+        // re-evaluated once — 'moveend' has already fired by this point.
+        reportViewCity();
 
         const hexSourcesStyled = new Set<string>();
         const onHexSourceData = (event: maplibregl.MapSourceDataEvent) => {
@@ -353,6 +378,8 @@ export default function MapView({
         setMapZoom(map.getZoom());
       });
       setMapZoom(map.getZoom());
+
+      map.on('moveend', reportViewCity);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.addSource('ward-labels', { type: 'geojson', data: wardCentroidsGeoJSON() as any });

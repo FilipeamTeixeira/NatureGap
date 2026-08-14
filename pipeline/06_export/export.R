@@ -71,8 +71,38 @@ validate_render_fields <- function(value) {
   invisible(TRUE)
 }
 
+# Storage products are gzipped. These are text formats that repeat every key
+# name on every one of ~250k features, so they compress 20-35x: uncompressed,
+# a single city's export (0.25-0.8 GB) exceeds the entire Supabase free-tier
+# storage budget, and one porto page load moves 16.6 MB of egress. Compression
+# is not a speed tradeoff — writing 1.6 MB instead of 35 MB saves more I/O time
+# than the compression costs, so gzipped writes measured *faster* than plain
+# ones. Supabase Storage serves stored bytes verbatim with no Content-Encoding
+# negotiation, so readers decompress explicitly and the ".gz" suffix is the
+# signal that they must (see fetchStorageJson in src/lib/pipeline-manifest.ts).
+#
+# Manifests and current.json stay uncompressed: they are the bootstrap that
+# tells a reader which files exist, so they cannot themselves require knowing
+# how they were written. They are a few KB regardless.
+gz_path <- function(path) paste0(path, ".gz")
+
+write_json_gz <- function(obj, output_path, ...) {
+  txt <- as.character(jsonlite::toJSON(obj, ...))
+  con <- gzfile(output_path, "wb", compression = 6L)
+  on.exit(close(con), add = TRUE)
+  writeBin(charToRaw(enc2utf8(txt)), con)
+  invisible(output_path)
+}
+
 write_geojson <- function(value, output_path, precise = TRUE) {
   if (file.exists(output_path)) unlink(output_path)
+  # DATA_EXPORT persists between runs, so drop any uncompressed twin an earlier
+  # export left behind — otherwise it would be staged and uploaded alongside the
+  # compressed file, wasting the storage this change is meant to reclaim.
+  if (endsWith(output_path, ".gz")) {
+    plain <- sub("\\.gz$", "", output_path)
+    if (file.exists(plain)) unlink(plain)
+  }
   # GDAL's default GeoJSON coordinate precision is far higher than this
   # project needs — 7 decimal degrees is ~1.1cm at the equator, safely more
   # precise than anything meaningful at 20m hex resolution, but every vertex
@@ -82,10 +112,21 @@ write_geojson <- function(value, output_path, precise = TRUE) {
   # is measurably slower than GDAL's default fast path (per-coordinate
   # rounding vs. raw double-to-string) — precise = FALSE skips it for
   # throwaway writes where only the byte count is used, not the file itself.
-  if (precise) {
-    st_write(value, output_path, delete_dsn = FALSE, layer_options = "COORDINATE_PRECISION=7")
+  #
+  # A ".gz" target is compressed by GDAL as it serialises, in one pass. The
+  # /vsigzip/ handler needs an absolute path and cannot infer a driver from
+  # ".geojson.gz", so both are given explicitly. Callers that feed another
+  # tool rather than Storage (tippecanoe) pass a plain path and are unaffected.
+  target <- if (endsWith(output_path, ".gz")) {
+    paste0("/vsigzip/", normalizePath(output_path, winslash = "/", mustWork = FALSE))
   } else {
-    st_write(value, output_path, delete_dsn = FALSE)
+    output_path
+  }
+  if (precise) {
+    st_write(value, target, driver = "GeoJSON", delete_dsn = FALSE,
+             layer_options = "COORDINATE_PRECISION=7")
+  } else {
+    st_write(value, target, driver = "GeoJSON", delete_dsn = FALSE)
   }
 }
 
@@ -97,9 +138,13 @@ cleanup_chunked_outputs <- function(output_path, extension_pattern) {
   out_dir <- dirname(output_path)
   stale <- c(
     file.path(out_dir, paste0(base_name, ".manifest.json")),
+    # Sweep both the compressed products written today and any uncompressed
+    # ones left by an earlier run into the same directory, so a re-export never
+    # leaves a stale plain-text twin that readers could resolve in preference.
+    file.path(out_dir, paste0(base_name, ".", extension_pattern)),
     list.files(
       out_dir,
-      pattern = paste0("^", base_name, "-part-[0-9]+\\.", extension_pattern, "$"),
+      pattern = paste0("^", base_name, "-part-[0-9]+\\.", extension_pattern, "(\\.gz)?$"),
       full.names = TRUE
     )
   )
@@ -160,22 +205,22 @@ write_json_chunked <- function(obj, output_path, ...) {
 }
 
 write_geojson_chunked <- function(value, output_path) {
-  tmp <- tempfile(fileext = ".geojson")
-  write_geojson(value, tmp, precise = FALSE)  # content discarded below, only the byte count matters
-  total_size <- file.info(tmp)$size
+  cleanup_chunked_outputs(output_path, "geojson")
 
-  if (total_size <= MAX_UPLOAD_BYTES) {
-    cleanup_chunked_outputs(output_path, "geojson")
-    file.copy(tmp, output_path, overwrite = TRUE)
-    unlink(tmp)
-    return(invisible(NULL))
-  }
-  unlink(tmp)
+  # Write the real compressed file once and keep it if it fits. The Storage
+  # limit applies to stored bytes, and gzip puts every current city's
+  # cell_attributes well under the cap, so the common path is now a single
+  # write — the previous throwaway probe pass serialised the whole dataset a
+  # second time (~900 MB of writes for yokohama) purely to measure it.
+  out_gz <- gz_path(output_path)
+  write_geojson(value, out_gz)
+  total_size <- file.info(out_gz)$size
+  if (total_size <= MAX_UPLOAD_BYTES) return(invisible(NULL))
+  unlink(out_gz)
 
   n <- nrow(value)
   base_name <- tools::file_path_sans_ext(basename(output_path))
   out_dir <- dirname(output_path)
-  cleanup_chunked_outputs(output_path, "geojson")
 
   # Row byte size varies (species/pressures are variable-length JSON arrays).
   # object.size() reflects R in-memory overhead, not serialized GeoJSON bytes,
@@ -190,7 +235,7 @@ write_geojson_chunked <- function(value, output_path) {
 
   flush_chunk <- function(start, end) {
     part_num <<- part_num + 1L
-    part_name <- sprintf("%s-part-%03d.geojson", base_name, part_num)
+    part_name <- sprintf("%s-part-%03d.geojson.gz", base_name, part_num)
     part_path <- file.path(out_dir, part_name)
     write_geojson(value[start:end, ], part_path)
     actual <- file.info(part_path)$size
@@ -325,19 +370,24 @@ write_hexgrid_pmtiles <- function(value, output_path) {
 }
 
 export_upload_files <- function(export_dir = DATA_EXPORT) {
+  # Both spellings are listed for the gzipped products and filtered by
+  # existence below, so this keeps working if a product is ever written
+  # uncompressed and while re-staging an export produced before compression.
+  compressible <- c("parks.geojson", "cell_attributes.geojson", "corridor-links.geojson")
   files <- c(
     "hexgrid.pmtiles",
-    "parks.geojson", "park-stats.json", "cell_attributes.geojson",
-    "cell_attributes.manifest.json", "cell-details.manifest.json", "corridor-links.geojson",
+    compressible, gz_path(compressible),
+    "park-stats.json",
+    "cell_attributes.manifest.json", "cell-details.manifest.json",
     "corridor-links.manifest.json", "top_interventions.json", "city_layer_stats.json"
   )
   for (base in c("cell_attributes", "corridor-links")) {
-    parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)$"))
+    parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)(\\.gz)?$"))
     files <- c(files, parts)
   }
   detail_parts <- list.files(
     file.path(export_dir, "cell-details"),
-    pattern = "^cell-details-[0-9]+\\.json$",
+    pattern = "^cell-details-[0-9]+\\.json(\\.gz)?$",
     full.names = FALSE
   )
   files <- c(files, file.path("cell-details", detail_parts))
@@ -415,10 +465,10 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
     ),
     products = list(
       pmtiles = list(path = "hexgrid.pmtiles", purpose = "MapLibre rendering only"),
-      parks = list(path = "parks.geojson", purpose = "Green-space polygons for Storage and PostgreSQL import"),
-      cellAttributes = list(path = "cell_attributes.geojson", purpose = "Full ecological cell outputs for Storage/archive use"),
-      cellDetails = list(path = "cell-details.manifest.json", purpose = "Sharded per-cell detail lookup served from Storage"),
-      corridorLinks = list(path = "corridor-links.geojson", purpose = "Full connectivity graph edges for MapLibre line rendering"),
+      parks = list(path = "parks.geojson.gz", purpose = "Green-space polygons for Storage and PostgreSQL import (gzip)"),
+      cellAttributes = list(path = "cell_attributes.geojson.gz", purpose = "Full ecological cell outputs for Storage/archive use (gzip)"),
+      cellDetails = list(path = "cell-details.manifest.json", purpose = "Sharded per-cell detail lookup served from Storage; shards are gzip"),
+      corridorLinks = list(path = "corridor-links.geojson.gz", purpose = "Full connectivity graph edges for MapLibre line rendering (gzip)"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
       cityLayerStats = list(path = "city_layer_stats.json", purpose = "Per-metric percentile bounds for city_layer_stats import (legend/render stretching)"),
@@ -520,7 +570,7 @@ cell_detail_shard_index <- function(cell_ids, shard_count) {
 
 write_cell_details_sharded <- function(value, output_dir, shard_count = 128L) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  old_parts <- list.files(output_dir, pattern = "^cell-details-[0-9]+\\.json$", full.names = TRUE)
+  old_parts <- list.files(output_dir, pattern = "^cell-details-[0-9]+\\.json(\\.gz)?$", full.names = TRUE)
   if (length(old_parts) > 0L) unlink(old_parts)
 
   rows <- value |>
@@ -529,7 +579,7 @@ write_cell_details_sharded <- function(value, output_dir, shard_count = 128L) {
 
   shard_files <- character(shard_count)
   for (shard in seq.int(0L, shard_count - 1L)) {
-    shard_name <- sprintf("cell-details-%03d.json", shard)
+    shard_name <- sprintf("cell-details-%03d.json.gz", shard)
     shard_path <- file.path(output_dir, shard_name)
     shard_rows <- rows |>
       filter(.shard == shard) |>
@@ -542,7 +592,10 @@ write_cell_details_sharded <- function(value, output_dir, shard_count = 128L) {
       lapply(records, function(row) as.list(row[1, , drop = TRUE]))
     }
 
-    jsonlite::write_json(
+    # This is the frontend's hot path — one shard is fetched per cell click.
+    # Gzipped it drops from ~2.7 MB to ~78 KB, which is the difference between
+    # ~1,800 and ~63,000 cell clicks per month of free-tier egress.
+    write_json_gz(
       payload,
       shard_path,
       auto_unbox = TRUE,
@@ -1374,7 +1427,7 @@ if (!is.null(green)) {
   green_export <- green |>
     filter(id %in% metric_park_ids)
 
-  parks_path <- file.path(DATA_EXPORT, "parks.geojson")
+  parks_path <- gz_path(file.path(DATA_EXPORT, "parks.geojson"))
   write_geojson(green_export, parks_path)
   cat(sprintf("Written: %s (%d metric-backed parks)\n", parks_path, nrow(green_export)))
 }
@@ -1467,7 +1520,7 @@ if (exists("PROC_CONNECTIVITY_GRAPH") && file.exists(PROC_CONNECTIVITY_GRAPH)) {
 
     corridor_links_path <- file.path(DATA_EXPORT, "corridor-links.geojson")
     write_geojson_chunked(corridor_links, corridor_links_path)
-    cat(sprintf("Written: corridor-links.geojson (%d graph edges)\n", nrow(corridor_links)))
+    cat(sprintf("Written: corridor-links.geojson.gz (%d graph edges)\n", nrow(corridor_links)))
   }
 } else {
   message(sprintf("Skipping corridor-links.geojson — %s not found", PROC_CONNECTIVITY_GRAPH))
@@ -1570,7 +1623,7 @@ cell_attr <- cell_attr_base |>
 
 cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
 write_geojson_chunked(cell_attr, cell_attr_path)
-cat(sprintf("Written: %s\n", cell_attr_path))
+cat(sprintf("Written: %s (gzip, or -part-NNN.geojson.gz when chunked)\n", gz_path(cell_attr_path)))
 
 write_cell_details_sharded(cell_attr, file.path(DATA_EXPORT, "cell-details"))
 

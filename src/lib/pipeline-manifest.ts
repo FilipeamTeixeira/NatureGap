@@ -72,6 +72,20 @@ function storageObjectPath(path: string): string {
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }
 
+/**
+ * Pipeline products are gzipped (see write_geojson in pipeline/06_export/export.R).
+ * Supabase Storage serves stored bytes verbatim — there is no Content-Encoding
+ * negotiation to rely on — so a ".gz" path is decompressed here explicitly.
+ * Decompression is ~15ms for a cell-details shard and saves ~2.6MB of transfer,
+ * so it is a large net win on every metered request.
+ */
+async function readStorageText(blob: Blob, path: string): Promise<string> {
+  if (!path.endsWith('.gz')) return blob.text();
+
+  const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
 export async function fetchStorageJson(path: string): Promise<unknown | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.storage
@@ -81,7 +95,7 @@ export async function fetchStorageJson(path: string): Promise<unknown | null> {
   if (error || !data) return null;
 
   try {
-    return JSON.parse(await data.text());
+    return JSON.parse(await readStorageText(data, path));
   } catch {
     return null;
   }
@@ -235,7 +249,11 @@ export function resolveHexgridPath(dataset: ActivePipelineDataset): string {
 }
 
 export function resolveDatasetFile(dataset: ActivePipelineDataset, fileName: string): string {
-  const manifestPath = dataset.files[fileName];
+  // Callers ask for the logical name ('parks.geojson'). Current exports publish
+  // it gzipped and list the real name in the manifest, while datasets published
+  // before compression list the plain one — so prefer .gz and fall back. This
+  // keeps every call site unchanged and both dataset generations readable.
+  const manifestPath = dataset.files[`${fileName}.gz`] ?? dataset.files[fileName];
   if (manifestPath) return joinPath(dataset.basePath, manifestPath);
   return joinPath(dataset.basePath, fileName);
 }

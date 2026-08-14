@@ -157,6 +157,44 @@ export function cityIdFromHexLayerId(map: maplibregl.Map, layerId: string): stri
   return undefined;
 }
 
+/**
+ * City the current view is looking at, from the registered hex dataset extents.
+ * Nothing is selected most of the time, so without this the badge and the
+ * sidebar location label sit on the default city no matter where the map is.
+ * Containment of the view centre wins; otherwise the dataset overlapping the
+ * viewport whose extent centre is nearest. Undefined when the view is off every
+ * city — callers fall back to CITY.
+ */
+export function cityIdForViewport(map: maplibregl.Map): string | undefined {
+  const datasets = getHexDatasets(map).filter((dataset) => dataset.bounds);
+  if (datasets.length === 0) return undefined;
+
+  const center = map.getCenter();
+  const view = map.getBounds();
+  let nearest: { cityId: string; distance: number } | undefined;
+
+  for (const dataset of datasets) {
+    const [minLon, minLat, maxLon, maxLat] = dataset.bounds;
+    if (center.lng >= minLon && center.lng <= maxLon
+      && center.lat >= minLat && center.lat <= maxLat) {
+      return dataset.cityId;
+    }
+
+    const overlapsView = maxLon >= view.getWest() && minLon <= view.getEast()
+      && maxLat >= view.getSouth() && minLat <= view.getNorth();
+    if (!overlapsView) continue;
+
+    const dLon = (minLon + maxLon) / 2 - center.lng;
+    const dLat = (minLat + maxLat) / 2 - center.lat;
+    const distance = dLon * dLon + dLat * dLat;
+    if (!nearest || distance < nearest.distance) {
+      nearest = { cityId: dataset.cityId, distance };
+    }
+  }
+
+  return nearest?.cityId;
+}
+
 export async function fitMapToPmtilesDatasets(
   map: maplibregl.Map,
   datasets: HexPmtilesDataset[],

@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 
 const execFileAsync = promisify(execFile);
 
@@ -73,20 +74,22 @@ async function fileExists(path) {
 
 async function listExportFiles(sourceDir) {
   const names = await readdir(sourceDir);
+  // GeoJSON/JSON products are published gzipped; the plain spellings are still
+  // accepted so an export produced before compression can be re-staged.
   const wanted = names.filter((name) => (
     name === 'hexgrid.pmtiles'
-    || name === 'parks.geojson'
+    || name === 'parks.geojson' || name === 'parks.geojson.gz'
     || name === 'park-stats.json'
-    || name === 'cell_attributes.geojson'
+    || name === 'cell_attributes.geojson' || name === 'cell_attributes.geojson.gz'
     || name === 'cell_attributes.manifest.json'
     || name === 'cell-details.manifest.json'
     || name === 'top_interventions.json'
-    || /^cell_attributes-part-[0-9]+\.(json|geojson)$/.test(name)
+    || /^cell_attributes-part-[0-9]+\.(json|geojson)(\.gz)?$/.test(name)
   ));
   if (await fileExists(join(sourceDir, 'cell-details'))) {
     const detailNames = await readdir(join(sourceDir, 'cell-details'));
     wanted.push(...detailNames
-      .filter((name) => /^cell-details-[0-9]+\.json$/.test(name))
+      .filter((name) => /^cell-details-[0-9]+\.json(\.gz)?$/.test(name))
       .map((name) => join('cell-details', name)));
   }
   if (!wanted.includes('hexgrid.pmtiles')) {
@@ -109,6 +112,9 @@ async function validatePmtiles(pmtilesPath) {
 }
 
 async function maybeJson(path) {
+  if (await fileExists(`${path}.gz`)) {
+    return JSON.parse(gunzipSync(await readFile(`${path}.gz`)).toString('utf8'));
+  }
   if (!await fileExists(path)) return null;
   return JSON.parse(await readFile(path, 'utf8'));
 }

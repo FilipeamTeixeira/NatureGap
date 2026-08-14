@@ -111,7 +111,10 @@ if (identical(mget(import_done_key, envir = .GlobalEnv, ifnotfound = list(NULL))
 
 version_dir <- file.path(export_root, data_version)
 manifest_path <- file.path(version_dir, "manifest.json")
-parks_path <- file.path(version_dir, "parks.geojson")
+parks_path <- file.path(version_dir, "parks.geojson.gz")
+if (!file.exists(parks_path)) {
+  parks_path <- file.path(version_dir, "parks.geojson")
+}
 
 if (!file.exists(manifest_path)) {
   stop(sprintf(
@@ -208,7 +211,12 @@ register_storage_dataset <- function(con, storage_prefix, manifest_storage_path,
 }
 
 list_cell_attribute_sources <- function(version_dir) {
-  single_path <- file.path(version_dir, "cell_attributes.geojson")
+  # Prefer the compressed product, falling back to the plain name so datasets
+  # exported before compression still import.
+  single_path <- file.path(version_dir, "cell_attributes.geojson.gz")
+  if (!file.exists(single_path)) {
+    single_path <- file.path(version_dir, "cell_attributes.geojson")
+  }
   if (file.exists(single_path)) {
     return(list(single_path))
   }
@@ -235,10 +243,24 @@ list_cell_attribute_sources <- function(version_dir) {
   as.list(paths)
 }
 
+# The batch-import threshold is about how much GeoJSON *text* is handed to
+# Postgres in one statement, so it must be measured on uncompressed bytes — a
+# 21 MB .gz is ~450 MB of GeoJSON and would otherwise slip under the limit and
+# be sent as a single statement. RFC 1952 records the uncompressed length
+# modulo 2^32 in the trailing 4 bytes; these products are single-member gzip
+# streams well under 4 GiB, so that value is exact.
+uncompressed_size <- function(path) {
+  if (!endsWith(path, ".gz")) return(unname(file.info(path)$size))
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  seek(con, where = -4L, origin = "end")
+  sum(as.numeric(readBin(con, "raw", 4L)) * 256^(0:3))
+}
+
 use_batch_import <- function(sources) {
   length(sources) > 1L || (
     length(sources) == 1L &&
-      unname(file.info(sources[[1]])$size) > 40 * 1024^2
+      uncompressed_size(sources[[1]]) > 40 * 1024^2
   )
 }
 
@@ -258,12 +280,32 @@ replace_import_available <- function(con) {
   isTRUE(out$ok[[1]])
 }
 
+# Export products are gzipped (see write_geojson in 06_export/export.R).
+# gzfile() reads plain files transparently too, so both spellings work and
+# datasets exported before compression still import unchanged.
+open_geojson <- function(path) {
+  if (endsWith(path, ".gz")) gzfile(path, "rb") else file(path, "rb")
+}
+
 read_geojson_text <- function(path) {
-  readChar(path, file.info(path)$size)
+  con <- open_geojson(path)
+  on.exit(close(con), add = TRUE)
+  # The uncompressed size is not knowable up front for a gzip stream, so read
+  # to exhaustion and join once rather than growing a buffer per block.
+  chunks <- list()
+  repeat {
+    chunk <- readBin(con, "raw", 8L * 1024L^2)
+    if (length(chunk) == 0L) break
+    chunks[[length(chunks) + 1L]] <- chunk
+  }
+  if (length(chunks) == 0L) return("")
+  text <- rawToChar(do.call(c, chunks))
+  Encoding(text) <- "UTF-8"
+  text
 }
 
 count_geojson_features <- function(path) {
-  data <- jsonlite::read_json(path, simplifyVector = FALSE)
+  data <- jsonlite::fromJSON(read_geojson_text(path), simplifyVector = FALSE)
   length(data$features %||% list())
 }
 
@@ -315,7 +357,7 @@ if (import_cell_attributes) {
 
   green_geojson <- if (file.exists(parks_path)) {
     validate_geojson_features(
-      jsonlite::read_json(parks_path, simplifyVector = FALSE),
+      jsonlite::fromJSON(read_geojson_text(parks_path), simplifyVector = FALSE),
       "id",
       "parks",
       parks_path

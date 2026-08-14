@@ -478,14 +478,18 @@ Recommended scalable path:
 
 ```text
 pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
-pipeline-export/<CITY_ID>/<DATA_VERSION>/parks.geojson
+pipeline-export/<CITY_ID>/<DATA_VERSION>/parks.geojson.gz
 pipeline-export/<CITY_ID>/<DATA_VERSION>/park-stats.json
-pipeline-export/<CITY_ID>/<DATA_VERSION>/cell_attributes.geojson
+pipeline-export/<CITY_ID>/<DATA_VERSION>/cell_attributes.geojson.gz
 pipeline-export/<CITY_ID>/<DATA_VERSION>/cell-details.manifest.json
-pipeline-export/<CITY_ID>/<DATA_VERSION>/cell-details/cell-details-*.json
+pipeline-export/<CITY_ID>/<DATA_VERSION>/cell-details/cell-details-*.json.gz
 pipeline-export/<CITY_ID>/<DATA_VERSION>/top_interventions.json
 pipeline-export/<CITY_ID>/current.json
 ```
+
+GeoJSON products and cell-detail shards are gzipped; `hexgrid.pmtiles` is
+already internally compressed and manifests stay plain. See
+[Compression](data-contract.md#compression).
 
 `current.json` should identify the active immutable version:
 

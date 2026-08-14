@@ -48,6 +48,7 @@ export default function Page() {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [actions, setActions] = useState<TakeAction[]>([]);
   const [cellDetailLoading, setCellDetailLoading] = useState(false);
+  const [viewCityId, setViewCityId] = useState<string | null>(null);
   const cellClickGenerationRef = useRef(0);
 
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
@@ -56,7 +57,13 @@ export default function Page() {
     () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'impact',
     [layers],
   );
-  const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? CITY.id;
+  // Selection wins; otherwise follow the map, so panning to another city
+  // relabels the badge and sidebar instead of leaving them on the default.
+  const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? viewCityId ?? CITY.id;
+
+  const handleViewCityChange = useCallback((cityId: string | undefined) => {
+    setViewCityId(cityId ?? null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +209,7 @@ export default function Page() {
             surveyPointsGeoJSON={surveyPointsFc}
             selectedSurveyPointId={selectedSurveyPoint?.id ?? null}
             onSurveyPointSelect={handleSurveyPointSelect}
+            onViewCityChange={handleViewCityChange}
           />
         </div>
 

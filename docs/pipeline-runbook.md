@@ -18,11 +18,19 @@ pipeline-export/
     20260627T120000Z/
       manifest.json
       hexgrid.pmtiles
-      parks.geojson
+      parks.geojson.gz
       park-stats.json
-      cell_attributes.geojson
+      cell_attributes.geojson.gz
+      cell-details.manifest.json
+      cell-details/cell-details-000.json.gz ...
       top_interventions.json
 ```
+
+GeoJSON products and cell-detail shards are gzipped — see
+[Compression](data-contract.md#compression). Upload them as-is; do **not**
+decompress before upload and do not set a `Content-Encoding` header.
+`manifest.json` and `current.json` stay uncompressed because they are the
+bootstrap that tells a reader which files exist.
 
 Upload the contents into the Supabase Storage bucket named `pipeline-export`.
 Inside the bucket, object paths should start with the city id:
@@ -55,9 +63,11 @@ Upload the versioned folder plus the city pointer:
 <city-id>/current.json
 <city-id>/<dataset-id>/manifest.json
 <city-id>/<dataset-id>/hexgrid.pmtiles
-<city-id>/<dataset-id>/cell_attributes.geojson   (or chunked parts + manifest)
-<city-id>/<dataset-id>/parks.geojson
+<city-id>/<dataset-id>/cell_attributes.geojson.gz   (or chunked parts + manifest)
+<city-id>/<dataset-id>/parks.geojson.gz
 <city-id>/<dataset-id>/park-stats.json
+<city-id>/<dataset-id>/cell-details.manifest.json
+<city-id>/<dataset-id>/cell-details/cell-details-NNN.json.gz
 ```
 
 The bucket is public-read. No database credentials are involved.
