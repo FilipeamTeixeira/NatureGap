@@ -258,6 +258,16 @@ OSM_SKIP_IF_EXISTS   <- TRUE
 
 CELL_SIZE <- 20   # metres
 
+# ── Path accessibility / survey effort ───────────────────────────────────────
+# Effort correction uses OSM pedestrian path density. A 20 m hex is ~350 m², so
+# a path centreline only clips a narrow ribbon of cells: testing for a strict
+# intersection marks a cell one hex off a footway as unsampled even though it is
+# plainly observable from that footway. Measure path length in a neighbourhood
+# around the cell centroid instead, and require a real minimum length so a stray
+# OSM geometry fragment cannot pass as an access point.
+PATH_RADIUS_M <- 40   # neighbourhood radius for path length (~2 hex rings)
+MIN_PATH_M    <- 50   # minimum path length in that neighbourhood to count as sampled
+
 # Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
 # process_tile.R (per-tile halo grid) must both offset from this exact point,
 # or adjacent tiles' hexagons fall out of phase and leave a seam along every
@@ -271,6 +281,37 @@ HEX_GRID_ORIGIN <- sf::st_bbox(
     CRS_LOCAL
   )
 )[c("xmin", "ymin")]
+
+# ...but offset alone is NOT enough to pin the phase, which is why the seam
+# survived HEX_GRID_ORIGIN. sf:::make_hex_grid() reduces the anchor modulo
+# dx (= cellsize/sqrt(3)) while the hex *centre* lattice repeats every 3*dx,
+# so the surviving phase is floor((anchor - extent_corner)/dx) %% 3 — a
+# function of each tile's own extent, not of the anchor. With flat_topped =
+# FALSE (st_make_grid's default) that axis is output Y, so north-south
+# neighbouring tiles drift by 5.77 m or 11.55 m. Snap the extent corner onto
+# the lattice period first and offset then lands at phase zero everywhere.
+#
+# Pass the result straight to st_make_grid(square = FALSE, offset = origin).
+# Takes origin/cell_size explicitly rather than reading the globals so it
+# stays safe to call inside the furrr tile workers.
+hex_lattice_extent <- function(x, origin, cell_size) {
+  bb <- sf::st_bbox(x)
+  # x period is 2*dy = cell_size; y period is 3*dx = sqrt(3)*cell_size.
+  period <- c(cell_size, sqrt(3) * cell_size)
+  # The -0.5 keeps the corner half a period away from make_hex_grid()'s own
+  # floor() boundary: sqrt(3)*cell_size / (cell_size/sqrt(3)) is not exactly
+  # 3 in doubles, so landing on an exact multiple flips the phase back on
+  # floating-point noise. Grow the far corner so the snap never clips cells.
+  sf::st_as_sfc(sf::st_bbox(
+    c(
+      xmin = origin[[1]] + (floor((bb[["xmin"]] - origin[[1]]) / period[1]) - 0.5) * period[1],
+      ymin = origin[[2]] + (floor((bb[["ymin"]] - origin[[2]]) / period[2]) - 0.5) * period[2],
+      xmax = bb[["xmax"]] + period[1],
+      ymax = bb[["ymax"]] + period[2]
+    ),
+    crs = sf::st_crs(bb)
+  ))
+}
 
 # ── Biodiversity index parameters ───────────────────────────────────────────
 # Upper bound for expected species richness at habitat_quality = 1.0.

@@ -433,7 +433,11 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
         sourceField = "observed_richness",
         definition = "Effort-normalised observed richness per survey effort unit.",
         formula = "species_richness / survey_effort_units",
-        surveyEffortUnits = "log1p(path_km)",
+        surveyEffortUnits = "log1p(path_local_m)",
+        surveyEffortNeighbourhood = sprintf(
+          "OSM pedestrian path length in metres within %d m of the cell centroid; a cell is unsampled below %d m.",
+          PATH_RADIUS_M, MIN_PATH_M
+        ),
         missingValueRule = "Unsampled cells keep observed_richness and survey_effort_units as null; sampled cells with no observations use 0."
       ),
       effortCorrectedRichness = list(
@@ -789,7 +793,10 @@ derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
                              is_unsampled = FALSE, temporal_bias_flag = FALSE) {
   pressures <- character(0)
   if (isTRUE(is_unsampled)) {
-    return(c("Unsampled cell — no accessible pedestrian path length from OSM"))
+    return(c(sprintf(
+      "Unsampled cell — under %d m of OSM pedestrian path within %d m",
+      MIN_PATH_M, PATH_RADIUS_M
+    )))
   }
   if (replace_na(n_obs, 0L) == 0L) {
     pressures <- c(pressures, "No biodiversity observations recorded in this cell")
@@ -1190,15 +1197,16 @@ if (!"effort_corrected_richness" %in% names(grid_raw)) {
 }
 if (!"species_richness" %in% names(grid_raw)) grid_raw$species_richness <- grid_raw$richness_corrected
 if (!"path_km" %in% names(grid_raw)) grid_raw$path_km <- 0
+if (!"path_local_m" %in% names(grid_raw)) grid_raw$path_local_m <- replace_na(grid_raw$path_km, 0) * 1000
 if (!"observed_richness" %in% names(grid_raw)) grid_raw$observed_richness <- grid_raw$effort_corrected_richness
 if (!"ecological_residual_normalized" %in% names(grid_raw)) grid_raw$ecological_residual_normalized <- NA_real_
 if (!"ecological_residual_mean" %in% names(grid_raw)) grid_raw$ecological_residual_mean <- NA_real_
 if (!"ecological_residual_std" %in% names(grid_raw)) grid_raw$ecological_residual_std <- NA_real_
 if (!"survey_effort_units" %in% names(grid_raw)) {
   grid_raw$survey_effort_units <- if_else(
-    replace_na(grid_raw$path_km, 0) <= 0,
+    replace_na(grid_raw$path_local_m, 0) < MIN_PATH_M,
     NA_real_,
-    log1p(replace_na(grid_raw$path_km, 0))
+    log1p(replace_na(grid_raw$path_local_m, 0))
   )
 }
 if (!"nature_gap_score" %in% names(grid_raw)) grid_raw$nature_gap_score <- NA_real_
@@ -1208,7 +1216,9 @@ if (!"mean_lst" %in% names(grid_raw)) {
 }
 if (!"lst_idx" %in% names(grid_raw)) grid_raw$lst_idx <- NA_real_
 if (!"betweenness_centrality" %in% names(grid_raw)) grid_raw$betweenness_centrality <- grid_raw$corridor_importance
-if (!"is_unsampled" %in% names(grid_raw)) grid_raw$is_unsampled <- replace_na(grid_raw$path_km, 0) <= 0
+if (!"is_unsampled" %in% names(grid_raw)) {
+  grid_raw$is_unsampled <- replace_na(grid_raw$path_local_m, 0) < MIN_PATH_M
+}
 if (!"temporal_bias_flag" %in% names(grid_raw)) grid_raw$temporal_bias_flag <- FALSE
 if (!"taxonomic_shannon" %in% names(grid_raw) && "species_shannon" %in% names(grid_raw)) {
   grid_raw$taxonomic_shannon <- grid_raw$species_shannon
@@ -1243,7 +1253,7 @@ grid <- grid_raw |>
     n_obs, species_richness, richness_corrected, observed_richness,
     effort_corrected_richness, survey_effort_units,
     taxonomic_shannon, is_unsampled, temporal_bias_flag,
-    n_survey_dates, path_km,
+    n_survey_dates, path_km, path_local_m,
     plant, bird, insect, mammal, fungi,
     expected_richness, ecological_residual, ecological_residual_normalized,
     ecological_residual_mean, ecological_residual_std
@@ -1554,6 +1564,7 @@ if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {
       connectivity_score = coalesce(connectivity_score, corridor_importance),
       node_importance = NA_real_,
       path_km,
+      path_local_m,
       is_unsampled,
       temporal_bias_flag,
       last_updated = Sys.time()

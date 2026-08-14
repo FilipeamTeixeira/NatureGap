@@ -360,10 +360,11 @@ Every derived metric has one source of truth: the R pipeline.
 Source: `pipeline/03_observations/observation_layer.R`
 
 ```text
-species_richness / log(1 + path_km)
+species_richness / log(1 + path_local_m)
 ```
 
-Cells with `path_km <= 0` are `is_unsampled = true` and have `NA` corrected
+Cells with under `MIN_PATH_M` (50 m) of pedestrian path within `PATH_RADIUS_M`
+(40 m) of the centroid are `is_unsampled = true` and have `NA` corrected
 richness for residual inference.
 
 ### `expected_richness`

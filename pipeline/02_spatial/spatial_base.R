@@ -108,7 +108,14 @@ bbox_sf <- st_bbox(
   st_as_sfc() |>
   st_transform(CRS_LOCAL)
 
-hex_cells <- st_make_grid(bbox_sf, cellsize = 20, square = FALSE, offset = HEX_GRID_ORIGIN) |>
+# hex_lattice_extent() keeps this grid in phase with the per-tile grids built
+# in process_tile.R; offset alone does not (see config.R).
+hex_cells <- st_make_grid(
+  hex_lattice_extent(bbox_sf, HEX_GRID_ORIGIN, CELL_SIZE),
+  cellsize = CELL_SIZE,
+  square = FALSE,
+  offset = HEX_GRID_ORIGIN
+) |>
   st_as_sf() |>
   mutate(cell_id = row_number())
 

@@ -57,7 +57,7 @@ for (col in c(
   "ecological_residual", "ecological_residual_normalized",
   "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
   "betweenness_centrality", "tree_fraction", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
-  "impact_score", "intervention_rank", "intervention_score", "path_km", "n_obs",
+  "impact_score", "intervention_rank", "intervention_score", "path_km", "path_local_m", "n_obs",
   "accessibility_component"
 )) {
   if (!col %in% names(hex)) hex[[col]] <- NA_real_
@@ -68,13 +68,15 @@ hex <- hex |>
     effort_corrected_richness = coalesce(effort_corrected_richness, observed_richness),
     observed_richness = coalesce(observed_richness, effort_corrected_richness),
     survey_effort_units = if_else(
-      replace_na(path_km, 0) <= 0,
+      replace_na(path_local_m, 0) < MIN_PATH_M,
       NA_real_,
-      coalesce(survey_effort_units, log1p(path_km))
+      coalesce(survey_effort_units, log1p(path_local_m))
     )
   )
 
-if (!"is_unsampled" %in% names(hex)) hex$is_unsampled <- replace_na(hex$path_km, 0) <= 0
+if (!"is_unsampled" %in% names(hex)) {
+  hex$is_unsampled <- replace_na(hex$path_local_m, 0) < MIN_PATH_M
+}
 
 hex <- hex |>
   filter(!is.na(green_space_id))

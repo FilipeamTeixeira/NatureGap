@@ -256,14 +256,24 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   cell_size <- cfg$CELL_SIZE %||% CELL_SIZE
   halo_m <- cfg$halo_m %||% halo_m
   hex_grid_origin <- cfg$HEX_GRID_ORIGIN %||% HEX_GRID_ORIGIN
+  path_radius_m <- cfg$PATH_RADIUS_M %||% PATH_RADIUS_M
+  min_path_m <- cfg$MIN_PATH_M %||% MIN_PATH_M
 
   core_local <- st_transform(st_as_sf(core_polygon), crs_local)
   halo_extent <- st_buffer(core_local, dist = halo_m)
   wkt_filter <- wkt_filter_from_sf(halo_extent, crs_local)
 
-  # offset is fixed city-wide (not derived from this tile's own halo bbox) so
-  # every tile's hexagons share one lattice phase and tile seamlessly.
-  grid <- st_make_grid(halo_extent, cellsize = cell_size, square = FALSE, offset = hex_grid_origin) |>
+  # offset is fixed city-wide (not derived from this tile's own halo bbox) and
+  # the extent is snapped onto the lattice period, so every tile's hexagons
+  # share one lattice phase and tile seamlessly. Both are required — see
+  # hex_lattice_extent() in config.R for why offset alone leaves a seam along
+  # every north-south core_tiles.gpkg boundary.
+  grid <- st_make_grid(
+    hex_lattice_extent(halo_extent, hex_grid_origin, cell_size),
+    cellsize = cell_size,
+    square = FALSE,
+    offset = hex_grid_origin
+  ) |>
     st_as_sf()
 
   # row_number() is only unique within this tile's own halo grid — two tiles
@@ -513,14 +523,28 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     grid$path_length_m <- 0
   }
 
+  # Effort is measured over a neighbourhood, not the cell alone. A 20 m hex is
+  # ~350 m², so a path centreline only clips a narrow ribbon of cells and a
+  # strict intersection marks a cell one hex off a footway as unsampled. Run on
+  # the full halo grid (halo_m is 750 m, far wider than path_radius_m) so cells
+  # near a tile edge get their real neighbourhood rather than a truncated one —
+  # filter_core_cells() discards the halo rows later.
+  cell_centroids <- suppressWarnings(st_centroid(grid))
+  path_neighbours <- suppressWarnings(
+    st_is_within_distance(st_geometry(cell_centroids), dist = path_radius_m)
+  )
   grid <- grid |>
     mutate(
       path_km = path_length_m / 1000,
-      is_unsampled = path_km <= 0
+      path_local_m = vapply(
+        path_neighbours,
+        function(idx) sum(path_length_m[idx]),
+        numeric(1)
+      ),
+      is_unsampled = path_local_m < min_path_m
     ) |>
     select(-path_length_m)
 
-  cell_centroids <- suppressWarnings(st_centroid(grid))
   cell_area_ha <- as.numeric(st_area(grid)) / 10000
   if (nrow(roads) > 0L) roads$.road_weight <- road_weight(roads$highway)
   # Pre-extract once; both the density and proximity helpers below would
@@ -683,8 +707,16 @@ finish_citywide_metrics <- function(grid) {
         0.286 * replace_na(lst_idx, 0) +
         0.214 * (1 - replace_na(disturbance_idx, 1)),
       path_km = replace_na(path_km, 0),
-      is_unsampled = replace_na(path_km <= 0, TRUE),
-      survey_effort_units = if_else(is_unsampled, NA_real_, log1p(path_km)),
+      path_local_m = replace_na(path_local_m, 0),
+      # MIN_PATH_M, not the tile-local min_path_m: this runs city-wide in the
+      # main session after bind_rows(), outside process_tile()'s cfg scope.
+      is_unsampled = replace_na(path_local_m < MIN_PATH_M, TRUE),
+      # log1p() of a length in metres. Taking log1p(path_km) here made the log
+      # inert — a 20 m hex carries 0.002–0.04 km of path, and log1p(x) ≈ x that
+      # close to zero, so correction degenerated into dividing richness by a
+      # near-zero denominator and produced richness values in the tens of
+      # thousands against an expected richness of ~20.
+      survey_effort_units = if_else(is_unsampled, NA_real_, log1p(path_local_m)),
       effort_corrected_richness = if_else(
         is_unsampled,
         NA_real_,
@@ -852,6 +884,8 @@ run_tiled_processing <- function(force = FALSE) {
     CELL_SIZE = CELL_SIZE,
     halo_m = halo_m,
     HEX_GRID_ORIGIN = HEX_GRID_ORIGIN,
+    PATH_RADIUS_M = PATH_RADIUS_M,
+    MIN_PATH_M = MIN_PATH_M,
     RAW_LANDCOVER = RAW_LANDCOVER,
     RAW_IMPERVIOUS = RAW_IMPERVIOUS,
     RAW_NDVI = RAW_NDVI,

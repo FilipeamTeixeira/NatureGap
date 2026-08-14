@@ -65,27 +65,35 @@ if (!"betweenness_centrality" %in% names(grid)) {
 # Unsampled cells still receive an expected richness estimate, but their
 # observed/corrected richness and residual stay NA and are excluded from ranking.
 
+if (!"path_local_m" %in% names(grid)) {
+  stop(
+    "path_local_m missing from the observation grid — re-run 02_habitat/03_observations ",
+    "so neighbourhood path length is available before residuals.",
+    call. = FALSE
+  )
+}
+
 grid <- grid |>
   mutate(
     effort_corrected_richness = coalesce(effort_corrected_richness, richness_corrected),
     survey_effort_units = if_else(
-      replace_na(path_km, 0) <= 0,
+      replace_na(path_local_m, 0) < MIN_PATH_M,
       NA_real_,
-      coalesce(survey_effort_units, log1p(path_km))
+      coalesce(survey_effort_units, log1p(path_local_m))
     ),
     observed_richness = coalesce(observed_richness, effort_corrected_richness),
     is_unsampled = if_else(
       is.na(obs_is_unsampled),
-      replace_na(path_km, 0) <= 0,
+      replace_na(path_local_m, 0) < MIN_PATH_M,
       obs_is_unsampled
     ),
-    max_path_km = max(path_km, na.rm = TRUE),
+    max_path_local_m = max(path_local_m, na.rm = TRUE),
     habitat_component = replace_na(habitat_quality, 0),
     connectivity_component = pmin(1, pmax(0, replace_na(corridor_importance, 0))),
     accessibility_component = if_else(
-      replace_na(path_km, 0) <= 0 | !is.finite(max_path_km) | max_path_km <= 0,
+      replace_na(path_local_m, 0) < MIN_PATH_M | !is.finite(max_path_local_m) | max_path_local_m <= 0,
       0,
-      pmin(1, log1p(path_km) / log1p(max_path_km))
+      pmin(1, log1p(path_local_m) / log1p(max_path_local_m))
     ),
     expected_richness = SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (
       0.65 * habitat_component +
@@ -99,7 +107,7 @@ grid <- grid |>
     ),
     underperformance = pmax(0, ecological_residual)
   ) |>
-  select(-max_path_km, -obs_is_unsampled)
+  select(-max_path_local_m, -obs_is_unsampled)
 
 finite_residuals <- grid$ecological_residual[is.finite(grid$ecological_residual)]
 city_residual_max <- if (length(finite_residuals) > 0L) max(abs(finite_residuals)) else NA_real_
@@ -304,6 +312,7 @@ cell_attributes <- grid |>
     connectivity_score,
     node_importance,
     path_km,
+    path_local_m,
     is_unsampled,
     temporal_bias_flag,
     last_updated = Sys.time()

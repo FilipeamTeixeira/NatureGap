@@ -124,7 +124,7 @@ confounds biodiversity with observer effort.
 Canonical formula:
 
 ```text
-survey_effort_units_i = log(1 + path_km_i)
+survey_effort_units_i = log(1 + path_local_m_i)
 
 effort_corrected_richness_i =
   species_richness_i / survey_effort_units_i
@@ -136,7 +136,16 @@ observed_richness_i =
 Where:
 
 - `species_richness_i` is the distinct species count in cell `i`.
-- `path_km_i` is OSM pedestrian path length in cell `i`.
+- `path_local_m_i` is OSM pedestrian path length, in metres, within
+  `PATH_RADIUS_M` (40 m) of cell `i`'s centroid. A 20 m hex is ~350 m², so a
+  path centreline only clips a narrow ribbon of cells: measuring the cell
+  alone marks a cell one hex off a footway as unsampled even though it is
+  plainly observable from that footway.
+- the denominator is a length in metres. `log1p` of a length in kilometres is
+  inert at this cell size (`log1p(x) ≈ x` for `x` ≈ 0.02), which turned effort
+  correction into division by a near-zero denominator.
+- `path_km_i` is the per-cell intersected length. It is still exported for
+  transparency but no longer drives effort correction.
 - `survey_effort_units_i` is the explicit effort denominator used by every
   city pipeline run.
 - `observed_richness_i` is the exported biodiversity metric used by hex,
@@ -146,7 +155,7 @@ Where:
 Unsampled rule:
 
 ```text
-if path_km_i <= 0:
+if path_local_m_i < MIN_PATH_M (50 m):
   is_unsampled_i = true
   survey_effort_units_i = NA
   observed_richness_i = NA
@@ -204,8 +213,8 @@ expected_richness_i =
 Where:
 
 - `MAX_EXPECTED_RICHNESS = 350`
-- `accessibility_component_i = log1p(path_km_i) / log1p(max_path_km)`
-  clamped to `[0, 1]`
+- `accessibility_component_i = log1p(path_local_m_i) / log1p(max_path_local_m)`
+  clamped to `[0, 1]`, and `0` for unsampled cells
 
 This is a within-city relative index for hex comparison, not a species count and
 not calibrated per city.

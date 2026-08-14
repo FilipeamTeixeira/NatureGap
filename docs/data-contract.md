@@ -145,7 +145,7 @@ Required properties include:
   "cell_id": "yokohama-honmoku-123",
   "expected_richness": 104.2,
   "effort_corrected_richness": 75.9,
-  "survey_effort_units": 0.17,
+  "survey_effort_units": 5.2,
   "ecological_residual": -28.3,
   "ecological_residual_normalized": -0.62,
   "nature_gap_score": -14,
@@ -158,6 +158,7 @@ Required properties include:
   "is_unsampled": false,
   "temporal_bias_flag": false,
   "path_km": 0.18,
+  "path_local_m": 182.4,
   "n_obs": 41,
   "n_survey_dates": 5,
   "habitat_potential": "moderate",
@@ -179,7 +180,16 @@ Required properties include:
 `observed_richness` definition:
 
 - `observed_richness = species_richness / survey_effort_units`
-- `survey_effort_units = log1p(path_km)`
+- `survey_effort_units = log1p(path_local_m)`
+- `path_local_m` is OSM pedestrian path length, in metres, within
+  `PATH_RADIUS_M` (40 m) of the cell centroid — not just the length clipped by
+  the cell itself. A 20 m hex is ~350 m², so a strict per-cell intersection
+  marks a cell one hex off a footway as unsampled; the neighbourhood measure
+  does not. `path_km` remains the per-cell intersected length and is exported
+  for transparency, but no longer drives effort correction.
+- effort is measured in metres. `log1p` of a length in kilometres is inert at
+  this cell size (`log1p(x) ≈ x` for `x` ≈ 0.02), which turned the correction
+  into division by a near-zero denominator.
 - `effort_corrected_richness` is the backwards-compatible canonical alias used
   in residual calculations.
 - sampled cells with no observations export `observed_richness = 0`;
@@ -195,6 +205,8 @@ Constraints:
 - `cell_id` must match PMTiles `cellId`.
 - Unsampled cells must preserve `is_unsampled = true` and use null/NA for
   residual inference fields where appropriate.
+- `is_unsampled = path_local_m < MIN_PATH_M` (50 m). The floor keeps a stray
+  OSM geometry fragment from passing as an access point.
 - JSON array fields should be valid arrays, not encoded free text.
 
 Database import:

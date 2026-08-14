@@ -144,6 +144,17 @@ function hasRawObservations(cell: CellData): boolean {
 }
 
 /**
+ * An unsampled cell has two distinct causes: no records at all, or records that
+ * cannot be effort-corrected because the hex has too little accessible OSM
+ * pedestrian path (is_unsampled is set from path_local_m < MIN_PATH_M, not from
+ * observation count).
+ * Naming the wrong one contradicts the Biodiversity tab, which reports records.
+ */
+function unsampledDetail(cell: CellData, noRecords: string, noPath: string): string {
+  return hasRawObservations(cell) ? noPath : noRecords;
+}
+
+/**
  * Distinct "no data" state for observation-dependent metrics (Nature Gap,
  * Ecological Residual, Observed Biodiversity, Intervention Priority) so an
  * unsampled cell never reads as a genuinely neutral score.
@@ -336,7 +347,13 @@ export default function CellDetailPanel({
                 <CardTitle>Ecological residual</CardTitle>
                 <CardSubtitle>Biodiversity-specific metric</CardSubtitle>
                 {cell.isUnsampled ? (
-                  <UnsampledNotice detail="Ecological residual compares observed to expected richness — it can't be computed until this cell has recorded observations." />
+                  <UnsampledNotice
+                    detail={unsampledDetail(
+                      cell,
+                      "Ecological residual compares observed to expected richness — it can't be computed until this cell has recorded observations.",
+                      "Ecological residual compares observed to expected richness — records exist here, but this hex has under 50m of OSM pedestrian path within 40m, so corrected richness and the residual can't be computed.",
+                    )}
+                  />
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-3 mb-4">
@@ -375,7 +392,13 @@ export default function CellDetailPanel({
                 <CardTitle>Nature Gap</CardTitle>
                 <CardSubtitle>Composite ecological condition</CardSubtitle>
                 {cell.isUnsampled ? (
-                  <UnsampledNotice detail="Nature Gap combines biodiversity residual, habitat quality, and corridor connectivity — the biodiversity component needs recorded observations first." />
+                  <UnsampledNotice
+                    detail={unsampledDetail(
+                      cell,
+                      'Nature Gap combines biodiversity residual, habitat quality, and corridor connectivity — the biodiversity component needs recorded observations first.',
+                      'Nature Gap combines biodiversity residual, habitat quality, and corridor connectivity — records exist here, but this hex has under 50m of OSM pedestrian path within 40m, so the biodiversity component cannot be effort-corrected.',
+                    )}
+                  />
                 ) : (
                   <div className="flex items-center gap-5">
                     <ScoreGauge score={cell.impactScore} />
@@ -512,13 +535,13 @@ export default function CellDetailPanel({
               <CardTitle>Observed richness</CardTitle>
               <CardSubtitle>From iNaturalist + GBIF records in this cell</CardSubtitle>
               {cell.isUnsampled && !hasRawObservations(cell) ? (
-                <UnsampledNotice detail="No accessible pedestrian path length or recorded observations yet — this cell is marked unsampled rather than zero-richness." />
+                <UnsampledNotice detail="Under 50m of pedestrian path within 40m, and no recorded observations yet — this cell is marked unsampled rather than zero-richness." />
               ) : !hasRawObservations(cell) ? (
                 <NoHexObservationsNotice />
               ) : (
                 <>
                   {cell.isUnsampled && (
-                    <UnsampledNotice detail="Records exist here, but this hex has no accessible OSM pedestrian path — effort-corrected richness is unavailable and the cell is excluded from residual inference." />
+                    <UnsampledNotice detail="Records exist here, but this hex has under 50m of OSM pedestrian path within 40m — effort-corrected richness is unavailable and the cell is excluded from residual inference." />
                   )}
                   <div className="grid grid-cols-2 gap-3 mb-2">
                     <div className={cn('rounded-xl p-4', cell.isUnsampled ? 'bg-[#F0F0EE]' : 'bg-[#F7F8F5]')}>
