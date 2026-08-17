@@ -1101,7 +1101,7 @@ if (file.exists(green_path)) {
     "survey_effort_units", "expected_richness",
     "ecological_residual", "ecological_residual_normalized",
     "data_availability_ratio", "nature_gap_score", "corridor_importance",
-    "betweenness_centrality", "intervention_rank", "tree_fraction", "canopy_height_idx", "mean_lst"
+    "betweenness_centrality", "intervention_rank", "tree_fraction", "veg_fraction", "ndvi_texture", "canopy_height_idx", "mean_lst"
   )) {
     if (!col %in% names(green_raw)) green_raw[[col]] <- NA_real_
   }
@@ -1230,7 +1230,7 @@ for (col in c(
   "tree_fraction", "shrub_fraction", "grass_fraction", "water_fraction",
   "ground_vegetation_fraction", "osm_water_fraction",
   "built_fraction_wc", "bare_fraction", "impervious_fraction",
-  "green_fraction_wc", "lst_rank"
+  "green_fraction_wc", "lst_rank", "veg_fraction", "ndvi_texture"
 )) {
   if (!col %in% names(grid_raw)) grid_raw[[col]] <- NA_real_
 }
@@ -1243,7 +1243,7 @@ grid <- grid_raw |>
              "built_fraction_wc", "green_fraction_wc",
              "impervious_fraction", "osm_green_fraction",
              "osm_ground_veg_fraction", "osm_water_poly_fraction")),
-    any_of(c("ndvi_mean", "lst_rank", "heat_exposure", "noise",
+    any_of(c("ndvi_mean", "veg_fraction", "ndvi_texture", "lst_rank", "heat_exposure", "noise",
              "light_pollution", "disturbance_index", "water_proximity",
              "mean_canopy", "mean_lst",
              "canopy_height_idx", "lst_idx")),
@@ -1464,6 +1464,8 @@ hexgrid_tiles <- hexgrid_render |>
     betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),
     canopyHeightIdx    = round(replace_na(canopy_height_idx, 0), 4),
+    vegFraction        = round(veg_fraction, 4),
+    ndviTexture        = round(ndvi_texture, 4),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
@@ -1621,7 +1623,9 @@ cell_detail_attrs <- grid_all |>
       auto_unbox = TRUE, null = "null", na = "null"
     ),
     tree_cover = pct_index(tree_fraction),
-    land_use_green = pct_index(green_fraction_wc)
+    land_use_green = pct_index(green_fraction_wc),
+    veg_fraction = round(veg_fraction, 4),
+    ndvi_texture = round(ndvi_texture, 4)
   )
 
 cell_attr <- cell_attr_base |>

@@ -20,7 +20,7 @@ city         <- "yokohama-honmoku"        # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "kanto-latest.osm.pbf"    # under data/raw/regional/
 
 aoi_mode    <- "relation"                 # "relation" or "bbox"
-relation_id <- c(2689447L)                # Yokohama
+relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokohama
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
 
 # ── Optional raster sources ───────────────────────────────────────────────────

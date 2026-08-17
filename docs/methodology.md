@@ -112,6 +112,12 @@ Limitations:
 - OSM completeness varies by city.
 - LST is date-sensitive; multi-date composites would be more robust.
 
+Where a national CIR orthophoto is available (Portugal DGT Ortos, Netherlands
+PDOK luchtfoto CIR), ingest also writes `veg_fraction` (share of 0.5 m pixels
+with DN-based NDVI ≥ 0.2) and `ndvi_texture` (within-hex SD of that NDVI).
+These are supplementary hex attributes. They do **not** enter `habitat_quality`,
+which continues to use Sentinel-2 `ndvi_idx` so cities stay comparable.
+
 ## 5. Observer Effort Correction
 
 Effort correction is computed in `pipeline/03_observations/observation_layer.R`.

@@ -391,6 +391,39 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     }
   }
 
+  grid$veg_fraction <- NA_real_
+  grid$ndvi_texture <- NA_real_
+  cir_path <- cfg$RAW_CIR_NDVI %||% if (exists("RAW_CIR_NDVI")) RAW_CIR_NDVI else NA_character_
+  veg_path <- cfg$RAW_VEG_FRACTION %||% if (exists("RAW_VEG_FRACTION")) RAW_VEG_FRACTION else NA_character_
+  cir_threshold <- cfg$CIR_VEG_NDVI_THRESHOLD %||% if (exists("CIR_VEG_NDVI_THRESHOLD")) CIR_VEG_NDVI_THRESHOLD else 0.2
+  message(sprintf(
+    "[tile %s] RAW_CIR_NDVI path: %s (exists: %s)",
+    tile_id, cir_path,
+    is.character(cir_path) && !is.na(cir_path) && file.exists(cir_path)
+  ))
+  if (is.character(cir_path) && !is.na(cir_path) && file.exists(cir_path)) {
+    t_crop <- proc.time()
+    cir <- crop_project_to_halo(cir_path, halo_extent, crs_local, method = "bilinear", label = "cir_ndvi")
+    message(sprintf("[tile %s] cir_ndvi crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
+    if (!is.null(cir)) {
+      t_extract <- proc.time()
+      cir_sd <- terra::extract(cir, core_vect, fun = sd, na.rm = TRUE)
+      idx <- match(core_grid$cell_id, grid$cell_id)
+      grid$ndvi_texture[idx] <- cir_sd[[2]]
+      if (is.character(veg_path) && !is.na(veg_path) && file.exists(veg_path)) {
+        veg <- crop_project_to_halo(veg_path, halo_extent, crs_local, method = "near", label = "veg_fraction")
+        if (!is.null(veg)) {
+          veg_mean <- terra::extract(veg, core_vect, fun = mean, na.rm = TRUE)
+          grid$veg_fraction[idx] <- veg_mean[[2]]
+        }
+      } else {
+        veg_mean <- terra::extract(cir >= cir_threshold, core_vect, fun = mean, na.rm = TRUE)
+        grid$veg_fraction[idx] <- veg_mean[[2]]
+      }
+      message(sprintf("[tile %s] cir veg_fraction/ndvi_texture extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
+    }
+  }
+
   grid$canopy_height_m <- NA_real_
   grid$canopy_height_idx <- NA_real_
   canopy_path <- cfg$CANOPY_HEIGHT_FILE %||% if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_
@@ -889,6 +922,9 @@ run_tiled_processing <- function(force = FALSE) {
     RAW_LANDCOVER = RAW_LANDCOVER,
     RAW_IMPERVIOUS = RAW_IMPERVIOUS,
     RAW_NDVI = RAW_NDVI,
+    RAW_CIR_NDVI = if (exists("RAW_CIR_NDVI")) RAW_CIR_NDVI else NA_character_,
+    RAW_VEG_FRACTION = if (exists("RAW_VEG_FRACTION")) RAW_VEG_FRACTION else NA_character_,
+    CIR_VEG_NDVI_THRESHOLD = if (exists("CIR_VEG_NDVI_THRESHOLD")) CIR_VEG_NDVI_THRESHOLD else 0.2,
     RAW_LST = RAW_LST,
     CANOPY_HEIGHT_FILE = if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_,
     CANOPY_LOCAL_PATH = NA_character_

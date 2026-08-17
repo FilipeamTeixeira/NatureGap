@@ -857,6 +857,38 @@ if (!ndvi_written) {
   )
 }
 
+# ── 6b. Country CIR orthophoto NDVI (optional) ──────────────────────────────
+# DN-based vegetation mask + NDVI raster for veg_fraction / ndvi_texture.
+# Does not overwrite RAW_NDVI.
+
+if (config_path_exists(CIR_NDVI_FILE)) {
+  cat(sprintf("Processing CIR orthophoto NDVI: %s\n", CIR_NDVI_FILE))
+  cir <- crop_to_city(rast(CIR_NDVI_FILE))
+  if (nlyr(cir) > 1L) cir <- cir[[1]]
+  cir[!is.finite(cir)] <- NA
+  names(cir) <- "cir_ndvi_dn"
+  writeRaster(
+    cir, RAW_CIR_NDVI, overwrite = TRUE, datatype = "FLT4S",
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
+
+  veg <- ifel(cir >= CIR_VEG_NDVI_THRESHOLD, 1, 0)
+  names(veg) <- "veg_fraction"
+  writeRaster(
+    veg, RAW_VEG_FRACTION, overwrite = TRUE, datatype = "INT1U",
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  )
+  cat(sprintf(
+    "  → CIR NDVI written; veg mask threshold %.2f\n",
+    CIR_VEG_NDVI_THRESHOLD
+  ))
+} else {
+  message(
+    "Skipping CIR NDVI - run download_pt_ortho_ndvi.R or download_nl_cir_ndvi.R ",
+    "to write ", CIR_NDVI_FILE, "."
+  )
+}
+
 # ── 7. Landsat LST (optional) ───────────────────────────────────────────────
 # Configure LST_FILE (or LST_DIR + LST_BAND_PATTERN) in pipeline/config.R.
 

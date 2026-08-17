@@ -384,6 +384,17 @@ S2_NDVI_FILE <- file.path(
   paste0("ndvi_", CITY_ID, ".tif")
 )
 
+# Country CIR orthophoto NDVI (Portugal DGT / Netherlands PDOK). DN-based,
+# not reflectance-based — do not write this over RAW_NDVI / ndvi_idx.
+# Produced by download_pt_ortho_ndvi.R or download_nl_cir_ndvi.R.
+CIR_NDVI_FILE <- file.path(
+  DATA_IMPORT, "nir",
+  paste0("ndvi_", CITY_ID, ".tif")
+)
+# Pixels with CIR NDVI >= this count as vegetated when building veg_fraction.
+# This is a DN threshold on an 8-bit visual product, not a reflectance NDVI cut.
+CIR_VEG_NDVI_THRESHOLD <- 0.2
+
 S2_SAFE_DIR <- file.path(DATA_IMPORT, "sentinel2")
 S2_RED_BAND_PATTERN <- "B04_10m\\.jp2$"
 S2_NIR_BAND_PATTERN <- "B08_10m\\.jp2$"
@@ -426,6 +437,8 @@ for (d in c(DATA_RAW, DATA_PROC, DATA_EXPORT)) {
 RAW_LANDCOVER  <- file.path(DATA_RAW, "landcover.tif")
 RAW_IMPERVIOUS <- file.path(DATA_RAW, "impervious.tif")
 RAW_NDVI       <- file.path(DATA_RAW, "ndvi.tif")
+RAW_CIR_NDVI   <- file.path(DATA_RAW, "cir_ndvi.tif")
+RAW_VEG_FRACTION <- file.path(DATA_RAW, "veg_fraction.tif")
 RAW_LST        <- file.path(DATA_RAW, "lst.tif")
 RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")

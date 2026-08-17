@@ -56,7 +56,7 @@ for (col in c(
   "observed_richness", "effort_corrected_richness", "survey_effort_units",
   "ecological_residual", "ecological_residual_normalized",
   "ecological_residual_mean", "ecological_residual_std", "corridor_importance",
-  "betweenness_centrality", "tree_fraction", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
+  "betweenness_centrality", "tree_fraction", "veg_fraction", "ndvi_texture", "canopy_height_idx", "nature_gap_score", "fragmentation_index",
   "impact_score", "intervention_rank", "intervention_score", "path_km", "path_local_m", "n_obs",
   "accessibility_component"
 )) {
@@ -191,6 +191,8 @@ patch_base <- hex_weighted |>
     corridor_importance = finite_weighted_mean(corridor_importance, overlap_area_m2),
     betweenness_centrality = finite_weighted_mean(betweenness_centrality, overlap_area_m2),
     tree_fraction = finite_weighted_mean(tree_fraction, overlap_area_m2),
+    veg_fraction = finite_weighted_mean(veg_fraction, overlap_area_m2),
+    ndvi_texture = finite_weighted_mean(ndvi_texture, overlap_area_m2),
     canopy_height_idx = finite_weighted_mean(canopy_height_idx, overlap_area_m2),
     fragmentation_index = finite_weighted_mean(fragmentation_index, overlap_area_m2),
     impact_score = finite_median(impact_score),
