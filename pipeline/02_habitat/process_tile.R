@@ -243,11 +243,67 @@ crop_project_to_halo <- function(r, halo_extent, crs_local, method = "bilinear",
   halo_src <- st_transform(st_as_sf(halo_extent), crs(r))
   cropped <- safe_crop(r, terra::vect(halo_src), label = paste(label, "crop"))
   if (is.null(cropped)) return(NULL)
-  if (terra::crs(cropped) == crs_local) return(cropped)
+  # same.crs(), not ==: crs() returns full WKT, so comparing it to an authority
+  # string ("EPSG:3763") is never TRUE and every already-local raster was being
+  # reprojected onto itself — ~6 s per tile for cir_ndvi/veg_fraction, plus a
+  # pointless bilinear resample of data that was already in the target CRS.
+  if (terra::same.crs(cropped, crs_local)) return(cropped)
   tryCatch(project(cropped, crs_local, method = method), error = function(e) {
     message(sprintf("[crop_project_to_halo] %s project failed: %s", label, conditionMessage(e)))
     NULL
   })
+}
+
+# terra::extract(fun=) walks polygon by polygon, so its cost scales with
+# (n polygons x cells per polygon). On sub-metre rasters a 20 m hex covers
+# ~1400 cells and this dominates everything else in the tile: measured on porto
+# tile_0003 (7322 core cells), the cir_ndvi sd extract alone projects to ~1590 s.
+# rasterize() + zonal() computes the same statistic in one C++ pass over the
+# raster instead — 14.7 s for cir sd + veg mean together.
+#
+# Values are identical, not approximated: rasterize() and extract(touches=FALSE)
+# both assign a raster cell by whether its centre falls inside the polygon, so
+# the same cells feed the same statistic (max abs diff 5e-16 over 400 hexes).
+#
+# The one case rasterize cannot reproduce is a hex containing no cell centre at
+# all, which extract(small=TRUE) still resolves. That only happens on rasters
+# coarse relative to the hex, so those go down the original extract path, and
+# any straggler with an empty zone is backfilled with extract — the result is
+# unchanged for every cell either way.
+zonal_stat_by_cell <- function(r, core_vect, fun, hex_area, zone = NULL) {
+  n_cells <- nrow(core_vect)
+  fine_enough <- is.finite(hex_area) && prod(terra::res(r)) * 4 <= hex_area
+  if (!fine_enough) {
+    return(list(
+      values = terra::extract(r, core_vect, fun = fun, na.rm = TRUE)[[2L]],
+      zone = zone
+    ))
+  }
+  if (!is.null(zone) && !isTRUE(terra::compareGeom(r, zone, stopOnError = FALSE))) {
+    zone <- NULL
+  }
+  if (is.null(zone)) zone <- terra::rasterize(core_vect, r, field = "zone_idx")
+  agg <- terra::zonal(r, zone, fun = fun, na.rm = TRUE)
+  out <- rep(NA_real_, n_cells)
+  keep <- agg[[1L]] >= 1L & agg[[1L]] <= n_cells
+  out[agg[[1L]][keep]] <- agg[[2L]][keep]
+  gaps <- which(is.na(out))
+  if (length(gaps) > 0L) {
+    # The sub-metre rasters do not cover the whole city — crop() clips the halo
+    # at the raster edge, so on an edge tile most core hexes lie outside the
+    # raster and come back NA. extract() returns NA for those too, so sending
+    # them down the fallback buys nothing and costs everything: on porto
+    # tile_0002, 4770 of 4808 gaps were outside the extent and that fallback
+    # alone took 1321 s. Only hexes that actually meet the raster can gain a
+    # value from extract(small=TRUE) — there were 38, and all 38 do.
+    footprint <- terra::as.polygons(terra::ext(r), crs = terra::crs(r))
+    meets_raster <- terra::relate(core_vect[gaps, ], footprint, "intersects")[, 1L]
+    gaps <- gaps[meets_raster]
+  }
+  if (length(gaps) > 0L) {
+    out[gaps] <- terra::extract(r, core_vect[gaps, ], fun = fun, na.rm = TRUE)[[2L]]
+  }
+  list(values = out, zone = zone)
 }
 
 process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NULL) {
@@ -299,7 +355,15 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   # end anyway. Restrict extraction to core cells only; halo-only rows stay
   # NA for these columns, which is fine since they get discarded regardless.
   core_grid <- filter_core_cells(grid, core_local)
+  # Numeric row index for zonal_stat_by_cell(): rasterize() needs a numeric
+  # field, and cell_id is a character key with one level per hex.
+  core_grid$zone_idx <- seq_len(nrow(core_grid))
   core_vect <- vect(core_grid)
+  hex_area <- if (nrow(core_grid) > 0L) {
+    stats::median(as.numeric(st_area(core_grid)))
+  } else {
+    NA_real_
+  }
 
   tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
   message(sprintf("[tile %s] start %s", tile_id, format(Sys.time(), "%H:%M:%S")))
@@ -407,18 +471,23 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     message(sprintf("[tile %s] cir_ndvi crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(cir)) {
       t_extract <- proc.time()
-      cir_sd <- terra::extract(cir, core_vect, fun = sd, na.rm = TRUE)
+      cir_sd <- zonal_stat_by_cell(cir, core_vect, "sd", hex_area)
       idx <- match(core_grid$cell_id, grid$cell_id)
-      grid$ndvi_texture[idx] <- cir_sd[[2]]
+      grid$ndvi_texture[idx] <- cir_sd$values
       if (is.character(veg_path) && !is.na(veg_path) && file.exists(veg_path)) {
+        # Free the cir crop before loading veg: both are full-halo sub-metre
+        # rasters (~290 MB each here) and every worker holds its own copy.
+        rm(cir)
         veg <- crop_project_to_halo(veg_path, halo_extent, crs_local, method = "near", label = "veg_fraction")
         if (!is.null(veg)) {
-          veg_mean <- terra::extract(veg, core_vect, fun = mean, na.rm = TRUE)
-          grid$veg_fraction[idx] <- veg_mean[[2]]
+          # veg_fraction shares cir_ndvi's grid, so the zone raster is reused;
+          # zonal_stat_by_cell() re-rasterizes if that ever stops holding.
+          veg_mean <- zonal_stat_by_cell(veg, core_vect, "mean", hex_area, zone = cir_sd$zone)
+          grid$veg_fraction[idx] <- veg_mean$values
         }
       } else {
-        veg_mean <- terra::extract(cir >= cir_threshold, core_vect, fun = mean, na.rm = TRUE)
-        grid$veg_fraction[idx] <- veg_mean[[2]]
+        veg_mean <- zonal_stat_by_cell(cir >= cir_threshold, core_vect, "mean", hex_area, zone = cir_sd$zone)
+        grid$veg_fraction[idx] <- veg_mean$values
       }
       message(sprintf("[tile %s] cir veg_fraction/ndvi_texture extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
     }
@@ -443,10 +512,12 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     message(sprintf("[tile %s] canopy_height crop+project: %.1fs", tile_id, (proc.time() - t_crop)[["elapsed"]]))
     if (!is.null(canopy_height)) {
       t_extract <- proc.time()
-      canopy_height_mean <- terra::extract(canopy_height, core_vect, fun = mean, na.rm = TRUE)
+      # canopy_height_local is 0.9 m, so ~430 raster cells per 20 m hex — the
+      # same per-polygon extract cost that made cir_ndvi the tile bottleneck.
+      canopy_height_mean <- zonal_stat_by_cell(canopy_height, core_vect, "mean", hex_area)
       message(sprintf("[tile %s] canopy_height extract: %.1fs", tile_id, (proc.time() - t_extract)[["elapsed"]]))
       idx <- match(core_grid$cell_id, grid$cell_id)
-      grid$canopy_height_m[idx] <- replace_na(canopy_height_mean[[2]], NA_real_)
+      grid$canopy_height_m[idx] <- replace_na(canopy_height_mean$values, NA_real_)
       grid$canopy_height_idx[idx] <- fixed_rescale01(grid$canopy_height_m[idx], 0, 30)
     }
   }
