@@ -15,7 +15,7 @@ export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProp
   const isUnder = ward.score < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
 
   return (
-    <div className="w-[320px] flex-shrink-0 bg-white border-l border-[#E4E7E1] flex flex-col overflow-hidden">
+    <div className="h-full bg-white flex flex-col overflow-hidden">
       <div className="px-5 pt-4 pb-5 flex-1">
         <button
           onClick={onClose}

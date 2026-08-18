@@ -262,7 +262,7 @@ export default function CellDetailPanel({
   const showResidualSummary = activeLayer === 'residual';
 
   return (
-    <div className="w-[440px] flex-shrink-0 bg-[#F7F8F5] border-l border-[#E4E7E1] flex flex-col overflow-hidden">
+    <div className="h-full bg-[#F7F8F5] flex flex-col overflow-hidden">
       <div className="px-6 pt-5 pb-0 flex-shrink-0 bg-white border-b border-[#E4E7E1]">
         <button
           onClick={onClose}

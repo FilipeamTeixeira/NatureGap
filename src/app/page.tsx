@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/layout/Navbar';
+import RightSidebar from '@/components/layout/RightSidebar';
 import LayerControls from '@/components/map/LayerControls';
 import CellDetailPanel from '@/components/detail/CellDetailPanel';
 import WardSummaryPanel from '@/components/detail/WardSummaryPanel';
@@ -213,29 +214,34 @@ export default function Page() {
           />
         </div>
 
-        {selectedCell ? (
-          <CellDetailPanel
-            cell={selectedCell}
-            activeLayer={activeLayer}
-            detailLoading={cellDetailLoading}
-            events={events}
-            actions={actions}
-            onClose={handleClosePanel}
-            onViewInsidePark={() => setFlyToTarget({ center: selectedCell.coordinates, zoom: 16 })}
-          />
-        ) : selectedWard ? (
-          <WardSummaryPanel ward={selectedWard} onClose={handleClosePanel} />
-        ) : (
-          <CitizenSciencePanel
-            role={role}
-            species={species}
-            surveyPoints={surveyPoints}
-            selectedSurveyPoint={selectedSurveyPoint}
-            onSelectSurveyPoint={setSelectedSurveyPoint}
-            onRefreshMapData={refreshCitizenData}
-            cityId={currentCityId}
-          />
-        )}
+        <RightSidebar
+          label={selectedCell ? 'Place' : selectedWard ? 'Ward' : 'Citizen science'}
+          expandKey={selectedCell?.id ?? selectedWard?.id ?? selectedSurveyPoint?.id ?? null}
+        >
+          {selectedCell ? (
+            <CellDetailPanel
+              cell={selectedCell}
+              activeLayer={activeLayer}
+              detailLoading={cellDetailLoading}
+              events={events}
+              actions={actions}
+              onClose={handleClosePanel}
+              onViewInsidePark={() => setFlyToTarget({ center: selectedCell.coordinates, zoom: 16 })}
+            />
+          ) : selectedWard ? (
+            <WardSummaryPanel ward={selectedWard} onClose={handleClosePanel} />
+          ) : (
+            <CitizenSciencePanel
+              role={role}
+              species={species}
+              surveyPoints={surveyPoints}
+              selectedSurveyPoint={selectedSurveyPoint}
+              onSelectSurveyPoint={setSelectedSurveyPoint}
+              onRefreshMapData={refreshCitizenData}
+              cityId={currentCityId}
+            />
+          )}
+        </RightSidebar>
       </div>
     </div>
   );

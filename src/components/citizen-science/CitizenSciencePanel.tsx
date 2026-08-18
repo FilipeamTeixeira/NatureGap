@@ -40,7 +40,7 @@ export default function CitizenSciencePanel({
   const activeView: PanelView = canReview ? view : 'submit';
 
   return (
-    <div className="w-[440px] flex-shrink-0 bg-[#F7F8F5] border-l border-[#E4E7E1] flex flex-col overflow-hidden">
+    <div className="h-full bg-[#F7F8F5] flex flex-col overflow-hidden">
       <div className="bg-white border-b border-[#E4E7E1] px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
