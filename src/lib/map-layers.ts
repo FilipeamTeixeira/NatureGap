@@ -20,10 +20,16 @@ import {
   HEX_OUTLINE_LAYER_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
+  hasOverviewFill,
+  isPointLayer,
   LAYER_DRAW_ORDER,
+  overviewPointPaint,
   PATCH_FILL_LAYER_IDS,
   PATCH_FILL_LAYER_ORDER,
   patchFillColorExpressionForCities,
+  type PointLayerId,
+  POINT_LAYER_IDS,
+  POINT_LAYER_ORDER,
   THEMATIC_LAYER_IDS,
 } from '@/lib/layer-styles';
 
@@ -52,6 +58,15 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
       map.setPaintProperty(layer, 'fill-color', patchFillColorExpressionForCities(layerId, cityIds, allCityStats));
     }
 
+    for (const layerId of POINT_LAYER_ORDER) {
+      const layer = POINT_LAYER_IDS[layerId].overview;
+      if (!map.getLayer(layer)) continue;
+      const paint = overviewPointPaint(layerId, cityIds, allCityStats);
+      map.setPaintProperty(layer, 'circle-color', paint?.['circle-color']);
+      // Vegetation radius rides the same per-city canopy stretch as the colour.
+      map.setPaintProperty(layer, 'circle-radius', paint?.['circle-radius']);
+    }
+
     for (const dataset of getHexDatasets(map)) {
       const cityStats = getCityLayerStats(dataset.cityId);
       for (const layerId of LAYER_DRAW_ORDER) {
@@ -66,7 +81,18 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
 
 export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerId, layers: MapLayer[]) {
   for (const layerId of PATCH_FILL_LAYER_ORDER) {
-    setMapLayerVisibility(map, PATCH_FILL_LAYER_IDS[layerId], activeLayerId === layerId);
+    // Point layers show park-centroid points at overview zoom instead of a fill,
+    // and hasOverviewFill layers (canopy height) show nothing at all below the
+    // hex source's minzoom rather than a park-level aggregate.
+    setMapLayerVisibility(
+      map,
+      PATCH_FILL_LAYER_IDS[layerId],
+      activeLayerId === layerId && !isPointLayer(layerId) && hasOverviewFill(layerId),
+    );
+  }
+
+  for (const layerId of POINT_LAYER_ORDER) {
+    setMapLayerVisibility(map, POINT_LAYER_IDS[layerId].overview, activeLayerId === layerId);
   }
 
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
@@ -89,6 +115,14 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
       } catch { /* layer not ready */ }
     }
 
+    for (const layerId of POINT_LAYER_ORDER) {
+      setMapLayerVisibility(
+        map,
+        pointLayerIdForDataset(dataset.sourceId, layerId),
+        activeLayerId === layerId,
+      );
+    }
+
     try {
       const outlineLayerId = hexOutlineLayerId(dataset.sourceId);
       if (map.getLayer(outlineLayerId)) {
@@ -109,6 +143,10 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
 
 export function hexFillLayerIdForDataset(sourceId: string, layerId: HexLayerId): string {
   return `${hexFillLayerId(layerId)}-${sourceId}`;
+}
+
+export function pointLayerIdForDataset(sourceId: string, layerId: PointLayerId): string {
+  return `${POINT_LAYER_IDS[layerId].detail}-${sourceId}`;
 }
 
 export function hexOutlineLayerId(sourceId: string): string {

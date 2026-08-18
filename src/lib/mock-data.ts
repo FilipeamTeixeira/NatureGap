@@ -15,7 +15,7 @@ export const MAP_LAYERS: MapLayer[] = [
   { id: 'connectivity', label: 'Connectivity',            enabled: false, color: '#7b1fa2' },
   { id: 'heat',         label: 'Heat exposure',           enabled: false, color: '#E8A44C' },
   { id: 'landuse',      label: 'Land use',                enabled: false, color: '#558b2f' },
-  { id: 'cell-grid',    label: '20m hex grid',            enabled: true,  color: '#5a6b5a' },
+  { id: 'cell-grid',    label: '20m hex grid',            enabled: false, color: '#5a6b5a' },
   { id: 'survey-points', label: 'Survey points',          enabled: true,  color: '#1F2A1F' },
   { id: 'structured-surveys', label: 'Structured surveys', enabled: true,  color: '#2E6F40' },
 ];
