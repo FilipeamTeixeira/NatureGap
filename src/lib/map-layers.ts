@@ -21,6 +21,9 @@ import {
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
   hasOverviewFill,
+  hexFillAntialias,
+  hexFillOutlineColor,
+  hexOutlineOverlayPaint,
   isPointLayer,
   LAYER_DRAW_ORDER,
   overviewPointPaint,
@@ -74,6 +77,13 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
         const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
         if (!map.getLayer(mlId)) continue;
         map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(layerId, cityStats));
+        // Re-asserted here, not just at addLayer time. These two carry the whole
+        // zoom regime (see HEX_REGIME), and a layer created before this code
+        // existed — a hot reload in dev, or any path that recreates the style
+        // and skips the creation branch — would otherwise keep MapLibre's
+        // default antialiasing and render the honeycomb regardless.
+        map.setPaintProperty(mlId, 'fill-antialias', hexFillAntialias());
+        map.setPaintProperty(mlId, 'fill-outline-color', hexFillOutlineColor());
       }
     }
   } catch { /* style not ready */ }
@@ -131,6 +141,11 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
           'visibility',
           layerEnabled(layers, 'cell-grid') ? 'visible' : 'none',
         );
+        // Same reason as the fill's antialias/outline: re-assert the zoom ramp
+        // rather than trusting whatever paint the layer was created with.
+        const outlinePaint = hexOutlineOverlayPaint();
+        map.setPaintProperty(outlineLayerId, 'line-width', outlinePaint?.['line-width']);
+        map.setPaintProperty(outlineLayerId, 'line-opacity', outlinePaint?.['line-opacity']);
       }
 
       const selectedLayerId = hexSelectedLayerId(dataset.sourceId);

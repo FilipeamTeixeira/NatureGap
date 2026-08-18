@@ -59,8 +59,15 @@ export function cityMeta(cityId: string | null | undefined): CityMeta {
 export const MAP_CONFIG = {
   /** Initial map center — Porto analysis extent centroid. */
   center:    [-8.6123, 41.1593] as [number, number],
-  /** Overview zoom — patch fills visible below DETAIL_ZOOM (14). */
-  zoom:      12,
+  /**
+   * Opening zoom, and the ceiling fitMapToPmtilesDatasets() fits to.
+   *
+   * Must be >= MapView's DETAIL_ZOOM (14): the hexgrid PMTiles hold no tiles
+   * below 14, so opening at 12 meant the app always started in the park-polygon
+   * overview and the 20 m analytical surface was never what you first saw. The
+   * park layer still handles anything wider once the user zooms out.
+   */
+  zoom:      14,
   minZoom:   0,
   maxZoom:   20,
   /** OpenFreeMap Positron — free, no API key, Carto-Positron-compatible style. */

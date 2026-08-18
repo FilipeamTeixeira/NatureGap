@@ -2,6 +2,7 @@ import type {
   CircleLayerSpecification,
   ExpressionSpecification,
   FilterSpecification,
+  LineLayerSpecification,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
 import { POINT_ICON_ID } from './map-icons';
@@ -129,6 +130,104 @@ export const POINT_LAYER_IDS: Record<PointLayerId, { detail: string; overview: s
 };
 
 export const POINT_LAYER_ORDER = LAYER_DRAW_ORDER.filter(isPointLayer);
+
+/**
+ * Cartographic zoom regimes for the 20 m hex source.
+ *
+ * These are *drawing* thresholds only. Every cell keeps its exported value at
+ * every zoom; nothing is aggregated, averaged or recomputed because the user
+ * zoomed out. The breakpoints come from how wide a 20 m cell actually is on
+ * screen — Web Mercator, so a cell covers more pixels at higher latitude:
+ *
+ *        Porto (41.2°N)   Amsterdam (52.4°N)
+ *   z14        2.8 px            3.4 px
+ *   z15        5.6 px            6.9 px
+ *   z16       11.1 px           13.7 px
+ *   z17       22.2 px           27.4 px
+ *   z18       44.5 px           54.9 px
+ *
+ * At z14 a cell is under 3 px. What made that read as a honeycomb was not the
+ * cell size but `fill-antialias`, which is on by default and feathers every
+ * polygon edge: a 2.8 px hexagon is mostly edge, so the whole grid rendered as
+ * a lattice of seams laid over the colour. Turning antialiasing off makes
+ * adjacent fills abut exactly and the field goes continuous — no data change,
+ * no new layer, no raster.
+ *
+ * Zooming in then reverses that in two stages, so the structure emerges instead
+ * of appearing all at once:
+ *
+ *   far        z14   – 15.5  antialias off, no cell edge → continuous surface
+ *   medium     z15.5 – 16.5  antialias on, edge still transparent → cells begin
+ *                            to separate but the layer still reads as a field
+ *   close      z16.5 – 18    cell edge fades in → hexagons clearly individual
+ *   veryClose  z18 +         edge at full strength → explicit 20 m grid
+ */
+export const HEX_REGIME = {
+  /** Hex source minzoom; must stay equal to MapView's DETAIL_ZOOM. */
+  far: 14,
+  medium: 15.5,
+  close: 16.5,
+  veryClose: 18,
+} as const;
+
+/**
+ * The single most important property in this file.
+ *
+ * `fill-antialias` defaults to true, which is right for large polygons and
+ * catastrophic for a 20 m grid at city zoom — see HEX_REGIME. Off below the
+ * medium regime, on above it, which is also what starts revealing cell
+ * structure as the user zooms in.
+ */
+export function hexFillAntialias(): ExpressionSpecification {
+  return ['step', ['zoom'], false, HEX_REGIME.medium, true] as ExpressionSpecification;
+}
+
+/**
+ * Per-cell edge on the analytical fill itself, so hexagons become legible
+ * without the optional grid overlay having to be switched on. Fully
+ * transparent until the close regime, so it cannot reintroduce the honeycomb
+ * at wide zoom. MapLibre only draws this when fill-antialias is true, which
+ * hexFillAntialias() guarantees from HEX_REGIME.medium up.
+ */
+export function hexFillOutlineColor(): ExpressionSpecification {
+  // The first stop must be at HEX_REGIME.medium with alpha 0: `interpolate`
+  // clamps to its first stop below that stop, so starting at .close would paint
+  // a visible edge across the whole far regime and put the honeycomb straight
+  // back. Antialiasing is off below .medium anyway — this keeps the two
+  // properties agreeing rather than relying on that.
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    HEX_REGIME.medium, 'rgba(255,255,255,0)',
+    HEX_REGIME.close, 'rgba(255,255,255,0.08)',
+    HEX_REGIME.veryClose, 'rgba(255,255,255,0.22)',
+    20, 'rgba(255,255,255,0.34)',
+  ] as ExpressionSpecification;
+}
+
+/**
+ * The optional 20 m grid overlay, ramped so that enabling it at city zoom
+ * shows a faint hint rather than a wall of white. Independent of the fill: the
+ * analytical surface never depends on this layer being on.
+ */
+export function hexOutlineOverlayPaint(): LineLayerSpecification['paint'] {
+  return {
+    'line-color': '#ffffff',
+    'line-width': [
+      'interpolate', ['linear'], ['zoom'],
+      HEX_REGIME.far, 0.2,
+      HEX_REGIME.close, 0.45,
+      HEX_REGIME.veryClose, 0.7,
+      20, 1,
+    ],
+    'line-opacity': [
+      'interpolate', ['linear'], ['zoom'],
+      HEX_REGIME.far, 0.10,
+      HEX_REGIME.medium, 0.22,
+      HEX_REGIME.close, 0.38,
+      HEX_REGIME.veryClose, 0.55,
+    ],
+  } as LineLayerSpecification['paint'];
+}
 
 /**
  * Layers with no overview representation below the hex source's minzoom.
@@ -569,14 +668,34 @@ export function hexFillColorExpression(
   ));
 }
 
+/** Nature gap is the default layer and sits lighter so the basemap stays readable. */
+const HEX_FILL_OPACITY: Partial<Record<HexLayerId, number>> = { impact: 0.5 };
+const HEX_FILL_OPACITY_DEFAULT = 0.78;
+
+/**
+ * Zoom ramp around a layer's base opacity.
+ *
+ * Slightly firmer at wide zoom: with antialiasing off the fill no longer has
+ * light seams running through it, so it needs a little more weight to stay the
+ * dominant thing on the map. Slightly softer once cells are large, where the
+ * basemap underneath is what tells you *where* you are looking. Cosmetic only —
+ * the value being shaded is identical at every zoom.
+ */
+function hexOpacityRamp(base: number): ExpressionSpecification {
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    HEX_REGIME.far, Math.min(0.95, base + 0.08),
+    HEX_REGIME.close, base,
+    HEX_REGIME.veryClose + 1, Math.max(0.3, base - 0.06),
+  ] as ExpressionSpecification;
+}
+
 export function hexFillOpacityForLayer(layerId: HexLayerId): number | ExpressionSpecification {
   // Point layers keep their hex fill in the style at zero opacity: nothing is
   // drawn, but queryRenderedFeatures still returns the cell, so clicking
-  // anywhere inside the grid still opens that cell's analytical detail. This is
-  // the same invisible-but-clickable trick biodiversityOpacity already relied on.
+  // anywhere inside the grid still opens that cell's analytical detail.
   if (isPointLayer(layerId)) return 0;
-  if (layerId === 'impact') return 0.5;
-  return 0.78;
+  return hexOpacityRamp(HEX_FILL_OPACITY[layerId] ?? HEX_FILL_OPACITY_DEFAULT);
 }
 
 export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | ExpressionSpecification {

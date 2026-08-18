@@ -12,6 +12,9 @@ import {
   biodiversityCellPaint,
   CORRIDOR_LINES_LAYER_ID,
   hasHexOverlay,
+  hexFillAntialias,
+  hexFillOutlineColor,
+  hexOutlineOverlayPaint,
   type HexLayerId,
   hexFillColorExpression,
   hexFillOpacityForLayer,
@@ -283,6 +286,13 @@ export default function MapView({
               paint: {
                 'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId)),
                 'fill-opacity': hexFillOpacityForLayer(layerId),
+                // See HEX_REGIME in layer-styles.ts. These two properties are the
+                // whole zoom progression: antialiasing off at city zoom removes
+                // the per-cell edge feather that made the grid read as a
+                // honeycomb, and the cell outline fades in only once cells are
+                // large enough to be worth inspecting individually.
+                'fill-antialias': hexFillAntialias(),
+                'fill-outline-color': hexFillOutlineColor(),
               },
             });
           }
@@ -304,17 +314,17 @@ export default function MapView({
             paint: biodiversityCellPaint(),
           });
 
+          // Optional inspection aid, off by default (MAP_LAYERS 'cell-grid').
+          // Starts hidden so it can never flash a full-city honeycomb in the
+          // frames before refreshHexLayers() syncs overlay visibility.
           map.addLayer({
             id: hexOutlineLayerId(dataset.sourceId),
             type: 'line',
             source: dataset.sourceId,
             'source-layer': dataset.sourceLayer,
             minzoom: DETAIL_ZOOM,
-            paint: {
-              'line-color': '#ffffff',
-              'line-width': 0.3,
-              'line-opacity': 0.4,
-            },
+            layout: { visibility: 'none' },
+            paint: hexOutlineOverlayPaint(),
           });
 
           map.addLayer({
@@ -332,7 +342,11 @@ export default function MapView({
           });
         }
 
-        await fitMapToPmtilesDatasets(map, activeHexDatasets);
+        // Preferred city, not every loaded dataset: fitting Porto + Amsterdam +
+        // Yokohama together produces a near-world view, which no maxZoom can
+        // pull back into the hex regime because fitBounds has to zoom *out* to
+        // contain them. One city's AOI fits comfortably inside MAP_CONFIG.zoom.
+        await fitMapToPmtilesDatasets(map, activeHexDatasets, displayCityIdRef.current);
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
         // Datasets only become known here, so the initial view has to be
@@ -635,8 +649,19 @@ export default function MapView({
         }
       } catch { /* style not ready */ }
     };
-    if (map.isStyleLoaded()) apply();
-    else map.once('load', apply);
+    // Deliberately ungated. The obvious `if (map.isStyleLoaded()) ... else
+    // map.once('load'|'idle', ...)` is wrong twice over: `load` fires exactly
+    // once at startup, so anything queued on it later is dropped for good, and
+    // isStyleLoaded() is `!style._changed && sourcesLoaded` — _changed only
+    // clears inside a render frame, so it sticks true whenever the render loop
+    // is throttled (background tab, low-power mode), which also stops `idle`
+    // firing. Observed here with every source loaded and areTilesLoaded true.
+    // apply() is safe to call at any time: it is wrapped in try/catch and the
+    // helpers it calls check map.getLayer() per layer. styledata is the
+    // catch-up for the genuine early case where the layers do not exist yet;
+    // unlike `load` it fires on every style mutation.
+    apply();
+    map.once('styledata', apply);
   }, [selectedCellId]);
 
   useEffect(() => {
@@ -651,8 +676,12 @@ export default function MapView({
       } catch { /* layers not ready yet */ }
     };
 
-    if (map.isStyleLoaded()) apply();
-    else map.once('load', apply);
+    // Ungated for the reason spelled out in the selected-cell effect above.
+    // This is the one where it showed: a layer toggle arriving while
+    // isStyleLoaded() was false left the sidebar and legend on the newly picked
+    // layer while the map went on drawing the previous one, permanently.
+    apply();
+    map.once('styledata', apply);
   }, [layers]);
 
   useEffect(() => {
