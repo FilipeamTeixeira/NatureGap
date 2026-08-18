@@ -85,11 +85,12 @@ interface MapViewProps {
   onViewCityChange?: (cityId: string | undefined) => void;
 }
 
-// Must match --minimum-zoom in pipeline/06_export/export.R: the hexgrid
-// PMTiles archives contain no tiles below this zoom, so lowering it here
-// alone leaves a band where patch fills are already off (layer maxzoom is
-// exclusive) and no hex tiles exist yet.
-const DETAIL_ZOOM = 14;
+// Must match --minimum-zoom in pipeline/06_export/export.R and HEX_REGIME.far
+// in lib/layer-styles.ts: the hexgrid PMTiles archives contain no tiles below
+// this zoom, so lowering it here alone would just make MapLibre request tiles
+// that 404. Archives exported before this was 11 can be extended in place with
+// scripts/backfill-low-zoom-tiles.mjs instead of re-running the R pipeline.
+const DETAIL_ZOOM = 11;
 
 export default function MapView({
   layers,

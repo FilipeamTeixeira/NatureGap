@@ -140,31 +140,39 @@ export const POINT_LAYER_ORDER = LAYER_DRAW_ORDER.filter(isPointLayer);
  * screen — Web Mercator, so a cell covers more pixels at higher latitude:
  *
  *        Porto (41.2°N)   Amsterdam (52.4°N)
+ *   z11        0.3 px            0.4 px
+ *   z12        0.7 px            0.9 px
+ *   z13        1.4 px            1.7 px
  *   z14        2.8 px            3.4 px
  *   z15        5.6 px            6.9 px
  *   z16       11.1 px           13.7 px
  *   z17       22.2 px           27.4 px
  *   z18       44.5 px           54.9 px
  *
- * At z14 a cell is under 3 px. What made that read as a honeycomb was not the
- * cell size but `fill-antialias`, which is on by default and feathers every
- * polygon edge: a 2.8 px hexagon is mostly edge, so the whole grid rendered as
- * a lattice of seams laid over the colour. Turning antialiasing off makes
- * adjacent fills abut exactly and the field goes continuous — no data change,
- * no new layer, no raster.
+ * Across the whole far regime a cell is smaller than a pixel or barely over it.
+ * What made that read as a honeycomb was not the cell size but `fill-antialias`,
+ * which is on by default and feathers every polygon edge: a 2.8 px hexagon is
+ * mostly edge, so the whole grid rendered as a lattice of seams laid over the
+ * colour. Turning antialiasing off makes adjacent fills abut exactly and the
+ * field goes continuous — no data change, no new layer, no raster.
  *
  * Zooming in then reverses that in two stages, so the structure emerges instead
  * of appearing all at once:
  *
- *   far        z14   – 15.5  antialias off, no cell edge → continuous surface
+ *   far        z11   – 15.5  antialias off, no cell edge → continuous surface
  *   medium     z15.5 – 16.5  antialias on, edge still transparent → cells begin
  *                            to separate but the layer still reads as a field
  *   close      z16.5 – 18    cell edge fades in → hexagons clearly individual
  *   veryClose  z18 +         edge at full strength → explicit 20 m grid
+ *
+ * z11 is the floor because that is where the PMTiles archives start, which is
+ * already wider than any city's analysis extent — Porto's is 7.2 x 4.3 km and
+ * a z11 screen spans tens of kilometres. Below it the analytical layers draw
+ * nothing rather than fall back to a different geometry; see hasOverviewFill().
  */
 export const HEX_REGIME = {
   /** Hex source minzoom; must stay equal to MapView's DETAIL_ZOOM. */
-  far: 14,
+  far: 11,
   medium: 15.5,
   close: 16.5,
   veryClose: 18,
@@ -230,22 +238,25 @@ export function hexOutlineOverlayPaint(): LineLayerSpecification['paint'] {
 }
 
 /**
- * Layers with no overview representation below the hex source's minzoom.
+ * No analytical layer has a park-polygon overview any more.
  *
- * Every other surface layer falls back to a park-polygon fill when the hex
- * tiles run out. Canopy height does not: area-averaging per-cell means up to a
- * whole green space answers a different question than the layer asks — "how
- * tall is this park's canopy on average" rather than "where is the canopy" —
- * and the second question is the only one the grid can answer. So below
- * DETAIL_ZOOM this layer draws nothing and the park outlines carry the
- * geographic context on their own.
+ * Canopy height was already exempt, for a reason that turned out to apply to
+ * every layer: shading a whole green space answers a different question than
+ * the layer asks — "what is this park's average" rather than "where is it" —
+ * and only the grid can answer the second. The park fills also came from a
+ * different geometry entirely (OSM polygons), so zooming out swapped the 20 m
+ * analytical surface for a set of hard-edged park shapes that looked like
+ * analysis but was not the same dataset.
+ *
+ * The reason it existed at all was that hexgrid.pmtiles started at zoom 14 and
+ * something had to cover wider views. The archives now carry zoom 11
+ * (pipeline/06_export/export.R), which is the whole analysis extent and then
+ * some, so the grid covers every zoom worth showing it at and the fallback has
+ * nothing left to do. Below zoom 11 the analytical layers simply draw nothing
+ * and the park outlines carry the geographic context on their own — the
+ * behaviour canopy height already had.
  */
-export const LAYERS_WITHOUT_OVERVIEW: ReadonlySet<HexLayerId> = new Set<HexLayerId>(['treecover']);
-
-/** False for layers that deliberately go blank below the hex source's minzoom. */
-export function hasOverviewFill(layerId: HexLayerId): boolean {
-  return !LAYERS_WITHOUT_OVERVIEW.has(layerId);
-}
+export const HAS_PATCH_OVERVIEW = false;
 
 const OBS_VALUE: ExpressionSpecification = ['coalesce', ['get', 'nObs'], 0];
 

@@ -344,12 +344,15 @@ write_hexgrid_pmtiles <- function(value, output_path) {
     "--no-tile-size-limit",
     "--no-tiny-polygon-reduction",
     # Matches the frontend's own minzoom on this source (src/components/map/
-    # MapView.tsx: DETAIL_ZOOM = 14) — MapLibre never requests tiles below
-    # that, so generating zoom 0-13 was pure wasted storage/upload/transfer,
-    # and likely a disproportionately large chunk of it: at low zoom the
-    # whole city fits in a handful of tiles, and with simplification
-    # disabled those few tiles were cramming in every hex at full detail.
-    "--minimum-zoom", "14",
+    # MapView.tsx: DETAIL_ZOOM). Cutting this at 14 left MapLibre with no
+    # analytical tiles at city/region zoom, so the map fell back to shading
+    # OSM park polygons — a different geometry answering a different question
+    # than the 20 m grid does. Zoom 11-13 is a rendering level of detail over
+    # the same cells: every cell is still emitted with its own exported
+    # values, nothing is aggregated or averaged for the wider view. It stays
+    # cheap because at those zooms the whole city is a handful of tiles
+    # (~4 MB for Porto's 21k cells against 13.5 MB for zoom 14-18).
+    "--minimum-zoom", "11",
     "--maximum-zoom", "18",
     tmp
   )

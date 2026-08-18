@@ -20,11 +20,10 @@ import {
   HEX_OUTLINE_LAYER_ID,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
-  hasOverviewFill,
+  HAS_PATCH_OVERVIEW,
   hexFillAntialias,
   hexFillOutlineColor,
   hexOutlineOverlayPaint,
-  isPointLayer,
   LAYER_DRAW_ORDER,
   overviewPointPaint,
   PATCH_FILL_LAYER_IDS,
@@ -91,18 +90,17 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
 
 export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerId, layers: MapLayer[]) {
   for (const layerId of PATCH_FILL_LAYER_ORDER) {
-    // Point layers show park-centroid points at overview zoom instead of a fill,
-    // and hasOverviewFill layers (canopy height) show nothing at all below the
-    // hex source's minzoom rather than a park-level aggregate.
-    setMapLayerVisibility(
-      map,
-      PATCH_FILL_LAYER_IDS[layerId],
-      activeLayerId === layerId && !isPointLayer(layerId) && hasOverviewFill(layerId),
-    );
+    // HAS_PATCH_OVERVIEW is false — see layer-styles.ts. The loop stays so the
+    // layers are explicitly driven to hidden rather than left at whatever
+    // visibility they happened to be created with.
+    setMapLayerVisibility(map, PATCH_FILL_LAYER_IDS[layerId], HAS_PATCH_OVERVIEW);
   }
 
   for (const layerId of POINT_LAYER_ORDER) {
-    setMapLayerVisibility(map, POINT_LAYER_IDS[layerId].overview, activeLayerId === layerId);
+    // Same reasoning as the patch fills: one circle per green space is a
+    // park-level mark, not a 20 m cell, and the hex source now reaches zoom 11
+    // so the cell-level symbols cover every zoom this layer is shown at.
+    setMapLayerVisibility(map, POINT_LAYER_IDS[layerId].overview, false);
   }
 
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');

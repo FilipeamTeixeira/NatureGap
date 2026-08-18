@@ -62,10 +62,11 @@ export const MAP_CONFIG = {
   /**
    * Opening zoom, and the ceiling fitMapToPmtilesDatasets() fits to.
    *
-   * Must be >= MapView's DETAIL_ZOOM (14): the hexgrid PMTiles hold no tiles
-   * below 14, so opening at 12 meant the app always started in the park-polygon
-   * overview and the 20 m analytical surface was never what you first saw. The
-   * park layer still handles anything wider once the user zooms out.
+   * Must be >= MapView's DETAIL_ZOOM (11), below which no hex tiles exist. 14
+   * rather than 11 because it frames one city's analysis extent almost exactly
+   * — Porto's is 7.2 km wide and a 1400 px map at z14 spans about 10 km — so
+   * the view opens on the analytical surface filling the screen rather than on
+   * a small patch adrift in a region.
    */
   zoom:      14,
   minZoom:   0,
