@@ -345,13 +345,17 @@ Limitations:
 
 - `SPECIES_AREA_Z` is still a documented assumption, not a calibrated or cited
   value.
-- Patch observed richness is an area-weighted mean of cell-level
-  effort-corrected richness, so it inherits the sparsity of section 6.1: on the
-  Porto export, patch `observedRichness` had mean 0.048 and median 0 across 1,058
-  sampled parks. Pooling distinct species and effort across each patch — rather
-  than averaging per-cell ratios — would give patch richness real counts to work
-  with (Porto parks reach `speciesRichnessRaw` of 1,049), and is the natural next
-  step. It is not done yet.
+- Patch observed richness is an area-weighted **mean of per-cell ratios**, which
+  is not the ratio of pooled sums, so it inherits the sparsity of section 6.1: on
+  the Porto export, patch `observedRichness` had mean 0.048 and median 0 across
+  1,058 sampled parks. Pooling distinct species and effort across each patch —
+  rather than averaging per-cell ratios — would give patch richness real counts to
+  work with: `merge_park_taxa()` in `06_export/export.R` already unions distinct
+  taxa per park, and Porto's largest park holds **637 distinct taxa**. Note that
+  the exported `speciesRichnessRaw` is *not* that figure — it sums per-cell
+  species counts and so counts the same species once per cell it occupies (1,049
+  for that park against 637 distinct, 1.2× inflation city-wide). Pooling is the
+  natural next step and is not done yet.
 - Neither scale models regional species-pool constraints.
 
 ## 7. Ecological Residual
