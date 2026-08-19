@@ -518,12 +518,15 @@ export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): H
   return getEnabledLayerIds(layers)[0] ?? 'impact';
 }
 
+// Both diverging metrics (nature_gap_score, ecological_residual) are built from
+// expected − observed, so POSITIVE is the bad end: fewer species recorded than
+// the habitat predicts. Red therefore sits at +1, green at -1.
 const DIVERGING_STOPS: [number, string][] = [
-  [-1, '#C95B4B'],
-  [-0.4, '#E8A44C'],
+  [-1, '#2E6F40'],
+  [-0.4, '#73A56D'],
   [0, '#B8C9AE'],
-  [0.4, '#73A56D'],
-  [1, '#2E6F40'],
+  [0.4, '#E8A44C'],
+  [1, '#C95B4B'],
 ];
 
 /** Saturated ramps — even low values stay visible on the light basemap. */
@@ -957,11 +960,11 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     property: 'natureGapScoreNorm',
     rawMetric: 'nature_gap_score',
     legend: [
-      { color: '#2E6F40', label: 'Strong surplus' },
-      { color: '#73A56D', label: 'Surplus' },
-      { color: '#B8C9AE', label: 'Near expected' },
-      { color: '#E8A44C', label: 'Pressure' },
       { color: '#C95B4B', label: 'Strong pressure' },
+      { color: '#E8A44C', label: 'Pressure' },
+      { color: '#B8C9AE', label: 'Near expected' },
+      { color: '#73A56D', label: 'Surplus' },
+      { color: '#2E6F40', label: 'Strong surplus' },
     ],
   },
   expected: {
@@ -982,11 +985,11 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     property: 'residualNorm',
     rawMetric: 'ecological_residual',
     legend: [
-      { color: '#2E6F40', label: 'Far fewer recorded' },
-      { color: '#73A56D', label: 'Fewer recorded' },
+      { color: '#C95B4B', label: 'Far fewer recorded' },
+      { color: '#E8A44C', label: 'Fewer recorded' },
       { color: '#B8C9AE', label: 'Near expected' },
-      { color: '#E8A44C', label: 'More recorded' },
-      { color: '#C95B4B', label: 'Far more recorded' },
+      { color: '#73A56D', label: 'More recorded' },
+      { color: '#2E6F40', label: 'Far more recorded' },
     ],
   },
   intervention: {

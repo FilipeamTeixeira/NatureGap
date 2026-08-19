@@ -86,25 +86,62 @@ Required vector tile source-layer:
 hexgrid
 ```
 
-Required feature properties:
+Required feature properties are declared in `PMTILES_REQUIRED_FIELDS`
+(`pipeline/06_export/export.R`) and validated before the tiles are written.
+That list is authoritative; it currently holds 32 fields. Shape:
 
 ```json
 {
-  "cellId": "yokohama-honmoku-123",
-  "parkId": "honmoku-sancho",
-  "parkName": "Honmoku Sancho Park",
-  "impactScore": -14,
-  "expectedRichness": 104.2,
-  "ecologicalResidual": 28.3,
+  "cellId": "porto-center-1234",
+  "parkId": "jardim-da-cordoaria",
+  "parkName": "Jardim da Cordoaria",
+  "natureGapScore": 31.4,
+  "impactScore": 31,
+  "expectedRichness": 34.8,
+  "ecologicalResidual": 22.4,
+  "ecologicalResidualNormalized": 0.62,
   "habitatQuality": 52,
-  "observedRichness": 75.9,
+  "observedRichness": 12.4,
+  "nObs": 41,
   "corridorImportance": 71,
+  "betweennessCentrality": 12,
   "treeCover": 38,
+  "canopyHeightIdx": 0.31,
   "heatExposure": 64,
+  "meanLst": 31.2,
+  "lstIdx": 36,
   "landUseGreen": 45,
-  "interventionRank": 8
+  "landUseClass": "tree",
+  "interventionRank": 8,
+
+  "natureGapScoreNorm": 0.58,
+  "residualNorm": 0.61,
+  "expectedNorm": 0.44,
+  "habitatQualityNorm": 0.52,
+  "corridorImportanceNorm": 0.71,
+  "betweennessNorm": 0.12,
+  "treeCoverNorm": 0.38,
+  "ndviNorm": 0.41,
+  "lstNorm": 0.64,
+  "disturbanceNorm": 0.55,
+  "interventionRankNorm": 0.84
 }
 ```
+
+Scales:
+
+- `habitatQuality`, `corridorImportance`, `betweennessCentrality`, `treeCover`,
+  `heatExposure`, `lstIdx`, `landUseGreen` are `0`–`100` integer percentages.
+- The `*Norm` fields are the render-ready companions MapLibre styles directly:
+  `[-1, 1]` for the diverging metrics (`natureGapScoreNorm`, `residualNorm`),
+  `[0, 1]` for the rest.
+- Biodiversity-inference fields (`natureGapScore`, `ecologicalResidual`,
+  `observedRichness`, `residualNorm`, `natureGapScoreNorm`,
+  `interventionRankNorm`) are zeroed for unsampled cells because vector tiles
+  cannot style nulls reliably; the true `null` survives in
+  `cell_attributes.geojson` and the `cell-details` shards.
+- `vegFraction` and `ndviTexture` also ride along where CIR NDVI exists. They
+  are supplementary, not in the required list.
 
 Constraints:
 
@@ -143,18 +180,18 @@ Required properties include:
 
 ```json
 {
-  "cell_id": "yokohama-honmoku-123",
-  "expected_richness": 104.2,
-  "effort_corrected_richness": 75.9,
+  "cell_id": "porto-center-1234",
+  "expected_richness": 34.8,
+  "effort_corrected_richness": 12.4,
   "survey_effort_units": 5.2,
-  "ecological_residual": -28.3,
-  "ecological_residual_normalized": -0.62,
-  "nature_gap_score": -14,
-  "impact_score": -14,
+  "ecological_residual": 22.4,
+  "ecological_residual_normalized": 0.62,
+  "nature_gap_score": 31.4,
+  "impact_score": 31,
   "habitat_quality": 52,
   "habitat_quality_index": 0.52,
   "species_richness_raw": 18,
-  "observed_richness": 75.9,
+  "observed_richness": 12.4,
   "max_expected_richness": 350,
   "is_unsampled": false,
   "temporal_bias_flag": false,
@@ -168,7 +205,6 @@ Required properties include:
   "corridor_importance": 0.71,
   "intervention_rank": 8,
   "heat_exposure": 0.64,
-  "fragmentation": 0.84,
   "connectivity_score": 0.52,
   "tree_cover": 38,
   "land_use_green": 45,
@@ -177,6 +213,20 @@ Required properties include:
   "interventions": []
 }
 ```
+
+Notes on specific fields:
+
+- `expected_richness` comes from the species-area law at hex area
+  (`SPECIES_AREA_C * 400^SPECIES_AREA_Z * quality_blend`), so its ceiling is
+  about `53.7`. `max_expected_richness` (350) is carried for transparency and no
+  longer scales it.
+- `ecological_residual` is `expected_richness - observed_richness`: positive
+  means fewer species recorded than the habitat predicts.
+- `impact_score` is a legacy field, `round(bio_residual_norm * 50)` — the
+  biodiversity term of `nature_gap_score` on its own.
+- `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`
+  and `patch_size_distribution` exist as columns but are always null; do not
+  publish them as values.
 
 `observed_richness` definition:
 
@@ -320,17 +370,18 @@ Example:
 
 ```json
 {
-  "honmoku-sancho": {
-    "impactScore": -14,
+  "jardim-da-cordoaria": {
+    "natureGapScore": 31.4,
+    "impactScore": 31,
     "habitatQuality": 52,
     "habitatQualityIndex": 0.52,
     "speciesRichnessRaw": 68,
-    "observedRichness": 68,
-    "effortCorrectedRichness": 68,
-    "expectedRichness": 104,
+    "observedRichness": 41.2,
+    "effortCorrectedRichness": 41.2,
+    "expectedRichness": 77.6,
     "maxExpectedRichness": 350,
-    "ecologicalResidual": 36,
-    "status": "worse",
+    "ecologicalResidual": 36.4,
+    "status": "much-worse",
     "habitatPotential": "moderate",
     "observerEffortScore": 2.3,
     "taxonomicDiversity": 1.9,
@@ -342,11 +393,10 @@ Example:
       { "type": "fungi", "count": 2 }
     ],
     "corridorImportance": 71,
-    "fragmentationIndex": 84,
     "pressures": ["Low survey effort"],
     "interventions": [
       {
-        "id": "yokohama-honmoku-123-rank-8",
+        "id": "porto-center-1234-rank-8",
         "title": "Create or restore habitat corridor",
         "description": "Ranked #8 for intervention priority.",
         "impact": "medium",
@@ -359,7 +409,12 @@ Example:
 
 Schema notes:
 
-- `status`: `much-worse | worse | as-expected | better | much-better`
+- `status`: `much-worse | worse | as-expected | better | much-better`, derived
+  from `natureGapScore` against `SCORE_THRESHOLDS` (`src/lib/config.ts`) —
+  higher score, worse status
+- patch `expectedRichness` uses total patch area in the species-area law, so it
+  is not comparable with the per-hex ceiling of ~53.7
+- `fragmentationIndex` is not exported; the underlying field is never computed
 - `habitatPotential`: `low | moderate | high`
 - `species[].type`: `plant | bird | insect | mammal | fungi`
 - `interventions[].impact`: `high | medium | low`
@@ -492,23 +547,29 @@ Implemented workflow:
 - PostgreSQL exposes `pipeline_observations_export`.
 - `pipeline/01_ingest/export_supabase_observations.R` reads that view and
   writes `raw/supabase_observations.gpkg`.
-- `pipeline/03_observations/observation_layer.R` reads this file alongside
-  iNaturalist and GBIF.
+- `pipeline/02_habitat/process_tile.R` reads this file alongside iNaturalist and
+  GBIF during the tiled observation pass (`03_observations/observation_layer.R`
+  then contract-checks the result).
+- The export step runs only when `SUPABASE_OBSERVATIONS_ENABLED="1"` (or
+  `SUPABASE_OBSERVATIONS_REQUIRED="1"`) is set for the run.
 - `observation_source = quick_sighting` is presence-only and receives
   `observation_weight = 0`.
-- `observation_source = structured_survey` receives higher analytical weight.
+- `observation_source = structured_survey` receives `observation_weight = 3`;
+  anything else defaults to `1`.
 
 ## Metric Semantics
 
 `ecological_residual`:
 
 ```text
-observed_richness - expected_richness
+expected_richness - observed_richness
 ```
 
-- Raw backend analytics value.
-- Positive means field-observed richness is above model expectation.
-- Negative means field-observed richness is below model expectation.
+- Raw backend analytics value — a gap, not a surplus.
+- **Positive** means field-observed richness is **below** model expectation
+  (pressure, restoration candidate).
+- **Negative** means field-observed richness is above model expectation.
+- Same orientation at patch level (`pipeline/05_patch/patch_aggregation.R`).
 
 `ecological_residual_normalized`:
 
@@ -517,18 +578,35 @@ observed_richness - expected_richness
 city_stddev(ecological_residual)
 ```
 
-- City-wise standardized residual.
-- MapLibre residual layers use this field only.
-- Visual styling may clamp `ecological_residual_normalized * 25` to
-  `[-50, 50]`; stored backend values are not clamped.
+- City-wise standardized residual, exported for analytics and detail panels.
+- Stored backend values are not clamped.
+
+`residualNorm` / `natureGapScoreNorm`:
+
+```text
+norm_diverging(x) = clamp(x / max(|p10(x)|, |p90(x)|), -1, 1)
+```
+
+- The render fields MapLibre actually styles for the residual and Nature Gap
+  layers. `ecological_residual_normalized` is **not** used for styling.
+- `src/lib/layer-styles.ts` colours `+1` red and `-1` green, following the sign
+  convention above.
 
 `natureGapScore`:
 
-- Decision score combining standardized residual and pressure indices.
-- Negative means ecosystem under pressure.
-- Positive means ecological surplus.
+- Decision score: `0.50 * clamp(residual / max|residual|, -1, 1)
+  + 0.30 * (1 - habitat_quality) + 0.20 * (1 - corridor_importance)`, ×100.
+- **Positive** means ecosystem under pressure.
+- **Negative** means ecological surplus.
+- Range `[-50, +100]`; band edges live in `SCORE_THRESHOLDS`
+  (`src/lib/config.ts`).
 
-Do not use one field as an alias for the other.
+`impactScore`:
+
+- Legacy field: `round(clamp(residual / max|residual|, -1, 1) * 50)`, i.e. the
+  biodiversity term of `natureGapScore` alone. Prefer `natureGapScore`.
+
+Do not use one field as an alias for another.
 
 ## Local Development Data
 

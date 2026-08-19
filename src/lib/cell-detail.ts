@@ -1,4 +1,4 @@
-import { MAX_EXPECTED_RICHNESS, CITY, CITIES, STORAGE } from './config';
+import { MAX_EXPECTED_RICHNESS, CITY, CITIES, SCORE_THRESHOLDS, STORAGE } from './config';
 import { getParkStats, getParks } from './green-spaces';
 import {
   basename,
@@ -143,11 +143,13 @@ function pct(value: number | null | undefined): number {
   return Math.round(Math.max(0, Math.min(100, value <= 1 ? value * 100 : value)));
 }
 
+/** Band edges live in config.ts so the panel, the gauge and the legend agree. */
 function impactStatus(score: number): ImpactStatus {
-  if (score < -15) return 'much-better';
-  if (score < -5) return 'better';
-  if (score < 10) return 'as-expected';
-  if (score < 20) return 'worse';
+  const t = SCORE_THRESHOLDS;
+  if (score < t.MUCH_BETTER) return 'much-better';
+  if (score < t.BETTER) return 'better';
+  if (score < t.AS_EXPECTED) return 'as-expected';
+  if (score < t.WORSE) return 'worse';
   return 'much-worse';
 }
 

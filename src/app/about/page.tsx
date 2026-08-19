@@ -1,14 +1,14 @@
 import Navbar from '@/components/layout/Navbar';
-import { Leaf, FolderGit, BookOpen, Database } from 'lucide-react';
+import { Leaf, FolderGit, BookOpen, Database, Network } from 'lucide-react';
 
 const PRINCIPLES = [
   {
     title: 'Methodologically honest',
-    body: 'Every index is documented with its inputs, assumptions, and known limitations. The nature impact score is a relative ranking, not an absolute prediction.',
+    body: 'Every index is documented with its inputs, assumptions, and known limitations. The Nature Gap score is a within-city relative ranking, not an absolute species prediction, and its weights are expert-assigned rather than calibrated.',
   },
   {
     title: 'Observation-effort corrected',
-    body: 'Citizen-science records (iNaturalist, GBIF) are normalised by the length of accessible paths per cell, so the map reflects real ecological pressure — not where people happen to walk.',
+    body: 'Citizen-science records (iNaturalist, GBIF, and approved surveys submitted here) are divided by the pedestrian path length within 40 m of each cell, so the map reflects real ecological pressure — not where people happen to walk. A cell with under 50 m of accessible path is marked unsampled and left out of the analysis rather than scored as empty.',
   },
   {
     title: 'Graph-theoretic interventions',
@@ -16,7 +16,7 @@ const PRINCIPLES = [
   },
   {
     title: 'Fully open source',
-    body: 'The R data pipeline, methodology documentation, and this application are all public. Anyone can re-run the analysis for any city with open data coverage.',
+    body: 'The R data pipeline, methodology documentation, and this application are all public — code under MIT, documentation and data under CC BY-SA 4.0. Anyone can re-run the analysis for any city with open data coverage: adding one takes a single small config file.',
   },
 ];
 
@@ -39,11 +39,15 @@ export default function AboutPage() {
           <p className="text-[14px] text-[#667066] leading-relaxed mb-4">
             NatureGap is an open-source tool that compares the biodiversity your neighbourhood{' '}
             <em>should</em> support — based on habitat quality — with what is actually recorded
-            there. The gap is the nature impact score.
+            there. The difference is the Nature Gap score: a positive score means fewer species
+            are recorded than the habitat predicts, a negative score means more.
           </p>
           <p className="text-[14px] text-[#667066] leading-relaxed mb-10">
-            The first city is <strong className="text-[#1F2A1F] font-semibold">Yokohama, Japan</strong>. A
-            second European city is planned to demonstrate transferability. The methodology is
+            Three areas are analysed today —{' '}
+            <strong className="text-[#1F2A1F] font-semibold">Porto</strong>,{' '}
+            <strong className="text-[#1F2A1F] font-semibold">Amsterdam</strong>, and{' '}
+            <strong className="text-[#1F2A1F] font-semibold">Honmoku, Yokohama</strong> — chosen
+            across two continents to show that the same method transfers. The methodology is
             designed to be publishable as a standalone methods paper.
           </p>
 
@@ -68,9 +72,10 @@ export default function AboutPage() {
           </h2>
           <div className="flex flex-col gap-2.5">
             {[
-              { icon: FolderGit, label: 'Source code',   sub: 'Available in this project repository' },
-              { icon: BookOpen,  label: 'Methodology',   sub: 'See docs/methodology.md' },
-              { icon: Database,  label: 'Data pipeline', sub: 'R scripts in pipeline/' },
+              { icon: FolderGit, label: 'Source code',   sub: 'MIT licensed, in this project repository' },
+              { icon: BookOpen,  label: 'Methodology',   sub: 'docs/methodology.md — formulas, assumptions, limitations' },
+              { icon: Database,  label: 'Data pipeline', sub: 'R scripts in pipeline/, one stage per folder' },
+              { icon: Network,   label: 'Ecological network', sub: 'Habitat cores and least-cost corridors, drawn on the map' },
             ].map(({ icon: Icon, label, sub }) => (
               <div
                 key={label}

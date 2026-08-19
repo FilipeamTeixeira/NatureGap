@@ -12,7 +12,7 @@ interface WardSummaryPanelProps {
 }
 
 export default function WardSummaryPanel({ ward, onClose }: WardSummaryPanelProps) {
-  const isUnder = ward.score < SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
+  const isUnder = ward.score > SCORE_THRESHOLDS.BADGE_UNDERPERFORMING;
 
   return (
     <div className="h-full bg-white flex flex-col overflow-hidden">

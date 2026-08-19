@@ -198,6 +198,19 @@ POSTGRES_IMPORT_REQUIRED="1"
 ```
 
 Leave all four flags as `"0"` when you are only regenerating local map products.
+Note that the shipped `.env.example` sets `SUPABASE_OBSERVATIONS_ENABLED="1"`,
+because a scheduled/production run must pull approved surveys — set it back to
+`"0"` deliberately for a local dry-run.
+
+One further optional flag lives in `.env.example` and is off by default:
+
+```text
+POSTGRES_IMPORT_CELL_ATTRIBUTES="0"
+```
+
+Set it to `"1"` only when you need full `cell_attributes` / `green_spaces` rows
+in Postgres for PostGIS analysis. Heavy cell detail otherwise stays in Storage
+and is read by the frontend from PMTiles and the `cell-details` shards.
 
 ## Full Pipeline Refresh
 

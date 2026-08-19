@@ -78,17 +78,38 @@ Frontend:
 - `src/lib/citizen-science.ts`: live survey/sighting fetches and Edge Function calls
 - `src/lib/storage-fetch.ts`: Supabase Storage JSON loader for pipeline JSON artefacts
 - `src/lib/green-spaces.ts`: `parks.geojson` loader for park click zones
-- `src/lib/data.ts`: live business-data reads for tables not yet covered by current migrations
+- `src/lib/data.ts`: live business-data reads (`conservation_actions`,
+  `city_layer_stats`, plus `global_stats`/`wards`/`community_events`, which are
+  not in current migrations and return empty)
 
 R pipeline:
 
-- `pipeline/config.R`: city, CRS, bbox, cell size, paths, constants
+- `pipeline/config.R`: shared constants, paths, env loading, geometry helpers
+- `pipeline/cities/<city>.R`: the per-city values (`CITY_ID`, `CRS_LOCAL`, OSM
+  relation, regional PBF, extra raster downloaders) — everything else is shared
+- `pipeline/run_pipeline.R`: the runner; stages below execute in this order
+- `pipeline/00_download/*.R`: raster acquisition (WorldCover, Sentinel-2,
+  Landsat LST, canopy height, PlanetScope, PT/NL CIR orthophoto NIR)
+- `pipeline/01_ingest/tile_registry.R`: AOI tiling for the tiled passes
 - `pipeline/01_ingest/ingest.R`: raw environmental and biodiversity ingest
-- `pipeline/02_habitat/habitat_model.R`: habitat, stressor, and path-density features
-- `pipeline/03_observations/observation_layer.R`: observation standardisation and effort correction
+- `pipeline/01_ingest/export_supabase_observations.R`: approved app observations
+  out of `pipeline_observations_export` into `raw/supabase_observations.gpkg`
+- `pipeline/02_spatial/spatial_base.R`: whole-AOI hex grid and green spaces
+- `pipeline/02_habitat/process_tile.R`: the tiled worker — habitat, stressor,
+  path length, observation standardisation, effort correction
+- `pipeline/02_habitat/habitat_model.R`: drives the tiled pass, writes
+  `grid_habitat.gpkg` and `habitat_quality.tif`
+- `pipeline/03_observations/observation_layer.R`: observed-richness contract
+  checks, `grid_observations.gpkg`, per-cell taxa JSON
 - `pipeline/04_connectivity/connectivity.R`: graph connectivity metrics
-- `pipeline/05_residuals/residuals.R`: expected richness, residuals, intervention ranking
-- `pipeline/06_export/export.R`: PMTiles, PostGIS import, and UI JSON exports
+- `pipeline/04_connectivity/network_derive.R`: derived node/corridor network
+- `pipeline/05_residuals/residuals.R`: expected richness, residuals, Nature Gap
+  score, intervention ranking
+- `pipeline/05_patch/patch_aggregation.R`: patch (park) aggregation and
+  patch-scale expected richness
+- `pipeline/06_export/export.R`: PMTiles, Storage products, and UI JSON exports
+- `pipeline/07_import/import_to_postgres.R`: optional PostgreSQL dataset import
+- `pipeline/07_import/prune_stale_storage.R`: removes superseded Storage objects
 
 Supabase:
 
@@ -149,9 +170,13 @@ Protocol-based surveys with timing and habitat indicators.
 - Habitat indicators are stored as JSONB
 - Structured surveys are intended to have higher R pipeline weight than quick sightings
 
-The current R pipeline contains a structured-survey weighting field, but the
-approved Supabase observation export into R is not yet fully implemented. That
-import contract is part of the pipeline contract below.
+Structured-survey weighting is implemented end to end: the export view
+`pipeline_observations_export` →
+`pipeline/01_ingest/export_supabase_observations.R` →
+`raw/supabase_observations.gpkg` → `pipeline/02_habitat/process_tile.R`, which
+assigns `observation_weight` 3 to `structured_survey`, 0 to `quick_sighting`,
+and 1 otherwise. The export step runs only when
+`SUPABASE_OBSERVATIONS_ENABLED="1"`. See the pipeline contract below.
 
 ### `survey_records`
 
@@ -167,9 +192,9 @@ Canonical 20 m hex grid and R-computed cell outputs.
 
 - `geometry geometry(Polygon, 4326)`
 - Referenced by live observations and structured surveys
-- Stores expected richness, effort-corrected richness, ecological residual,
-  Nature Gap score, stressors, connectivity, ranking, detail-panel JSON fields,
-  and timestamps
+- Stores expected richness, effort-corrected richness, ecological residual
+  (expected − observed), Nature Gap score, stressors, connectivity, ranking,
+  detail-panel JSON fields, and timestamps
 - Required before live observation assignment works
 
 Versioning model:
@@ -184,16 +209,11 @@ Versioning model:
 
 Reference table for admin-managed action types.
 
-Current conflict:
-
-- The frontend `take-action` page reads `recommended_actions`.
-- Current migrations define `conservation_actions`.
-
-Smallest correction:
-
-- Either migrate the frontend to `conservation_actions`, or add and document
-  `recommended_actions` as a separate content table. Do not keep both as
-  overlapping sources of truth.
+- Defined in `supabase/migrations/20260626095500_observation_database_layer.sql`
+- Read by `fetchActions()` in `src/lib/data.ts`, rendered by
+  `src/app/take-action/page.tsx`
+- There is no `recommended_actions` table and no frontend reference to one; the
+  earlier duplication between the two names is resolved
 
 ### `suggestions`
 
@@ -247,8 +267,15 @@ Current grid facts:
 
 - Resolution: 20 m
 - Shape: hexagons
-- Default city: `yokohama-honmoku`
-- R local CRS for Yokohama: `EPSG:6674`
+- Cities configured: `yokohama-honmoku`, `amsterdam-schimmelstraat`,
+  `porto-center`
+- Default city in the R pipeline: `yokohama-honmoku` (`DEFAULT_CITY` in
+  `pipeline/config.R`)
+- Default city in the frontend: `porto-center` (`CITY.id` in
+  `src/lib/config.ts`, with `NEXT_PUBLIC_PIPELINE_CITY_IDS` selecting which
+  Storage datasets are loaded)
+- R local CRS: `EPSG:6674` (Yokohama), `EPSG:28992` (Amsterdam), `EPSG:3763`
+  (Porto)
 - Web/PostGIS CRS: `EPSG:4326`
 - Frontend source-layer: `hexgrid`
 
@@ -281,12 +308,16 @@ Application observation inputs:
 - GPS accuracy
 - Structured-survey effort metadata and habitat indicators
 
-Current gap:
+Current state:
 
-- The current R pipeline reads iNaturalist and GBIF files.
-- The Supabase-to-R approved observation export is not yet implemented.
+- The R pipeline reads iNaturalist and GBIF files, plus
+  `raw/supabase_observations.gpkg` when the Supabase export has run.
+- The Supabase-to-R approved observation export is implemented
+  (`pipeline_observations_export` +
+  `pipeline/01_ingest/export_supabase_observations.R`) and gated behind
+  `SUPABASE_OBSERVATIONS_ENABLED`.
 
-Required import contract:
+Import contract:
 
 ```text
 approved_observations.gpkg or approved_observations.csv
@@ -317,20 +348,30 @@ records and records with pending or confirmed quality flags are excluded.
 - Writes raw GPKG/raster inputs
 - Does not compute final ecological metrics
 
-`pipeline/02_habitat/habitat_model.R`
+`pipeline/02_spatial/spatial_base.R`
 
-- Builds the 20 m grid
+- Builds the whole-AOI 20 m hex grid and the green-space layer, phase-anchored on
+  `HEX_GRID_ORIGIN` so per-tile grids stay in phase with it
+
+`pipeline/02_habitat/habitat_model.R` (driving `02_habitat/process_tile.R`)
+
+- Runs the tiled pass over `core_tiles.gpkg`
 - Computes habitat features, stressor features, path length, and habitat quality
+- Standardises iNaturalist, GBIF and approved Supabase observations, assigns them
+  to cells, and applies `observation_weight` (structured survey 3, quick
+  sighting 0)
+- Computes raw richness, effort summaries, taxonomic summaries, temporal bias,
+  `survey_effort_units` and `effort_corrected_richness`
+- Marks cells under `MIN_PATH_M` of neighbourhood path as unsampled instead of
+  zero-valued
 - Writes `grid_habitat.gpkg` and `habitat_quality.tif`
 
 `pipeline/03_observations/observation_layer.R`
 
-- Standardises observations
-- Assigns observations to canonical cells
-- Computes raw richness, effort summaries, taxonomic summaries, temporal bias,
-  and `effort_corrected_richness`
-- Marks pathless cells as unsampled instead of zero-valued
-- Applies higher structured-survey weight once the Supabase import exists
+- Enforces the observed-richness contract: a sampled cell must carry
+  `survey_effort_units` and `observed_richness`; an unsampled cell must carry
+  neither. Violations stop the run.
+- Writes `grid_observations.gpkg` and `cell_taxa.json`
 
 `pipeline/04_connectivity/connectivity.R`
 
@@ -354,16 +395,25 @@ records and records with pending or confirmed quality flags are excluded.
 
 `pipeline/05_residuals/residuals.R`
 
-- Computes expected richness
-- Computes ecological residual
-- Computes impact score
+- Computes expected richness (species-area law at hex area)
+- Computes ecological residual (expected − observed) and its normalisations
+- Computes Nature Gap score (and the legacy `impact_score`)
 - Computes intervention score, rank, and counterfactual connectivity estimate
+
+`pipeline/05_patch/patch_aggregation.R`
+
+- Aggregates cell outputs to green-space patches by cell/patch overlap
+- Computes patch expected richness from total patch area with the same
+  species-area law (see docs/methodology.md section 6.2)
 
 `pipeline/06_export/export.R`
 
 - Generates `hexgrid.pmtiles`
 - Generates `cell_attributes.geojson` for PostGIS import
-- Generates `parks.geojson`, `park-stats.json`, and `top_interventions.json`
+- Generates `parks.geojson`, `park-stats.json`, `top_interventions.json`,
+  `city_layer_stats.json`, the `cell-details` shards and their manifest, and the
+  connectivity network edge/node GeoJSON
+- Writes the versioned `manifest.json` and the city's `current.json`
 - Prints the Supabase Storage upload target
 
 ## 7. Derived Metrics
@@ -372,7 +422,8 @@ Every derived metric has one source of truth: the R pipeline.
 
 ### `effort_corrected_richness`
 
-Source: `pipeline/03_observations/observation_layer.R`
+Source: `pipeline/02_habitat/process_tile.R` (`finish_citywide_metrics()`),
+contract-checked by `pipeline/03_observations/observation_layer.R`
 
 ```text
 species_richness / log(1 + path_local_m)
@@ -387,24 +438,32 @@ richness for residual inference.
 Source: `pipeline/05_residuals/residuals.R`
 
 ```text
-MAX_EXPECTED_RICHNESS * (
+SPECIES_AREA_C * (CELL_SIZE ^ 2) ^ SPECIES_AREA_Z * (
   0.65 * habitat_quality
   + 0.20 * corridor_importance
   + 0.15 * accessibility_component
 )
 ```
 
+`SPECIES_AREA_C = 12`, `SPECIES_AREA_Z = 0.25`, so the area term is a constant
+`≈ 53.7` per 20 m hex. `MAX_EXPECTED_RICHNESS` (350) is exported for
+transparency but no longer scales this. Patch-level expected richness uses the
+same law with total patch area (`pipeline/05_patch/patch_aggregation.R`).
+
 ### `ecological_residual`
 
 Source: `pipeline/05_residuals/residuals.R`
 
 ```text
-effort_corrected_richness - expected_richness
+expected_richness - effort_corrected_richness
 ```
 
-- Positive residual: above expectation, ecological surplus
-- Negative residual: below expectation, ecosystem under pressure
+- **Positive** residual: below expectation, ecosystem under pressure
+- **Negative** residual: above expectation, ecological surplus
 - Unsampled cells: `NA`
+
+The residual is a gap, not a surplus: expected minus observed. The patch-level
+residual in `pipeline/05_patch/patch_aggregation.R` uses the same orientation.
 
 ### `nature_gap_score`
 
@@ -413,18 +472,26 @@ Source: `pipeline/05_residuals/residuals.R`
 Current implementation:
 
 ```text
+bio_residual_norm = clamp(ecological_residual / max_abs_residual, -1, 1)
+
 nature_gap_score =
   (
-    0.50 * ecological_residual / max_abs_residual +
+    0.50 * bio_residual_norm +
     0.30 * (1 - habitat_quality) +
     0.20 * (1 - corridor_importance)
   ) * 100
 ```
 
-- Negative Nature Gap score: ecosystem under pressure
-- Positive Nature Gap score: ecological surplus
+- **Positive** Nature Gap score: ecosystem under pressure
+- **Negative** Nature Gap score: ecological surplus
+- Range `[-50, +100]`
 
-Do not treat `nature_gap_score` and `ecological_residual` as the same metric.
+Band edges for status/colour live in `SCORE_THRESHOLDS` (`src/lib/config.ts`)
+and are documented in docs/methodology.md section 8.
+
+`impact_score` (`round(bio_residual_norm * 50)`) is still exported as a legacy
+field carrying the biodiversity term alone. Do not treat `nature_gap_score`,
+`impact_score` and `ecological_residual` as the same metric.
 
 ### `intervention_score`
 
@@ -433,11 +500,15 @@ Source: `pipeline/05_residuals/residuals.R`
 Current implementation:
 
 ```text
-(ecological_residual * 0.5) * (corridor_importance * 0.5)
+underperformance = max(0, ecological_residual)
+
+(underperformance * 0.5) * (corridor_importance * 0.5)
 ```
 
-This replaces the older weighted-sum formula. Documentation and UI copy should
-refer to this implementation until the model is intentionally changed.
+The residual is floored at zero first, so an over-performing cell scores 0
+rather than negative. This replaces the older weighted-sum formula.
+Documentation and UI copy should refer to this implementation until the model is
+intentionally changed.
 
 ### Detail-panel fields
 
@@ -456,21 +527,18 @@ PMTiles are the canonical map-rendering artefact for the 20 m hex grid.
 `pipeline/06_export/export.R` generates `hexgrid.pmtiles` from the R residual
 grid using `tippecanoe`.
 
-Required properties:
-
-- `cellId`
-- `parkId`
-- `parkName`
-- `impactScore`
-- `expectedRichness`
-- `ecologicalResidual`
-- `habitatQuality`
-- `observedRichness`
-- `corridorImportance`
-- `treeCover`
-- `heatExposure`
-- `landUseGreen`
-- `interventionRank`
+Required properties are declared once, in `PMTILES_REQUIRED_FIELDS`
+(`pipeline/06_export/export.R`), and validated at export time — that list is
+authoritative and currently holds 32 fields: identity (`cellId`, `parkId`,
+`parkName`), scores (`natureGapScore`, `impactScore`, `expectedRichness`,
+`ecologicalResidual`, `ecologicalResidualNormalized`, `interventionRank`),
+context (`habitatQuality`, `observedRichness`, `corridorImportance`,
+`betweennessCentrality`, `treeCover`, `canopyHeightIdx`, `heatExposure`,
+`meanLst`, `lstIdx`, `landUseGreen`, `landUseClass`, `nObs`) and the
+render-normalised companions MapLibre styles directly (`natureGapScoreNorm`,
+`residualNorm`, `expectedNorm`, `habitatQualityNorm`, `corridorImportanceNorm`,
+`betweennessNorm`, `treeCoverNorm`, `ndviNorm`, `lstNorm`, `disturbanceNorm`,
+`interventionRankNorm`). See docs/methodology.md section 11.
 
 Required vector tile source-layer:
 
@@ -634,51 +702,44 @@ Implemented scale controls:
 Do not introduce another analytical grid. Do not add frontend or SQL ecological
 recalculation to solve scale problems.
 
-## 12. Known Current Gaps
+## 12. Implemented, And Still Open
+
+Implemented (previously listed here as gaps):
 
 - Supabase approved observations are exported to R through
   `pipeline_observations_export` and
-  `pipeline/01_ingest/export_supabase_observations.R`.
-- Structured-survey weighting is connected to live Supabase exports through the
-  R observation source contract.
+  `pipeline/01_ingest/export_supabase_observations.R`, gated on
+  `SUPABASE_OBSERVATIONS_ENABLED`.
+- Structured-survey weighting is connected to those exports through the R
+  observation source contract (structured survey 3, quick sighting 0).
 - PMTiles generation and Storage discovery use versioned `manifest.json` and
   stable `current.json` pointers.
-- `conservation_actions` and frontend `recommended_actions` are inconsistent.
-- `global_stats`, `wards`, `community_events`, and `recommended_actions` are
-  queried by frontend code but are not present in the inspected migrations.
+- `conservation_actions` is the single action table; the frontend reads it
+  directly and no `recommended_actions` reference remains.
+- `city_layer_stats` exists (migration `20260628120000_per_city_normalisation`)
+  and carries the per-metric percentile bounds the legends stretch to.
 - `cell_attributes` has city/version metadata for optional legacy imports;
-  historical versions can live in `pipeline_cell_attributes`.
+  historical versions live in `pipeline_cell_attributes`.
+
+Still open:
+
+- `global_stats`, `wards`, and `community_events` are queried by
+  `src/lib/data.ts` but are not present in current migrations, so those reads
+  return empty.
+- `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`
+  and `patch_size_distribution` are placeholder `NA` fields (see
+  docs/methodology.md section 9).
+- Named barriers (a specific road or railway interrupting a corridor) need a
+  roads/rail loader at the connectivity stage; only bottleneck sections exist.
 - Numeric constraints on detail fields are weaker than the model contract.
 
 ## 13. Implementation Roadmap
 
-1. Documentation alignment
-   - Purpose: remove obsolete GeoJSON/cells render contract and document current PMTiles/PostGIS flow
-   - Affected files: `docs/system-architecture.md`, `docs/data-contract.md`, `docs/methodology.md`
-   - Dependencies: none
-   - Difficulty: small
-   - Breaking: no
-
-2. PMTiles manifest
-   - Purpose: replace hardcoded dataset discovery with active version discovery
-   - Affected files: `pipeline/06_export/export.R`, `src/lib/pmtiles-storage.ts`, `src/lib/config.ts`
-   - Dependencies: documentation alignment
-   - Difficulty: medium
-   - Breaking: no, if current paths remain as fallback
-
-3. R-to-Postgres import contract
-   - Purpose: make `cell_attributes` import repeatable and auditable
-   - Affected files: pipeline export scripts, Supabase migration/import scripts
-   - Dependencies: PMTiles manifest optional
-   - Difficulty: medium
-   - Breaking: no, if additive
-
-4. Approved observation export for R
-   - Purpose: include quick sightings and structured surveys in the analytical pipeline
-   - Affected files: SQL view/export script, `pipeline/03_observations/observation_layer.R`
-   - Dependencies: analysis eligibility rules
-   - Difficulty: medium to large
-   - Breaking: no
+Items 1–4 are done: the documentation describes the current PMTiles/Storage
+flow, dataset discovery runs through `current.json` + `manifest.json`, the
+PostgreSQL import contract is `import_pipeline_dataset()` /
+`promote_pipeline_dataset()`, and approved app observations reach R through
+`pipeline_observations_export`. The remaining items:
 
 5. Multi-city and versioned cell attributes
    - Purpose: scale beyond one active city/run
@@ -687,12 +748,13 @@ recalculation to solve scale problems.
    - Difficulty: medium
    - Breaking: potentially, unless introduced with defaults and compatibility views
 
-6. Action table reconciliation
-   - Purpose: remove duplicate action concepts
-   - Affected files: migration or frontend action reads
-   - Dependencies: product choice between `conservation_actions` and `recommended_actions`
+6. Missing content tables
+   - Purpose: back `global_stats`, `wards`, and `community_events` with real
+     migrations, or remove the frontend reads
+   - Affected files: Supabase migrations or `src/lib/data.ts` consumers
+   - Dependencies: product decision on whether those surfaces stay
    - Difficulty: medium
-   - Breaking: no, if fallback remains
+   - Breaking: no
 
 7. Constraints and indexes
    - Purpose: improve data integrity and query performance

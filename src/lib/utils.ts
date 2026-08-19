@@ -11,22 +11,24 @@ export function formatScore(score: number): string {
   return score > 0 ? `+${score}` : `${score}`;
 }
 
+// The Nature Gap score rises as a cell underperforms (expected − observed), so
+// the bands run best → worst as the score increases. See config.ts.
 export function getScoreColor(score: number): string {
   const t = SCORE_THRESHOLDS;
-  if (score < t.MUCH_WORSE)  return SCORE_COLORS.MUCH_WORSE;
-  if (score < t.WORSE)       return SCORE_COLORS.WORSE;
-  if (score < t.AS_EXPECTED) return SCORE_COLORS.AS_EXPECTED;
+  if (score < t.MUCH_BETTER) return SCORE_COLORS.MUCH_BETTER;
   if (score < t.BETTER)      return SCORE_COLORS.BETTER;
-  return SCORE_COLORS.MUCH_BETTER;
+  if (score < t.AS_EXPECTED) return SCORE_COLORS.AS_EXPECTED;
+  if (score < t.WORSE)       return SCORE_COLORS.WORSE;
+  return SCORE_COLORS.MUCH_WORSE;
 }
 
 export function getScoreLabel(score: number): string {
   const t = SCORE_THRESHOLDS;
-  if (score < t.MUCH_WORSE)  return 'Much worse than expected';
-  if (score < t.WORSE)       return 'Worse than expected';
-  if (score < t.AS_EXPECTED) return 'As expected';
+  if (score < t.MUCH_BETTER) return 'Much better than expected';
   if (score < t.BETTER)      return 'Better than expected';
-  return 'Much better than expected';
+  if (score < t.AS_EXPECTED) return 'As expected';
+  if (score < t.WORSE)       return 'Worse than expected';
+  return 'Much worse than expected';
 }
 
 export function formatNumber(n: number): string {

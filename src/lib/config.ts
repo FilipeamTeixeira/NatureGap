@@ -79,10 +79,12 @@ export const MAP_CONFIG = {
 
 // ── Hex grid ─────────────────────────────────────────────────────────────────
 
+// Unused by current code — the grid arrives pre-built in hexgrid.pmtiles. Kept
+// as the documented cell geometry; there is no synthetic hex generation left.
 export const HEX_CONFIG = {
-  /** Circumradius in metres — must match pipeline/06_export/export.R. */
+  /** Circumradius in metres — half of CELL_SIZE in pipeline/config.R. */
   radiusM: 10,
-  /** Score clamp applied during synthetic hex generation. */
+  /** Legacy score clamp from synthetic hex generation. */
   minScore: -48,
   maxScore:  48,
 } as const;
@@ -90,22 +92,29 @@ export const HEX_CONFIG = {
 // ── Score methodology ─────────────────────────────────────────────────────────
 //
 // These thresholds define the 5-band Nature Gap score scale.
-// They are used in utils.ts, ScoreGauge.tsx, and the
-// data-contract.md colour table — change them here only.
+//
+// The score is HIGHER THE WORSE a cell performs: residuals.R builds
+// nature_gap_score from expected − observed richness plus habitat and
+// connectivity deficits, so a positive score means fewer species recorded than
+// the habitat predicts (pressure) and a negative score means more (surplus).
+// See docs/methodology.md §8.
+//
+// Single source of truth for the band edges — used by utils.ts (colour/label),
+// cell-detail.ts (ImpactStatus) and ScoreGauge.tsx. Change them here only.
 
 export const SCORE_THRESHOLDS = {
-  /** score < MUCH_WORSE  → "Much worse than expected" */
-  MUCH_WORSE: -20,
-  /** score < WORSE       → "Worse than expected" */
-  WORSE:      -10,
-  /** score < AS_EXPECTED → "As expected" */
-  AS_EXPECTED:  5,
+  /** score < MUCH_BETTER → "Much better than expected" */
+  MUCH_BETTER: -15,
   /** score < BETTER      → "Better than expected" */
-  BETTER:      15,
-  // score >= BETTER      → "Much better than expected"
+  BETTER:       -5,
+  /** score < AS_EXPECTED → "As expected" */
+  AS_EXPECTED:  10,
+  /** score < WORSE       → "Worse than expected" */
+  WORSE:        20,
+  // score >= WORSE       → "Much worse than expected"
 
-  /** Badge switches to "underperforming" style below this value. */
-  BADGE_UNDERPERFORMING: -5,
+  /** Badge switches to "underperforming" style above this value. */
+  BADGE_UNDERPERFORMING: 5,
 
   /** Default gauge range. */
   GAUGE_MIN: -50,
