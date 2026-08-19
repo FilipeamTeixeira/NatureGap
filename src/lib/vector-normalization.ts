@@ -331,7 +331,9 @@ function hexCellProperties(props: Properties, domains: Record<string, MetricDoma
   };
 }
 
-const CORRIDOR_STRENGTHS = ['fragmented', 'weak', 'moderate', 'strong', 'strongest'] as const;
+const CORRIDOR_STRENGTHS = ['weak', 'moderate', 'strong', 'strongest'] as const;
+const CORRIDOR_RANKS = ['minor', 'secondary', 'primary'] as const;
+const CORRIDOR_KINDS = ['corridor', 'bottleneck'] as const;
 const NODE_TIERS = ['major', 'secondary', 'stepping-stone'] as const;
 
 // The derived network arrives pre-classified from 04_connectivity: `importance`
@@ -341,12 +343,22 @@ const NODE_TIERS = ['major', 'secondary', 'stepping-stone'] as const;
 // MapLibre match expression and paint an undefined colour.
 function networkEdgeProperties(props: Properties): StrictProperties {
   const strength = asString(props.strength);
+  const rank = asString(props.rank);
+  const kind = asString(props.kind);
   return {
-    segmentId: asString(props.segmentId ?? props.segment_id),
-    componentId: rawNumber(props, ['componentId', 'component_id']),
-    cells: rawNumber(props, ['cells']),
+    corridorId: asString(props.corridorId ?? props.corridor_id),
+    sectionIndex: rawNumber(props, ['sectionIndex', 'section_index']),
+    fromNode: asString(props.fromNode ?? props.from_node),
+    toNode: asString(props.toNode ?? props.to_node),
+    lengthM: rawNumber(props, ['lengthM', 'length_m']),
+    meanResistance: rawNumber(props, ['meanResistance', 'mean_resistance']),
+    bottlenecks: rawNumber(props, ['bottlenecks']),
     importance: roundNormalized(clamp01(asNumber(props.importance) ?? 0)),
-    strength: (CORRIDOR_STRENGTHS as readonly string[]).includes(strength) ? strength : 'fragmented',
+    strength: (CORRIDOR_STRENGTHS as readonly string[]).includes(strength) ? strength : 'weak',
+    // Rank drives the zoom hierarchy, so an unknown value must fall to the class
+    // that appears last rather than the one that appears at city scale.
+    rank: (CORRIDOR_RANKS as readonly string[]).includes(rank) ? rank : 'minor',
+    kind: (CORRIDOR_KINDS as readonly string[]).includes(kind) ? kind : 'corridor',
   };
 }
 
@@ -356,8 +368,8 @@ function networkNodeProperties(props: Properties): StrictProperties {
     cellId: asString(props.cellId ?? props.cell_id),
     tier: (NODE_TIERS as readonly string[]).includes(tier) ? tier : 'stepping-stone',
     degree: rawNumber(props, ['degree']),
-    componentId: rawNumber(props, ['componentId', 'component_id']),
-    componentCells: rawNumber(props, ['componentCells', 'component_cells']),
+    coreCells: rawNumber(props, ['coreCells', 'core_cells']),
+    areaHa: rawNumber(props, ['areaHa', 'area_ha']),
     importance: roundNormalized(clamp01(asNumber(props.importance) ?? 0)),
   };
 }

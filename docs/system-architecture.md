@@ -339,6 +339,15 @@ records and records with pending or confirmed quality flags are excluded.
 - Computes dispersal-limited betweenness and derives `corridor_importance` from
   it as a percentile rank; `connectivity_score` and `node_importance` are views
   on the same two values
+- Builds a **second** graph over every cell, walls included at maximum
+  resistance (`build_routing_graph()`), used only for corridor routing — the
+  betweenness graph is too fragmented to route across, having dropped the walls
+- Derives the simplified network in `network_derive.R`: habitat-core nodes, then
+  least-cost corridors between neighbouring nodes, scored and pruned (see
+  docs/methodology.md section 9a)
+- Caches in two steps: `connectivity_graph_up_to_date()` covers the expensive
+  betweenness half, `connectivity_up_to_date()` adds the network's own tuning, so
+  retuning `NET_*` rebuilds the network without recomputing betweenness
 - Does **not** compute `fragmentation_index`, `edge_density`, `patch_isolation`
   or `patch_size_distribution` — these remain `NA` placeholders (see
   docs/methodology.md section 9)

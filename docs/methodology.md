@@ -397,49 +397,101 @@ fired. Ranking restores a scale those thresholds can express.
 
 The 20 m cells are the analytical surface, but they are not the map's primary
 representation. `pipeline/04_connectivity/network_derive.R` reduces them to a
-simplified network — nodes joined by corridor centrelines — which is what the
+simplified network — habitat-core nodes joined by corridors — which is what the
 connectivity layer draws at overview and transition zoom. The cells themselves
 fade in only at analytical zoom (`NETWORK_REGIME.handover` in
 `lib/layer-styles.ts`).
 
+The order is nodes first, then routes between them. The reverse order — take the
+high-importance cells, skeletonise, draw every branch — was the previous
+implementation and is structurally incapable of producing a city-scale network:
+cutting the graph at the importance threshold *before* deriving topology means no
+corridor can cross degraded ground, so every high-importance blob becomes its own
+island. Porto came out as 130 disconnected components and 420 segments with a
+median length of 84 m.
+
+**Routing surface.** Corridors are routed on a graph built from *every* grid cell,
+walls included at `CONN_MAX_RESISTANCE` (`build_routing_graph()`). The betweenness
+graph cannot serve: it drops cells below `CONN_MIN_PERMEABILITY`, which leaves it
+in 520–1375 disconnected components with its largest holding 8–20% of cells, so
+four candidate connections in five were unreachable. Whether a corridor should
+cross weak ground is decided by the cost ceilings below, not by a missing edge.
+
 Derivation, per city:
 
-1. Cells at or above `NET_MIN_IMPORTANCE` are grouped into **connected areas**
-   with `igraph::components()` on the habitat graph.
-2. Each area is reduced to a **skeleton** by farthest-point growth: take the two
-   most remote cells and the least-cost path between them as the trunk, then
-   repeatedly attach the most remote unattached cell to the existing skeleton by
-   its least-cost path, pruning branches shorter than `NET_MIN_BRANCH_CELLS`.
-   Every centreline is therefore a least-cost path through the resistance
-   surface, so a corridor that follows a canal bank or park edge does so as a
-   consequence of the habitat data, never because that feature was used as
-   geometry.
-3. Degree-2 runs are contracted into one polyline per corridor **segment**, then
-   corner-cut (`NET_SMOOTH_PASSES`) to relax the 60° zigzag of a hex centroid
-   path into a curve.
-4. **Nodes**: one per connected area, tiered by area size
-   (`NET_MAJOR_CELLS` / `NET_SECONDARY_CELLS`); plus junctions (degree ≥ 3,
-   promoted to major at degree ≥ 4) and corridor endpoints. Areas too small to
-   skeletonise (`NET_MIN_COMPONENT_CELLS`) become a single stepping stone rather
-   than an invented corridor.
-5. Segments are classed `strongest | strong | moderate | weak | fragmented` by
-   mean `corridor_importance` along their cells.
+1. **Habitat cores.** Cells at or above `NET_CORE_IMPORTANCE` are grouped into
+   connected areas. An area of at least `NET_CORE_MIN_AREA_HA` earns exactly one
+   node, placed at the core's centre among its more permeable cells — not at its
+   most important cell, since `corridor_importance` peaks at bottlenecks and would
+   pull the node off the patch onto the pinch point leading out of it. Tier comes
+   from area (`NET_MAJOR_AREA_HA` / `NET_SECONDARY_AREA_HA`).
+2. **Node budget.** Cores are kept largest-area first, up to
+   `NET_NODES_PER_KM2 × AOI km²`, clamped to `[NET_NODES_MIN, NET_NODES_MAX]`.
+   Keyed to a cell-count threshold instead, Porto drew 160 secondary nodes against
+   Amsterdam's 84 for no ecological reason and the two maps stopped being
+   comparable.
+3. **Candidate connections.** Delaunay neighbours of the node set, capped at
+   `NET_MAX_LINK_M` straight-line separation (k-nearest as a fallback when
+   triangulation is unavailable). All-pairs routing is affordable at this node
+   count but yields a bundle of near-parallel routes that pruning then has to
+   undo; Delaunay also guarantees the candidate set is connected before the
+   distance cap is applied.
+4. **Routing.** One least-cost path per candidate over the routing surface, one
+   Dijkstra per source node. Cost is in effective metres, so `cost ÷ geometric
+   length` is the route's mean resistance. A route is rejected above
+   `NET_MAX_ROUTE_RESISTANCE` or `NET_MAX_ROUTE_COST_M`. Because every node pair
+   has *some* least-cost path, these ceilings are what stop the map trading
+   true-but-trivial fragments for clean-looking fictions.
+5. **Pruning.** The backbone is a minimum spanning tree over route cost. A
+   non-tree link survives only if it costs less than `NET_REDUNDANCY_RATIO` of the
+   detour the tree forces *and* reuses no more than `NET_MAX_ROUTE_OVERLAP` of the
+   cells already covered.
+6. **Scoring.** Each corridor gets one class from its whole route's mean
+   resistance: `strongest | strong | moderate | weak` (`NET_STRENGTH_BREAKS`).
+   There is no `fragmented` class — step 4 rejects a route that bad, and a
+   corridor that is broken rather than merely poor is described by its bottlenecks
+   instead of by its average. Mean `corridor_importance` is *not* usable here: the
+   route now crosses cells that carry no betweenness at all, where importance is 0
+   by definition, and averaging those collapses every score to the floor.
+7. **Bottlenecks.** A contiguous run of cells below
+   `NET_BOTTLENECK_PERMEABILITY` covering at least `NET_BOTTLENECK_MIN_M` is
+   carved out of the line as its own section, sharing the corridor's `corridorId`
+   and quality class but marked `kind = "bottleneck"`. Every other section keeps
+   the corridor's single dominant colour, so the line does not flicker between
+   classes along its length. Sections below `NET_MIN_SECTION_M` are absorbed into
+   their longer neighbour.
+8. **Geometry.** Corner-cut (`NET_SMOOTH_PASSES`) to relax the 60° zigzag of a hex
+   centroid path into a curve, then Douglas-Peucker at `NET_SIMPLIFY_M`. The
+   tolerance has to stay well under the 20 m cell pitch — at 6 m it ate the
+   curvature the smoother had just produced and left a 240 m corridor as four
+   vertices.
 
-Node tiering is deliberately not a function of score alone: a large connected
-area earns one major node, and a busy junction earns one on its own merit. An
-earlier version gave every terminal of a large area that area's tier, which
-produced 55 "major" nodes in Amsterdam instead of 5.
+**Hierarchy is styling, not generation.** One network is produced per city; each
+corridor carries a `rank` (`primary | secondary | minor`) derived from the tiers
+it connects, and `corridorLineOpacity()` reveals ranks progressively across zoom.
+Generating three networks for three scales would mean three things that can
+disagree. Rank gates by significance rather than by quality on purpose: a weak
+corridor between two major cores is a finding worth seeing at city scale.
 
-Amsterdam yields 143 connected areas → 211 corridor segments (25.3 km) and 404
-nodes (5 major, 84 secondary, 315 stepping stones), about 108 KB of line
-GeoJSON. This replaces `corridor-links.geojson`, which emitted one line per hex
-adjacency — roughly 32,000 segments that rendered as a dense mesh rather than a
-network.
+| | corridors | sections | nodes (major/secondary/stepping) | median route |
+|---|---|---|---|---|
+| amsterdam-schimmelstraat | 34 | 66 | 31 (6/8/17) | 720 m |
+| porto-center | 49 | 85 | 40 (7/23/10) | 680 m |
+| yokohama-honmoku | 8 | 10 | 9 (5/3/1) | 1060 m |
 
-Not yet derived: **connectivity breaks** where a road or railway severs a
-corridor. That needs a roads/rail loader at the connectivity stage, which does
-not exist yet — roads are currently only read per-tile in `02_habitat`. The
-legend deliberately omits a break symbol until the data behind it exists.
+Amsterdam previously emitted 211 segments (median 92 m) and 404 nodes; Porto 420
+segments and 822 nodes. The edge GeoJSON is now about 5 KB per city.
+
+Yokohama is genuinely sparse rather than misconfigured: it has no NIR coverage, so
+permeability falls back to the near-binary WorldCover fractions (see §8), which
+concentrates `corridor_importance` in few cells and leaves only nine habitat cores
+above `NET_CORE_MIN_AREA_HA`.
+
+Barriers are reported as bottleneck sections on the corridors they interrupt,
+which is what the legend's break symbol now refers to. A **named** barrier — this
+specific road, this railway — still needs a roads/rail loader at the connectivity
+stage, which does not exist yet; roads are currently only read per-tile in
+`02_habitat`.
 
 `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`, and
 `patch_size_distribution` exist as placeholder fields in the pipeline but are

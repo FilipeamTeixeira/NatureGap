@@ -1523,10 +1523,11 @@ hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
 pmtiles_validation <- write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
 cat(sprintf("Written: %s (source-layer: %s)\n", hexgrid_pmtiles_path, PMTILES_SOURCE_LAYER))
 
-# Derived ecological network (04_connectivity/network_derive.R): simplified
-# nodes and corridor centrelines. This replaces the old corridor-links export,
-# which emitted one line per hex adjacency — ~32k segments that rendered as a
-# dense mesh rather than a network. The cells themselves stay in
+# Derived ecological network (04_connectivity/network_derive.R): habitat-core
+# nodes and the least-cost corridors between them. A corridor is emitted as one
+# or more sections sharing a corridorId — extra sections exist only where the
+# route is genuinely interrupted, so `kind` can mark the break without the line
+# changing quality class along its length. The cells themselves stay in
 # hexgrid.pmtiles and carry the analytical detail at close zoom.
 network_paths_present <- exists("PROC_NETWORK_EDGES") && exists("PROC_NETWORK_NODES") &&
   file.exists(PROC_NETWORK_EDGES) && file.exists(PROC_NETWORK_NODES)
@@ -1538,8 +1539,8 @@ if (network_paths_present) {
   network_edges_path <- file.path(DATA_EXPORT, "connectivity-network-edges.geojson")
   write_geojson_chunked(network_edges, network_edges_path)
   cat(sprintf(
-    "Written: connectivity-network-edges.geojson.gz (%d corridor segments)\n",
-    nrow(network_edges)
+    "Written: connectivity-network-edges.geojson.gz (%d sections across %d corridors)\n",
+    nrow(network_edges), length(unique(network_edges$corridorId))
   ))
 
   network_nodes_path <- file.path(DATA_EXPORT, "connectivity-network-nodes.geojson")

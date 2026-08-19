@@ -101,6 +101,23 @@ habitat_fingerprint <- function(grid_sf) {
   )
 }
 
+# The derived network has its own tuning, independent of the graph's. Keeping it
+# in the fingerprint means retuning NET_* invalidates the network without
+# claiming the betweenness behind it also changed.
+network_tuning_hash <- function() {
+  digest::digest(
+    list(
+      NET_CORE_IMPORTANCE, NET_CORE_MIN_AREA_HA, NET_MAJOR_AREA_HA,
+      NET_SECONDARY_AREA_HA, NET_NODES_PER_KM2, NET_NODES_MIN, NET_NODES_MAX,
+      NET_CANDIDATE_K, NET_MAX_LINK_M, NET_MAX_ROUTE_RESISTANCE,
+      NET_MAX_ROUTE_COST_M, NET_REDUNDANCY_RATIO, NET_MAX_ROUTE_OVERLAP,
+      NET_STRENGTH_BREAKS, NET_BOTTLENECK_PERMEABILITY, NET_BOTTLENECK_MIN_M,
+      NET_SMOOTH_PASSES, NET_SIMPLIFY_M
+    ),
+    algo = "xxhash64"
+  )
+}
+
 connectivity_source_fingerprint <- function(grid_sf,
                                             max_resistance = CONN_MAX_RESISTANCE,
                                             min_permeability = CONN_MIN_PERMEABILITY,
@@ -112,23 +129,22 @@ connectivity_source_fingerprint <- function(grid_sf,
     min_permeability = min_permeability,
     dispersal_m = dispersal_m,
     graph_kind = "habitat-resistance-hex-adjacency",
+    network_kind = "core-nodes-least-cost-routes",
+    network_tuning = network_tuning_hash(),
     computed_at = as.character(Sys.time())
   )
 }
 
-connectivity_up_to_date <- function(data_proc = DATA_PROC, grid_sf = NULL) {
+# Freshness in two steps, because the two halves of this job have different
+# costs. The betweenness graph is expensive and depends only on the habitat grid
+# and the CONN_* constants; the derived network is cheap and additionally depends
+# on the NET_* constants. Retuning the network must not force a betweenness
+# recompute, so callers check the graph and the network separately.
+connectivity_graph_up_to_date <- function(data_proc = DATA_PROC, grid_sf = NULL) {
   paths_info <- connectivity_paths(data_proc)
-  # Every artefact this job is responsible for, not just the meta file. A run
-  # that produced nodes but no edges, or nodes but no derived network, is not up
-  # to date — and nothing downstream would notice except by silently exporting
-  # less than it should. Porto hit exactly this: its meta already matched the
-  # current tuning, so the job would have skipped and never written the network.
   required <- c(paths_info$meta, paths_info$nodes, paths_info$edges)
-  if (exists("PROC_NETWORK_NODES")) required <- c(required, PROC_NETWORK_NODES)
-  if (exists("PROC_NETWORK_EDGES")) required <- c(required, PROC_NETWORK_EDGES)
-  if (!all(file.exists(required))) {
-    return(FALSE)
-  }
+  if (exists("PROC_CONNECTIVITY_GRAPH")) required <- c(required, PROC_CONNECTIVITY_GRAPH)
+  if (!all(file.exists(required))) return(FALSE)
   meta <- jsonlite::read_json(paths_info$meta, simplifyVector = TRUE)
 
   if (is.null(grid_sf)) {
@@ -142,6 +158,24 @@ connectivity_up_to_date <- function(data_proc = DATA_PROC, grid_sf = NULL) {
     isTRUE(isTRUE(all.equal(meta$max_resistance %||% NA_real_, current$max_resistance))) &&
     isTRUE(isTRUE(all.equal(meta$min_permeability %||% NA_real_, current$min_permeability))) &&
     isTRUE(isTRUE(all.equal(meta$dispersal_m %||% NA_real_, current$dispersal_m)))
+}
+
+# Every artefact this job is responsible for, not just the meta file. A run that
+# produced nodes but no edges, or nodes but no derived network, is not up to date
+# — and nothing downstream would notice except by silently exporting less than it
+# should. Porto hit exactly this: its meta already matched the current tuning, so
+# the job would have skipped and never written the network.
+connectivity_up_to_date <- function(data_proc = DATA_PROC, grid_sf = NULL) {
+  paths_info <- connectivity_paths(data_proc)
+  required <- character(0)
+  if (exists("PROC_NETWORK_NODES")) required <- c(required, PROC_NETWORK_NODES)
+  if (exists("PROC_NETWORK_EDGES")) required <- c(required, PROC_NETWORK_EDGES)
+  if (length(required) > 0L && !all(file.exists(required))) return(FALSE)
+  if (!connectivity_graph_up_to_date(data_proc, grid_sf)) return(FALSE)
+
+  meta <- jsonlite::read_json(paths_info$meta, simplifyVector = TRUE)
+  isTRUE(identical(meta$network_kind %||% NA_character_, "core-nodes-least-cost-routes")) &&
+    isTRUE(identical(meta$network_tuning %||% NA_character_, network_tuning_hash()))
 }
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -286,26 +320,7 @@ habitat_resistance <- function(permeability, max_resistance = CONN_MAX_RESISTANC
 # Hex-adjacency graph weighted by habitat resistance: nodes are 20 m cell
 # centroids, edges join cells that share a boundary, and edge cost is the
 # centroid distance scaled by the mean resistance of the two cells it links.
-# Impermeable cells are dropped rather than carried at high cost — nothing
-# disperses through a building, and excluding them keeps the graph small enough
-# to run.
-build_habitat_graph <- function(grid_sf,
-                                min_permeability = CONN_MIN_PERMEABILITY,
-                                max_resistance = CONN_MAX_RESISTANCE) {
-  perm_all <- cell_permeability(grid_sf)
-
-  cells <- grid_sf[, "cell_id"]
-  cells$permeability <- perm_all
-  permeable <- perm_all > min_permeability
-  if (!any(permeable)) {
-    stop(
-      "No cells above CONN_MIN_PERMEABILITY (", min_permeability,
-      ") — the habitat graph would be empty.",
-      call. = FALSE
-    )
-  }
-  cells <- cells[permeable, , drop = FALSE]
-
+hex_resistance_graph <- function(cells, max_resistance) {
   centroids <- suppressWarnings(sf::st_centroid(sf::st_geometry(cells)))
   coords <- sf::st_coordinates(centroids)
 
@@ -320,7 +335,7 @@ build_habitat_graph <- function(grid_sf,
   to_idx <- to_idx[keep]
 
   if (length(from_idx) == 0L) {
-    stop("No adjacent permeable cells — the habitat graph would have no edges.", call. = FALSE)
+    stop("No adjacent cells — the resistance graph would have no edges.", call. = FALSE)
   }
 
   res <- habitat_resistance(cells$permeability, max_resistance)
@@ -355,6 +370,42 @@ build_habitat_graph <- function(grid_sf,
   )
 
   list(graph = g, nodes = nodes_df, edges = edges_df)
+}
+
+# Betweenness graph: permeable cells only. Impermeable cells are dropped rather
+# than carried at high cost — nothing disperses through a building, and
+# excluding them keeps the betweenness computation small enough to run.
+build_habitat_graph <- function(grid_sf,
+                                min_permeability = CONN_MIN_PERMEABILITY,
+                                max_resistance = CONN_MAX_RESISTANCE) {
+  perm_all <- cell_permeability(grid_sf)
+
+  cells <- grid_sf[, "cell_id"]
+  cells$permeability <- perm_all
+  permeable <- perm_all > min_permeability
+  if (!any(permeable)) {
+    stop(
+      "No cells above CONN_MIN_PERMEABILITY (", min_permeability,
+      ") — the habitat graph would be empty.",
+      call. = FALSE
+    )
+  }
+
+  hex_resistance_graph(cells[permeable, , drop = FALSE], max_resistance)
+}
+
+# Routing surface: *every* cell, walls included at maximum resistance.
+#
+# The betweenness graph cannot serve as the routing surface. Dropping walls
+# leaves it in 520-1375 disconnected components (its largest holds 8-20% of
+# cells), so a least-cost route between two habitat cores is unreachable four
+# times out of five — which is why corridors used to be confined inside single
+# high-importance blobs. A corridor may legitimately cross degraded ground; the
+# NET_MAX_ROUTE_* ceilings, not a missing edge, are what decide whether it does.
+build_routing_graph <- function(grid_sf, max_resistance = CONN_MAX_RESISTANCE) {
+  cells <- grid_sf[, "cell_id"]
+  cells$permeability <- cell_permeability(grid_sf, verbose = FALSE)
+  hex_resistance_graph(cells, max_resistance)
 }
 
 # Percentile rank among cells that actually carry routes. Cells with zero

@@ -310,15 +310,76 @@ CONN_DISPERSAL_M      <- 500
 
 # ── Derived ecological network (nodes + corridor centrelines) ─────────────────
 # The 20 m cells remain the analytical surface; this is the simplified network
-# drawn on top of them at overview and transition zooms. Cells above
-# NET_MIN_IMPORTANCE are grouped into connected areas, each reduced to a
-# skeleton of least-cost centrelines with nodes at junctions and endpoints.
-NET_MIN_IMPORTANCE      <- 0.5  # corridor_importance floor for network membership
-NET_MIN_COMPONENT_CELLS <- 8    # smaller connected areas become a single stepping stone
-NET_MIN_BRANCH_CELLS    <- 4    # prune skeleton branches shorter than this, in cells
-NET_MAJOR_CELLS         <- 200  # connected-area size that earns a major node
-NET_SECONDARY_CELLS     <- 40   # ... and a secondary node
-NET_SMOOTH_PASSES       <- 2    # corner-cutting passes on centreline geometry
+# drawn on top of them at overview and transition zooms.
+#
+# Nodes are habitat cores — connected areas of high-corridor-importance cells,
+# one node per core, tiered by area. Corridors are least-cost routes between
+# neighbouring nodes across the *whole* resistance surface, so a route may pass
+# through degraded ground; the cost ceilings below are what stop that becoming a
+# fictional connection across the city.
+#
+# The earlier version cut the graph at NET_CORE_IMPORTANCE *before* deriving any
+# topology, which made a city-scale network structurally impossible: Porto came
+# out as 130 disconnected islands and 420 segments with a median length of 84 m.
+NET_CORE_IMPORTANCE     <- 0.5   # corridor_importance floor for habitat-core membership
+NET_CORE_MIN_AREA_HA    <- 0.4   # smaller cores cannot anchor a node at all
+NET_MAJOR_AREA_HA       <- 8     # core area that earns a major node
+NET_SECONDARY_AREA_HA   <- 2     # ... and a secondary node
+
+# Node count scales with AOI extent, not with how green the city happens to be.
+# Keyed to a cell-count threshold instead, Porto drew 160 secondary nodes against
+# Amsterdam's 84 for no ecological reason, and the two maps stopped being
+# comparable.
+NET_NODES_PER_KM2       <- 1.5
+NET_NODES_MIN           <- 12
+NET_NODES_MAX           <- 40
+
+# Candidate connections: Delaunay neighbours only (k-nearest as a fallback when
+# triangulation is unavailable). All-pairs routing would be affordable at this
+# node count but produces a bundle of near-parallel routes between everything,
+# which pruning then has to undo. Delaunay also guarantees the candidate set is
+# connected before the distance ceiling is applied.
+NET_CANDIDATE_K         <- 4     # fallback neighbours per node
+NET_MAX_LINK_M          <- 2500  # straight-line ceiling on a candidate pair
+
+# Cost ceilings — the counterweight to routing through degraded ground. Cost is
+# in effective metres (1 = 1 m of ideal habitat, up to CONN_MAX_RESISTANCE
+# through a near-wall), so cost / geometric length is the route's mean
+# resistance. Without a ceiling, every node pair has *some* least-cost path and
+# the map trades true-but-trivial fragments for clean-looking fictions.
+NET_MAX_ROUTE_RESISTANCE <- 14     # reject a route whose mean resistance exceeds this
+NET_MAX_ROUTE_COST_M     <- 40000  # ... or whose absolute effective cost does
+
+# Pruning. The backbone is a minimum spanning tree over route cost; a non-tree
+# link survives only if it is much cheaper than the detour the tree forces, and
+# only if it does not retrace a route already kept.
+NET_REDUNDANCY_RATIO    <- 0.6   # keep an extra link at < this fraction of the tree detour
+NET_MAX_ROUTE_OVERLAP   <- 0.5   # ... unless it reuses more than this share of kept cells
+
+# Corridor quality, as mean resistance along the route. Interpretive breaks, not
+# sourced: they divide the 1-CONN_MAX_RESISTANCE cost scale into classes that
+# separate "runs through habitat" from "runs through the built fabric". There is
+# no "fragmented" class — NET_MAX_ROUTE_RESISTANCE rejects a route that bad, and
+# a corridor that is broken rather than merely poor is described by its
+# bottleneck sections instead of by its average.
+NET_STRENGTH_BREAKS     <- c(3, 6, 10)  # strongest | strong | moderate | weak
+
+# Bottlenecks: a run of genuinely hostile cells inside an otherwise useful
+# corridor. Carved out of the line as its own section, so the corridor keeps one
+# dominant colour and the interruption is explicit rather than being averaged
+# away or repainted every few metres.
+# 120 m is ~6 cells: an arterial road and its verges, not a gap between shrubs.
+# At 60 m two thirds of corridors carried a break and the line went back to
+# changing colour every few hundred metres.
+NET_BOTTLENECK_PERMEABILITY <- 0.2
+NET_BOTTLENECK_MIN_M        <- 120
+NET_MIN_SECTION_M           <- 40  # absorb shorter sections into their neighbour
+
+# Geometry. The simplify tolerance has to stay well under the 20 m cell pitch:
+# at 6 m Douglas-Peucker ate the curvature the smoother had just produced and
+# left a 240 m corridor as four vertices, i.e. a polyline of straight dashes.
+NET_SMOOTH_PASSES       <- 2     # corner-cutting passes on centreline geometry
+NET_SIMPLIFY_M          <- 2     # Douglas-Peucker tolerance after smoothing
 
 # Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
 # process_tile.R (per-tile halo grid) must both offset from this exact point,

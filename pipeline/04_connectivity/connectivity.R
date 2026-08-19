@@ -55,8 +55,46 @@ if (!"cutoff" %in% names(formals(igraph::betweenness))) {
 
 grid_habitat <- sf::st_read(PROC_GRID_HABITAT, quiet = TRUE)
 
+# Cell area drives the habitat-core area thresholds, and it is a property of the
+# grid rather than a constant — read it from the geometry instead of assuming a
+# cellsize convention.
+cell_area_m2 <- as.numeric(stats::median(sf::st_area(grid_habitat)))
+
+# Corridors are routed over a resistance surface that includes walls, so this is
+# built from the whole grid rather than from the betweenness graph. See
+# build_routing_graph() for why the betweenness graph cannot serve.
+write_derived_network <- function(nodes_df) {
+  routing <- build_routing_graph(grid_habitat)
+  message(sprintf(
+    "[connectivity] Routing surface: %d cells, %d edges (walls carried at resistance %g)",
+    igraph::vcount(routing$graph), igraph::ecount(routing$graph), CONN_MAX_RESISTANCE
+  ))
+  net <- derive_connectivity_network(routing, nodes_df, cell_area_m2 = cell_area_m2)
+  sf::st_write(net$nodes, PROC_NETWORK_NODES, delete_dsn = TRUE, quiet = TRUE)
+  sf::st_write(net$edges, PROC_NETWORK_EDGES, delete_dsn = TRUE, quiet = TRUE)
+  message(sprintf(
+    "[connectivity] Network: %d candidate links -> %d corridors (%d sections), %d nodes (%d major, %d secondary, %d stepping stones)",
+    net$candidates, net$corridors, nrow(net$edges), nrow(net$nodes),
+    sum(net$nodes$tier == "major"),
+    sum(net$nodes$tier == "secondary"),
+    sum(net$nodes$tier == "stepping-stone")
+  ))
+  invisible(net)
+}
+
 if (!force_run && connectivity_up_to_date(grid_sf = grid_habitat)) {
   message("[connectivity] Habitat grid and tuning unchanged — skipping (set FORCE_CONNECTIVITY=1 to override)")
+} else if (!force_run && connectivity_graph_up_to_date(grid_sf = grid_habitat)) {
+  # Only the NET_* tuning moved. Betweenness is the expensive half and is still
+  # valid, so re-derive the network from the cached node table alone.
+  message("[connectivity] Betweenness unchanged — rebuilding the derived network only")
+  write_derived_network(arrow::read_parquet(paths_info$nodes))
+  jsonlite::write_json(
+    connectivity_source_fingerprint(grid_habitat), paths_info$meta,
+    auto_unbox = TRUE, pretty = TRUE
+  )
+  message("[connectivity] Wrote ", PROC_NETWORK_NODES)
+  message("[connectivity] Wrote ", PROC_NETWORK_EDGES)
 } else {
   fingerprint <- connectivity_source_fingerprint(grid_habitat)
 
@@ -123,18 +161,7 @@ if (!force_run && connectivity_up_to_date(grid_sf = grid_habitat)) {
   # Derived ecological network: the simplified node/corridor representation the
   # map draws at overview and transition zooms. The cells stay the analytical
   # surface and are revealed at close zoom instead.
-  net_derived <- derive_connectivity_network(g, nodes_df)
-  sf::st_write(net_derived$nodes, PROC_NETWORK_NODES, delete_dsn = TRUE, quiet = TRUE)
-  sf::st_write(net_derived$edges, PROC_NETWORK_EDGES, delete_dsn = TRUE, quiet = TRUE)
-  message(sprintf(
-    "[connectivity] Network: %d connected areas -> %d corridor segments, %d nodes (%d major, %d secondary, %d stepping stones)",
-    net_derived$components,
-    nrow(net_derived$edges),
-    nrow(net_derived$nodes),
-    sum(net_derived$nodes$tier == "major"),
-    sum(net_derived$nodes$tier == "secondary"),
-    sum(net_derived$nodes$tier == "stepping-stone")
-  ))
+  write_derived_network(nodes_df)
 
   grid_stub <- grid_habitat |>
     dplyr::select(dplyr::any_of(c("cell_id", "green_space_id"))) |>

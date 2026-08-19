@@ -263,6 +263,50 @@ Frontend consumer:
 
 - `src/lib/green-spaces.ts`
 
+## `connectivity-network-edges.geojson` / `connectivity-network-nodes.geojson`
+
+The derived ecological network (see methodology §9a). Produced by
+`04_connectivity/network_derive.R`, exported by `06_export/export.R`, served
+through `src/app/api/vector/[cityId]/[layer]/route.ts` and validated by
+`src/lib/vector-normalization.ts`.
+
+**Edges** are `LineString` sections. A corridor is one or more sections sharing a
+`corridorId`: extra sections exist only where the route is genuinely interrupted,
+so a break can be marked without the line changing quality class along its length.
+
+| Property | Type | Notes |
+| --- | --- | --- |
+| `corridorId` | string | `cor_N`. Shared by every section of one corridor. |
+| `sectionIndex` | number | 1-based position along the corridor. |
+| `kind` | enum | `corridor \| bottleneck`. Unknown values fall back to `corridor`. |
+| `strength` | enum | `strongest \| strong \| moderate \| weak` — the whole route's class, carried by every section including bottlenecks. Unknown values fall back to `weak`. |
+| `rank` | enum | `primary \| secondary \| minor`, from the node tiers connected. Drives the zoom hierarchy, so unknown values fall back to `minor` (revealed last), never `primary`. |
+| `fromNode` / `toNode` | string | `cellId` of the corridor's endpoint nodes. |
+| `lengthM` | number | Geometric length of the **whole route**, not of this section. |
+| `meanResistance` | number | Effective cost ÷ geometric length, `1`–`CONN_MAX_RESISTANCE`. |
+| `bottlenecks` | number | Count of bottleneck sections on the route. |
+| `importance` | number | `0`–`1` route quality derived from `meanResistance`; carries line width. |
+
+**Nodes** are `Point` features, one per habitat core.
+
+| Property | Type | Notes |
+| --- | --- | --- |
+| `cellId` | string | The 20 m cell the node sits on. |
+| `tier` | enum | `major \| secondary \| stepping-stone`. Unknown values fall back to `stepping-stone`. |
+| `degree` | number | Corridors meeting at this node, after pruning. |
+| `coreCells` | number | Cells in the habitat core this node stands for. |
+| `areaHa` | number | Area of that core in hectares — what the tier is derived from. |
+| `importance` | number | `corridor_importance` of the node's own cell, `0`–`1`. |
+
+Constraints:
+
+- CRS: WGS-84, EPSG:4326.
+- `strength`, `rank`, `kind` and `tier` arrive **pre-classified**; the frontend
+  re-derives none of them and buckets unknown values rather than passing them
+  through, so a bad value cannot reach a MapLibre `match` expression.
+- Sections of one corridor share a vertex at each boundary, so the rendered line
+  is continuous.
+
 ## `park-stats.json`
 
 Park or analysis-area aggregate statistics.

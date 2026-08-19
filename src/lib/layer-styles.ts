@@ -58,8 +58,7 @@ export const HEX_OUTLINE_LAYER_ID = 'hex-outline-always';
 /**
  * Derived ecological network. Three separate node layers rather than one with a
  * data-driven radius, so each tier can be zoom-gated independently — stepping
- * stones would otherwise speckle the overview scale (Amsterdam has 315 of them
- * against 5 major nodes).
+ * stones would otherwise speckle the overview scale.
  */
 export const CORRIDOR_LINES_LAYER_ID = 'corridor-lines';
 export const NETWORK_NODE_MAJOR_LAYER_ID = 'network-node-major';
@@ -81,58 +80,103 @@ export const NETWORK_LAYER_IDS = [
  */
 export const NETWORK_REGIME = {
   /** Stepping stones and secondary nodes stay hidden below this. */
-  detail: 14,
+  detail: 12.5,
   /** Above this the analytical cells lead and the network steps back. */
-  handover: 16.5,
+  handover: 15,
 } as const;
 
-/** Corridor strength classes, weakest first — order matches the legend. */
+/**
+ * Corridor quality classes, weakest first — order matches the legend. There is
+ * no 'fragmented' class: the pipeline rejects a route that bad outright, and a
+ * corridor that is broken rather than merely poor is described by its bottleneck
+ * sections instead of by its average.
+ */
 export const CORRIDOR_STRENGTH_COLORS = {
-  fragmented: '#d1495b',
   weak: '#e8862a',
   moderate: '#d4b106',
   strong: '#5a9e46',
   strongest: '#1f6b3a',
 } as const;
 
+/** Bottleneck sections — a real interruption inside an otherwise useful corridor. */
+export const CORRIDOR_BOTTLENECK_COLOR = '#d1495b';
+
+/**
+ * Network hierarchy. A corridor's rank comes from the node tiers it connects,
+ * so it survives the overview scale by mattering, not by being long.
+ */
+export type CorridorRank = 'primary' | 'secondary' | 'minor';
+
 export function corridorLineColor(): ExpressionSpecification {
+  // Every section of a corridor carries the same dominant class, so the line
+  // holds one colour along its length. Only a bottleneck breaks that, and it is
+  // painted as the interruption it is rather than as another quality step.
   return [
-    'match',
-    ['get', 'strength'],
-    'strongest', CORRIDOR_STRENGTH_COLORS.strongest,
-    'strong', CORRIDOR_STRENGTH_COLORS.strong,
-    'moderate', CORRIDOR_STRENGTH_COLORS.moderate,
-    'weak', CORRIDOR_STRENGTH_COLORS.weak,
-    CORRIDOR_STRENGTH_COLORS.fragmented,
+    'case',
+    ['==', ['get', 'kind'], 'bottleneck'], CORRIDOR_BOTTLENECK_COLOR,
+    [
+      'match',
+      ['get', 'strength'],
+      'strongest', CORRIDOR_STRENGTH_COLORS.strongest,
+      'strong', CORRIDOR_STRENGTH_COLORS.strong,
+      'moderate', CORRIDOR_STRENGTH_COLORS.moderate,
+      CORRIDOR_STRENGTH_COLORS.weak,
+    ],
+  ] as ExpressionSpecification;
+}
+
+/** Bottlenecks read slightly heavier than the corridor they interrupt. */
+function bottleneckWidthFactor(): ExpressionSpecification {
+  return ['case', ['==', ['get', 'kind'], 'bottleneck'], 1.4, 1] as ExpressionSpecification;
+}
+
+function corridorWidthAt(low: number, high: number): ExpressionSpecification {
+  return [
+    '*',
+    bottleneckWidthFactor(),
+    ['interpolate', ['linear'], ['get', 'importance'], 0, low, 1, high],
   ] as ExpressionSpecification;
 }
 
 /**
- * Width carries corridor importance and scales with zoom. Kept deliberately
- * modest — the spec asks for a restrained ecological network, not glowing
- * arteries.
+ * Width carries route quality and scales with zoom. Kept deliberately modest —
+ * a restrained ecological network, not glowing arteries.
  */
 export function corridorLineWidth(): ExpressionSpecification {
   return [
     'interpolate', ['linear'], ['zoom'],
-    11, ['interpolate', ['linear'], ['get', 'importance'], 0, 0.8, 1, 2.2],
-    14, ['interpolate', ['linear'], ['get', 'importance'], 0, 1.4, 1, 4],
-    17, ['interpolate', ['linear'], ['get', 'importance'], 0, 2, 1, 6],
+    11, corridorWidthAt(0.9, 2.4),
+    14, corridorWidthAt(1.5, 4),
+    17, corridorWidthAt(2, 6),
+  ] as ExpressionSpecification;
+}
+
+function rankOpacity(primary: number, secondary: number, minor: number): ExpressionSpecification {
+  return [
+    'match', ['get', 'rank'],
+    'primary', primary,
+    'secondary', secondary,
+    minor,
   ] as ExpressionSpecification;
 }
 
 export function corridorLineOpacity(): ExpressionSpecification {
-  // Two things at once. Across zoom: fade back once the analytical cells take
-  // over, so the network reads as context rather than competing with the
-  // hexagons. Within the overview scale: suppress the weaker segments entirely,
-  // so far zoom shows principal corridors rather than all 211 of them — a
-  // complete network at city scale is just a mesh again, in green.
+  // The zoom hierarchy lives here rather than in the pipeline: one network is
+  // generated, and each scale reveals the part of it that matters. Overview
+  // shows corridors between significant cores only; secondary connections fade
+  // in through the transition scale, minor ones last; everything steps back once
+  // the analytical cells take over.
+  //
+  // Rank gating, not importance gating — a weak corridor between two major
+  // cores is a finding worth seeing at city scale, and suppressing it by quality
+  // is how the map ended up showing only what the model liked best.
   return [
     'interpolate', ['linear'], ['zoom'],
-    11, ['interpolate', ['linear'], ['get', 'importance'], 0.5, 0, 0.8, 0.9],
-    NETWORK_REGIME.detail, ['interpolate', ['linear'], ['get', 'importance'], 0, 0.5, 1, 0.9],
-    NETWORK_REGIME.handover, 0.85,
-    19, 0.35,
+    11, rankOpacity(0.95, 0, 0),
+    NETWORK_REGIME.detail, rankOpacity(0.95, 0.9, 0),
+    NETWORK_REGIME.detail + 1, rankOpacity(0.95, 0.9, 0.85),
+    NETWORK_REGIME.handover, rankOpacity(0.85, 0.8, 0.75),
+    19, rankOpacity(0.4, 0.35, 0.3),
   ] as ExpressionSpecification;
 }
 
@@ -1021,18 +1065,19 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     // corridor classes, not steps on one ramp, so appending percentile bounds
     // to the first and last row (see MapView's legend formatter) would be
     // nonsense.
-    note: 'Ecological corridors represent connected areas of the underlying connectivity surface.',
+    note: 'Nodes are habitat cores; corridors are least-cost routes between them across the connectivity surface. A corridor may cross degraded ground — its colour is the quality of the whole route.',
     legend: [
       { color: networkNodeFill('major'), label: 'Major node', symbol: 'node-major' },
       { color: networkNodeFill('secondary'), label: 'Secondary node', symbol: 'node-secondary' },
       { color: networkNodeFill('stepping-stone'), label: 'Stepping stone', symbol: 'node-stepping' },
-      { color: CORRIDOR_STRENGTH_COLORS.strongest, label: 'Strong corridor', symbol: 'line' },
+      { color: CORRIDOR_STRENGTH_COLORS.strongest, label: 'Strongest corridor', symbol: 'line' },
+      { color: CORRIDOR_STRENGTH_COLORS.strong, label: 'Strong corridor', symbol: 'line' },
       { color: CORRIDOR_STRENGTH_COLORS.moderate, label: 'Moderate corridor', symbol: 'line' },
       { color: CORRIDOR_STRENGTH_COLORS.weak, label: 'Weak corridor', symbol: 'line' },
-      { color: CORRIDOR_STRENGTH_COLORS.fragmented, label: 'Fragmented corridor', symbol: 'line' },
-      // 'Connectivity break' is intentionally absent until barriers are actually
-      // derived. Listing a symbol the map never draws is how fragmentation_index
-      // ended up documented as a real metric while always being null.
+      // Drawn only where a corridor is genuinely interrupted for 120 m or more,
+      // which is why this row can be listed: unlike fragmentation_index, the
+      // symbol corresponds to something the pipeline actually derives.
+      { color: CORRIDOR_BOTTLENECK_COLOR, label: 'Bottleneck', symbol: 'line' },
     ],
   },
   heat: {
