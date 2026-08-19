@@ -383,11 +383,19 @@ fetch_inat_for_bbox <- function(bounds) {
   nelng <- bounds[4]
 
   parts <- list()
-  page <- 1L
+  # Cursor pagination, not page numbers. The v1 API rejects any request where
+  # page * per_page > 10000, so &page= silently caps a bbox at 10,000 records
+  # however high INAT_MAX_RESULTS is set — Porto has 20,806 verifiable
+  # observations and was ingesting exactly 10,000 of them, losing everything
+  # after 2024-06-06. id_above walks the full set: ask for ids above the highest
+  # one seen so far, with the ascending id sort this query already used.
+  id_above <- 0L
+  request <- 0L
   fetched <- 0L
   api_total <- NA_integer_
 
   repeat {
+    request <- request + 1L
     url <- paste0(
       "https://api.inaturalist.org/v1/observations?",
       "swlat=", swlat,
@@ -396,32 +404,44 @@ fetch_inat_for_bbox <- function(bounds) {
       "&nelng=", nelng,
       "&quality_grade=", utils::URLencode(quality_param, reserved = TRUE),
       "&per_page=", per_page,
-      "&page=", page,
+      "&id_above=", format(id_above, scientific = FALSE),
       "&order=asc",
       "&order_by=id"
     )
     cat(sprintf(
-      "  → iNaturalist API (quality=%s, page=%d, per_page=%d)…\n",
-      quality_param, page, per_page
+      "  → iNaturalist API (quality=%s, request=%d, per_page=%d, id_above=%s)…\n",
+      quality_param, request, per_page, format(id_above, scientific = FALSE)
     ))
 
     resp <- tryCatch(
       jsonlite::fromJSON(url, flatten = TRUE),
       error = function(e) {
-        warning(sprintf("iNat API request failed on page %d: %s", page, conditionMessage(e)),
+        warning(sprintf("iNat API request failed at id_above=%s: %s",
+                        format(id_above, scientific = FALSE), conditionMessage(e)),
                 call. = FALSE)
         NULL
       }
     )
     if (is.null(resp) || is.null(resp$results) || nrow(resp$results) == 0L) break
 
+    # Captured on the first request only: with id_above set, total_results counts
+    # what is left above the cursor, not the whole bbox.
     if (is.na(api_total)) api_total <- as.integer(resp$total_results)
     batch <- normalize_inat_results(resp$results)
     parts[[length(parts) + 1L]] <- batch
     fetched <- fetched + nrow(batch)
 
+    next_cursor <- suppressWarnings(max(as.numeric(batch$id), na.rm = TRUE))
+    if (!is.finite(next_cursor) || next_cursor <= id_above) {
+      warning(sprintf(
+        "iNat cursor failed to advance past id %s — stopping at %d records",
+        format(id_above, scientific = FALSE), fetched
+      ), call. = FALSE)
+      break
+    }
+    id_above <- next_cursor
+
     if (nrow(batch) < per_page || fetched >= api_total || fetched >= max_total) break
-    page <- page + 1L
     Sys.sleep(0.25)
   }
 
@@ -437,6 +457,9 @@ fetch_inat_for_bbox <- function(bounds) {
       "iNat bbox has %d verifiable observations but only %d were downloaded (INAT_MAX_RESULTS=%d)",
       api_total, nrow(combined), max_total
     ), call. = FALSE)
+  } else if (!is.na(api_total)) {
+    cat(sprintf("  → iNaturalist: %d of %d verifiable observations in bbox\n",
+                nrow(combined), api_total))
   }
 
   combined
@@ -471,6 +494,20 @@ fetch_gbif_for_bbox <- function(bounds, max_total = 10000L) {
   page_size <- 300L
   offset <- 0L
   parts <- list()
+  api_total <- NA_integer_
+
+  # occ_search cannot page beyond offset 100,000; past that GBIF requires a
+  # credentialed occ_download. Clamp to the real API ceiling so the cap is the
+  # API's limit rather than an arbitrary number, and warn below when a bbox
+  # holds more than was fetched.
+  occ_search_max <- 100000L
+  if (max_total > occ_search_max) {
+    warning(sprintf(
+      "GBIF_MAX_RESULTS=%d exceeds occ_search's %d-record ceiling; clamping. Use occ_download for more.",
+      max_total, occ_search_max
+    ), call. = FALSE)
+    max_total <- occ_search_max
+  }
 
   repeat {
     remaining <- max_total - offset
@@ -494,6 +531,9 @@ fetch_gbif_for_bbox <- function(bounds, max_total = 10000L) {
     )
 
     if (is.null(res) || is.null(res$data) || nrow(res$data) == 0) break
+    if (is.na(api_total) && !is.null(res$meta$count)) {
+      api_total <- as.integer(res$meta$count)
+    }
     parts[[length(parts) + 1L]] <- res$data
     offset <- offset + nrow(res$data)
     if (nrow(res$data) < batch) break
@@ -501,13 +541,24 @@ fetch_gbif_for_bbox <- function(bounds, max_total = 10000L) {
 
   if (length(parts) == 0) return(NULL)
   out <- bind_rows(parts)
-  if ("key" %in% names(out)) {
+  out <- if ("key" %in% names(out)) {
     out |> distinct(key, .keep_all = TRUE)
   } else if ("occurrenceID" %in% names(out)) {
     out |> distinct(occurrenceID, .keep_all = TRUE)
   } else {
     out
   }
+
+  if (!is.na(api_total) && api_total > nrow(out)) {
+    warning(sprintf(
+      "GBIF bbox has %d records but only %d were downloaded (GBIF_MAX_RESULTS=%d)",
+      api_total, nrow(out), max_total
+    ), call. = FALSE)
+  } else if (!is.na(api_total)) {
+    cat(sprintf("  → GBIF: %d of %d records in bbox\n", nrow(out), api_total))
+  }
+
+  out
 }
 
 cat("Fetching GBIF observations…\n")

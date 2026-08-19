@@ -438,17 +438,22 @@ richness for residual inference.
 Source: `pipeline/05_residuals/residuals.R`
 
 ```text
-SPECIES_AREA_C * (CELL_SIZE ^ 2) ^ SPECIES_AREA_Z * (
-  0.65 * habitat_quality
-  + 0.20 * corridor_importance
-  + 0.15 * accessibility_component
-)
+fitted( effort_corrected_richness ~ habitat_component
+                                  + connectivity_component
+                                  + accessibility_component )
 ```
 
-`SPECIES_AREA_C = 12`, `SPECIES_AREA_Z = 0.25`, so the area term is a constant
-`≈ 53.7` per 20 m hex. `MAX_EXPECTED_RICHNESS` (350) is exported for
-transparency but no longer scales this. Patch-level expected richness uses the
-same law with total patch area (`pipeline/05_patch/patch_aggregation.R`).
+Fitted per city by OLS on sampled cells only (`05_residuals/expected_model.R`),
+predicted for every cell and floored at 0, so expected richness is in the same
+units as the observation the residual subtracts it from. This replaces
+`SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * quality_blend`, whose area term
+was a constant `≈ 53.7` per hex and put expected richness on a scale ~400× the
+observation's — see docs/methodology.md §6.1 for the measured consequence.
+`SPECIES_AREA_*` now applies at patch scale only, where area actually varies, and
+its coefficient is fitted there too (`pipeline/05_patch/patch_aggregation.R`).
+`MAX_EXPECTED_RICHNESS` (350) is exported for transparency and scales nothing.
+Each run's coefficients, R², and RMSE are recorded in
+`expected_richness_model.json` and in the export manifest.
 
 ### `ecological_residual`
 

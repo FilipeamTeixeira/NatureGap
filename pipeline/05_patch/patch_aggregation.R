@@ -6,15 +6,24 @@ library(tidyverse)
 library(jsonlite)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
+source(here::here("05_residuals", "expected_model.R"), local = FALSE)
 
 HABITAT_THRESHOLD <- 0.40
 
-# ── Patch-level expected richness (species-area power law) ────────────────────
-# expected_richness = SPECIES_AREA_C * patch_area_m2 ^ SPECIES_AREA_Z * quality_modifier
+# ── Patch-level expected richness (fitted species-area model) ─────────────────
+# expected_richness is fitted per city from
 #
-# SPECIES_AREA_Z and SPECIES_AREA_C are defined in config.R and shared with the
-# hex-scale model in residuals.R (same model, different area input). They are
-# documented ASSUMPTIONS, not calibrated values. See docs/methodology.md §6.
+#   effort_corrected_richness ~ patch_area_m2^SPECIES_AREA_Z + quality_modifier
+#
+# so it lands in the units it is subtracted from and the patch residual is a
+# real residual (see 05_residuals/expected_model.R).
+#
+# SPECIES_AREA_Z stays a documented ASSUMPTION for the exponent — the area term's
+# shape — and is defined in config.R. SPECIES_AREA_C is no longer used: the
+# coefficient on the area term is fitted rather than asserted, which removes a
+# tuning constant that previously set the whole scale. Unlike the hex scale,
+# patch area genuinely varies, so an area term is meaningful here.
+# See docs/methodology.md §6.2.
 
 required_files <- c(PROC_GREEN_SPACES, PROC_GRID_RESID)
 missing_files <- required_files[!file.exists(required_files)]
@@ -234,22 +243,44 @@ patch_metrics <- patch_base |>
       ),
       0
     ))),
-    # Species-area power law computed once per patch from total area (see the
-    # SPECIES_AREA_* assumptions above), replacing the previous area-weighted
-    # average of the flat per-hex ceiling, which did not scale with patch size.
-    expected_richness = SPECIES_AREA_C * (patch_area_m2 ^ SPECIES_AREA_Z) * quality_modifier,
+    # Area term of the species-area relationship. Its coefficient is fitted
+    # below; only the exponent stays an assumption.
+    area_term = patch_area_m2 ^ SPECIES_AREA_Z,
     effort_corrected_richness = if_else(sampled_cell_count == 0L, NA_real_, effort_corrected_richness),
     observed_richness = if_else(sampled_cell_count == 0L, NA_real_, observed_richness),
     survey_effort_units = if_else(sampled_cell_count == 0L, NA_real_, survey_effort_units),
     species_richness_raw = if_else(sampled_cell_count == 0L, NA_real_, species_richness_raw),
+    data_availability_ratio = if_else(linked_area_m2 > 0, sampled_area_m2 / linked_area_m2, NA_real_),
+    fragmentation = coalesce(fragmentation_index, fragmentation)
+  )
+
+# Patches with no sampled cell have no observation to explain, so they are
+# predicted but not fitted.
+patch_expected_model <- fit_expected_model(
+  train = patch_metrics |>
+    st_drop_geometry() |>
+    filter(replace_na(sampled_cell_count, 0L) > 0L),
+  response    = "effort_corrected_richness",
+  terms       = c("area_term", "quality_modifier"),
+  min_rows    = EXPECTED_MODEL_MIN_PATCHES,
+  scale_label = "patch"
+)
+
+record_expected_model("patch", patch_expected_model$record)
+
+patch_metrics$expected_richness <- patch_expected_model$predict(
+  st_drop_geometry(patch_metrics)
+)
+
+patch_metrics <- patch_metrics |>
+  mutate(
     ecological_residual = if_else(
       sampled_cell_count == 0L,
       NA_real_,
       expected_richness - effort_corrected_richness
-    ),
-    data_availability_ratio = if_else(linked_area_m2 > 0, sampled_area_m2 / linked_area_m2, NA_real_),
-    fragmentation = coalesce(fragmentation_index, fragmentation)
-  )
+    )
+  ) |>
+  select(-area_term)
 
 patch_finite_residuals <- patch_metrics$ecological_residual[is.finite(patch_metrics$ecological_residual)]
 patch_residual_max <- if (length(patch_finite_residuals) > 0L) {

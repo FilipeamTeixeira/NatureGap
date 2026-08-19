@@ -373,6 +373,27 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   validate_pmtiles_contract(output_path)
 }
 
+# Fitted expected-richness model record written by 05_residuals / 05_patch.
+# Carried into the manifest so a published dataset states the model that produced
+# its expected values (docs/methodology.md §14). Absent for datasets exported
+# before the fitted model landed.
+expected_model_record <- function(path = PROC_EXPECTED_MODEL) {
+  if (!file.exists(path)) {
+    message(sprintf(
+      "No expected-richness model record at %s — manifest will omit it", path
+    ))
+    return(NULL)
+  }
+  tryCatch(
+    jsonlite::read_json(path, simplifyVector = FALSE),
+    error = function(e) {
+      warning(sprintf("Unreadable expected-richness model record: %s", conditionMessage(e)),
+              call. = FALSE)
+      NULL
+    }
+  )
+}
+
 export_upload_files <- function(export_dir = DATA_EXPORT) {
   # Both spellings are listed for the gzipped products and filtered by
   # existence below, so this keeps working if a product is ever written
@@ -453,9 +474,29 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
         sourceField = "effort_corrected_richness",
         definition = "Canonical alias of observed_richness for residual calculation and backwards-compatible consumers."
       ),
+      expectedRichness = list(
+        sourceField = "expected_richness",
+        definition = paste(
+          "Fitted conditional expectation of effort_corrected_richness for this city,",
+          "in the same units as the observation it is subtracted from.",
+          "Not a species count and not comparable across cities."
+        ),
+        model = expected_model_record()
+      ),
       ecologicalResidual = list(
         sourceField = "ecological_residual",
-        definition = "Raw expected_richness minus effort_corrected_richness. Separate from nature_gap_score."
+        definition = paste(
+          "expected_richness minus effort_corrected_richness, where expected_richness is",
+          "the fitted expectation of that same quantity — so this is a statistical residual:",
+          "centred on zero and orthogonal to the fitted predictors.",
+          "Positive means fewer species recorded than the model predicts.",
+          "Separate from nature_gap_score."
+        ),
+        pressureCutoff = if (is.finite(RESIDUAL_PRESSURE_CUTOFF)) {
+          round(RESIDUAL_PRESSURE_CUTOFF, 6)
+        } else {
+          NA_real_
+        }
       ),
       natureGapScore = list(
         sourceField = "nature_gap_score",
@@ -797,6 +838,14 @@ land_use_mode <- function(tree, shrub, grass, water = NA_real_, built = NA_real_
   names(tab)[[1L]]
 }
 
+# Set from this city's sampled residual distribution once the grid is read (see
+# below). An absolute threshold cannot work: ecological_residual is a fitted
+# residual centred on zero, whose spread follows the city's own richness scale.
+# The previous `> 20` test was calibrated against an index that ran to ~50 and
+# can never fire now. Until the real value is known, any positive residual
+# qualifies rather than none.
+RESIDUAL_PRESSURE_CUTOFF <- NA_real_
+
 derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
                              expected_richness, ecological_residual,
                              fragmentation_index, corridor_importance,
@@ -817,11 +866,16 @@ derive_pressures <- function(n_obs, n_survey_dates, richness_corrected,
   if (replace_na(n_survey_dates, 0L) < 2L && replace_na(n_obs, 0L) > 0L) {
     pressures <- c(pressures, "Low survey effort — fewer than 2 distinct survey dates")
   }
-  if (!is.na(ecological_residual) && ecological_residual > 20) {
+  residual_cutoff <- if (is.finite(RESIDUAL_PRESSURE_CUTOFF)) {
+    RESIDUAL_PRESSURE_CUTOFF
+  } else {
+    0
+  }
+  if (!is.na(ecological_residual) && ecological_residual > residual_cutoff) {
     pressures <- c(
       pressures,
       sprintf(
-        "Effort-corrected richness (%.1f) is below the habitat expectation (%.0f)",
+        "Effort-corrected richness (%.2f) is below the habitat expectation (%.2f)",
         replace_na(richness_corrected, 0),
         replace_na(expected_richness, 0)
       )
@@ -1384,6 +1438,23 @@ if ("green_space_id" %in% names(grid) && nrow(park_lookup) > 0L) {
 }
 
 grid_df <- st_drop_geometry(grid)
+
+# Sampled 75th percentile of the fitted residual — the scale-free replacement for
+# the old absolute `> 20` pressure threshold. See docs/methodology.md §7.
+RESIDUAL_PRESSURE_CUTOFF <- local({
+  r <- grid_df$ecological_residual[
+    !replace_na(grid_df$is_unsampled, TRUE) & is.finite(grid_df$ecological_residual)
+  ]
+  if (length(r) == 0L) NA_real_ else as.numeric(stats::quantile(r, 0.75, na.rm = TRUE))
+})
+cat(sprintf(
+  "Residual pressure cutoff (sampled p75): %s\n",
+  if (is.finite(RESIDUAL_PRESSURE_CUTOFF)) {
+    sprintf("%.4f", RESIDUAL_PRESSURE_CUTOFF)
+  } else {
+    "unavailable — any positive residual qualifies"
+  }
+))
 n_cells <- nrow(grid_df)
 
 cell_taxa_lookup <- list()

@@ -232,8 +232,17 @@ BBOX_FETCH <- c(
 # iNaturalist "Verifiable" on the website ≈ research + needs_id (not casual).
 # Fetched via api.inaturalist.org (rinat does not support needs_id).
 INAT_QUALITY_GRADES <- c("research", "needs_id")
-INAT_MAX_RESULTS    <- 30000L   # total cap for bbox pagination
-GBIF_MAX_RESULTS    <- 10000L
+# Fetched with id_above cursor pagination, so these are real ceilings rather
+# than aspirations: the previous &page= paging hit the v1 API's hard limit of
+# page * per_page <= 10000 and silently truncated every city to 10,000 records
+# (Porto's bbox holds 20,806 verifiable observations). Both fetchers now warn
+# when a bbox holds more than was downloaded.
+INAT_MAX_RESULTS    <- 100000L  # total cap for bbox cursor pagination
+# occ_search cannot page past offset 100,000; beyond that GBIF needs a
+# credentialed occ_download. This is that ceiling, not a chosen sample size.
+# At 300 records per request a full 100k fetch is ~334 sequential calls, so
+# lower it deliberately if ingest runtime matters more than completeness.
+GBIF_MAX_RESULTS    <- 100000L
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
 # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
@@ -427,17 +436,42 @@ hex_lattice_extent <- function(x, origin, cell_size) {
 }
 
 # ── Biodiversity index parameters ───────────────────────────────────────────
-# Upper bound for expected species richness at habitat_quality = 1.0.
-# Used in residuals.R and exported to the frontend for transparency.
+# Legacy transparency field only. It no longer scales expected richness at
+# either scale; it is exported so consumers can see the historical ceiling.
 # This is an index, not a calibrated species distribution model.
 
 MAX_EXPECTED_RICHNESS <- 350L
 
-# Species-area power law parameters, shared by patch_aggregation.R (patch scale)
-# and residuals.R (hex scale) so both use one model with different area inputs.
-# ASSUMPTIONS, not calibrated: Z sits within the general 0.2–0.3 species-area
-# range; C is chosen so expected_richness lands in a plausible range across the
-# real park-area distribution (~20 m² to ~3.4e5 m²). See docs/methodology.md §6.
+# ── Expected richness model ──────────────────────────────────────────────────
+# expected_richness is the *conditional expectation of the observed quantity*,
+# fitted per city, so that ecological_residual = expected - observed is a real
+# residual: same units on both sides, centred on zero, and orthogonal to the
+# predictors it was fitted on.
+#
+# It replaces a fixed weighted-index formula that multiplied a [0,1] quality
+# blend by an arbitrary constant. At hex scale that constant was
+# SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z ≈ 53.7, which put "expected" on
+# a ~20-per-cell scale while observed richness (species per log-metre of path)
+# sits near 0.05. Subtracting the second from the first is not a leftover of
+# anything: measured on the 2026-08-19 exports, ecological_residual correlated
+# with expected_richness at 0.999 in all three cities, observations accounted
+# for 0.1-0.3% of its variance, and it was positive in 99.99% of sampled cells.
+# See docs/methodology.md §6 and §7.
+#
+# Below these sample sizes the fit is refused and an intercept-only model is
+# used instead (expected = mean observed). That keeps both sides in the same
+# units and is recorded as a fallback in PROC_EXPECTED_MODEL rather than failing
+# silently.
+EXPECTED_MODEL_MIN_CELLS   <- 30L   # sampled hexes required to fit at hex scale
+EXPECTED_MODEL_MIN_PATCHES <- 8L    # sampled patches required to fit at patch scale
+
+# Species-area power law parameters. Used by patch_aggregation.R only: patch
+# area genuinely varies, so an area term is meaningful there. SPECIES_AREA_Z is
+# retained as the documented ASSUMPTION for the exponent (it sits within the
+# general 0.2–0.3 species-area range and is not calibrated or sourced here —
+# see docs/methodology.md §6.2). SPECIES_AREA_C is no longer used: the patch
+# model fits the area term's coefficient from the data instead of asserting a
+# tuning constant. It is kept for reproducibility records and back-compatibility.
 SPECIES_AREA_Z <- 0.25
 SPECIES_AREA_C <- 12
 
@@ -584,6 +618,9 @@ PROC_CELL_ATTR    <- file.path(DATA_PROC, "cell_attributes.gpkg")
 PROC_TOP_INTER    <- file.path(DATA_PROC, "top_interventions.csv")
 PROC_HABITAT_TIF  <- file.path(DATA_PROC, "habitat_quality.tif")
 PROC_CELL_TAXA    <- file.path(DATA_PROC, "cell_taxa.json")
+# Fitted expected-richness model record (hex + patch blocks), written by
+# 05_residuals and 05_patch, read by 06_export for the manifest.
+PROC_EXPECTED_MODEL <- file.path(DATA_PROC, "expected_richness_model.json")
 
 # ── Robust geometry helpers ────────────────────────────────────────────────────
 # st_intersection()/st_union() on real-world OSM geometry against the hex grid

@@ -216,12 +216,15 @@ Required properties include:
 
 Notes on specific fields:
 
-- `expected_richness` comes from the species-area law at hex area
-  (`SPECIES_AREA_C * 400^SPECIES_AREA_Z * quality_blend`), so its ceiling is
-  about `53.7`. `max_expected_richness` (350) is carried for transparency and no
-  longer scales it.
+- `expected_richness` is the per-city fitted expectation of
+  `effort_corrected_richness` (`05_residuals/expected_model.R`), so it is in the
+  same units as `observed_richness` and has no fixed ceiling. It is a within-city
+  benchmark and **not comparable between cities**. `max_expected_richness` (350)
+  is carried for transparency and scales nothing.
 - `ecological_residual` is `expected_richness - observed_richness`: positive
-  means fewer species recorded than the habitat predicts.
+  means fewer species recorded than the model predicts. Because expected is a
+  fitted value, the residual is centred on zero across sampled cells; do not
+  apply absolute thresholds to it (see docs/methodology.md §7).
 - `impact_score` is a legacy field, `round(bio_residual_norm * 50)` — the
   biodiversity term of `nature_gap_score` on its own.
 - `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`

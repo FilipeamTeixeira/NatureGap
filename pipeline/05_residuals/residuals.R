@@ -5,6 +5,10 @@
 # Positive residual → fewer species recorded than habitat suggests
 # Negative residual → more species recorded than habitat suggests
 #
+# expected_richness is the fitted conditional expectation of effort-corrected
+# richness (05_residuals/expected_model.R), so both sides of that subtraction
+# are the same quantity in the same units and the residual is centred on zero.
+#
 # Nature Gap score = composite headline (0.50 biodiversity + 0.30 habitat + 0.20 connectivity),
 # scaled to [-100, 100] and separate from raw ecological_residual.
 #
@@ -23,6 +27,7 @@ library(igraph)
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 source(here::here("04_connectivity", "connectivity_load.R"), local = FALSE)
+source(here::here("05_residuals", "expected_model.R"), local = FALSE)
 
 TOP_N         <- 20    # number of cells for counterfactual connectivity
 
@@ -58,12 +63,24 @@ if (!"betweenness_centrality" %in% names(grid)) {
 }
 
 # ── 2. Expected richness model ────────────────────────────────────────────────
-# Uses existing habitat proxies, connectivity metrics, and path accessibility,
-# scaled by the same species-area power law used at patch level
-# (patch_aggregation.R), with each hex's own area (CELL_SIZE^2) as the area input.
-# SPECIES_AREA_C / SPECIES_AREA_Z come from config.R.
+# Habitat proxies, connectivity, and path accessibility are the predictors; the
+# response is effort-corrected richness itself, fitted on this city's sampled
+# cells. expected_richness is therefore in the units it is subtracted from
+# (species per effort unit), and the residual is what the predictors could not
+# account for.
+#
+# The previous formulation multiplied a [0,1] quality blend by
+# SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z — a constant ≈ 53.7 at 20 m,
+# identical for every hex, so it contributed scale and nothing else. It put
+# expected richness near 20 while observed richness sits near 0.05, which made
+# the "gap" an artefact of the scale clash rather than a measurement: on the
+# 2026-08-19 exports ecological_residual correlated with expected_richness at
+# 0.999 in all three cities and was positive in 99.99% of sampled cells. The
+# species-area law now applies only where area actually varies (patch scale).
+#
 # Unsampled cells still receive an expected richness estimate, but their
-# observed/corrected richness and residual stay NA and are excluded from ranking.
+# observed/corrected richness and residual stay NA and are excluded from ranking
+# and from the fit.
 
 if (!"path_local_m" %in% names(grid)) {
   stop(
@@ -94,20 +111,35 @@ grid <- grid |>
       replace_na(path_local_m, 0) < MIN_PATH_M | !is.finite(max_path_local_m) | max_path_local_m <= 0,
       0,
       pmin(1, log1p(path_local_m) / log1p(max_path_local_m))
-    ),
-    expected_richness = SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (
-      0.65 * habitat_component +
-        0.20 * connectivity_component +
-        0.15 * accessibility_component
-    ),
+    )
+  ) |>
+  select(-max_path_local_m, -obs_is_unsampled)
+
+# Fit on sampled cells only: an unsampled cell has no observation to explain,
+# and including its NA response would either drop it or bias the intercept.
+expected_model <- fit_expected_model(
+  train = grid |>
+    st_drop_geometry() |>
+    filter(!replace_na(is_unsampled, TRUE)),
+  response    = "effort_corrected_richness",
+  terms       = EXPECTED_MODEL_TERMS,
+  min_rows    = EXPECTED_MODEL_MIN_CELLS,
+  scale_label = "hex"
+)
+
+record_expected_model("hex", expected_model$record, reset = TRUE)
+
+grid$expected_richness <- expected_model$predict(st_drop_geometry(grid))
+
+grid <- grid |>
+  mutate(
     ecological_residual = if_else(
       is_unsampled,
       NA_real_,
       expected_richness - effort_corrected_richness
     ),
     underperformance = pmax(0, ecological_residual)
-  ) |>
-  select(-max_path_local_m, -obs_is_unsampled)
+  )
 
 finite_residuals <- grid$ecological_residual[is.finite(grid$ecological_residual)]
 city_residual_max <- if (length(finite_residuals) > 0L) max(abs(finite_residuals)) else NA_real_

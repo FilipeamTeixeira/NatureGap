@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, ArrowLeft, Calendar, MapPin, Users, TreePine, Flower2, Leaf, Zap, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { cityMeta, MAX_EXPECTED_RICHNESS } from '@/lib/config';
+import { cityMeta } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
 import type { CommunityEvent, TakeAction } from '@/lib/data';
@@ -185,15 +185,19 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
   const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
   return (
     <div className="mt-4 pt-4 border-t border-[#E4E7E1] flex flex-col gap-3">
-      <p className="text-[12px] font-medium text-[#1F2A1F]">Why is expected richness {cell.expectedRichness}?</p>
+      <p className="text-[12px] font-medium text-[#1F2A1F]">
+        Why is expected richness {formatMetric(cell.expectedRichness, 2)}?
+      </p>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        Expected richness is a habitat-based index, not a field survey. The pipeline estimates
-        how many species a cell could support given its land-cover quality:
+        Expected richness is what this city&apos;s fitted model predicts for the same quantity that
+        was actually measured here — effort-corrected richness — given the cell&apos;s habitat,
+        corridor importance, and path accessibility. It is not a field survey and not a species
+        count:
       </p>
       <div className="bg-[#F7F8F5] rounded-xl p-4 font-mono text-[12px] text-[#1F2A1F] leading-relaxed">
-        expected = habitat quality ({cell.habitatQualityIndex.toFixed(3)}) × {cell.maxExpectedRichness}
+        expected = fitted(effort-corrected richness ~ habitat + corridor + access)
         <br />
-        = {cell.expectedRichness.toFixed(1)} species
+        = {formatMetric(cell.expectedRichness, 2)} species per effort unit
       </div>
       <ul className="text-[12px] text-[#667066] leading-relaxed flex flex-col gap-2 list-disc pl-4">
         <li>
@@ -201,19 +205,19 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
           fractions and impervious surface).
         </li>
         <li>
-          {cell.maxExpectedRichness} is the study-area upper bound for a fully vegetated cell
-          (configured in the pipeline as MAX_EXPECTED_RICHNESS).
+          The model is fitted on this city&apos;s sampled cells only, so expected richness is a
+          within-city benchmark and is not comparable between cities.
         </li>
         <li>
-          This is a simple index for comparison across cells — not a calibrated species
-          distribution model.
+          Because the fit is in-sample, the residual below is centred on zero by construction. It
+          measures shortfall the habitat model could not explain — not absolute ecological deficit.
         </li>
       </ul>
       <p className="text-[12px] text-[#667066] leading-relaxed">
-        Ecological residual = expected richness ({cell.expectedRichness.toFixed(1)}) −
-        effort-corrected richness ({formatMetric(cell.observedRichness)}) =
-        {formatMetric(cell.ecologicalResidual)}.
-        {' '}Positive values mean fewer species are recorded than the habitat suggests.
+        Ecological residual = expected richness ({formatMetric(cell.expectedRichness, 2)}) −
+        effort-corrected richness ({formatMetric(cell.observedRichness, 2)}) =
+        {' '}{formatMetric(cell.ecologicalResidual, 2)}.
+        {' '}Positive values mean fewer species are recorded than the model predicts.
       </p>
     </div>
   );
@@ -562,13 +566,13 @@ export default function CellDetailPanel({
 
             <Card>
               <CardTitle>Expected richness</CardTitle>
-              <CardSubtitle>Habitat-based benchmark (index)</CardSubtitle>
+              <CardSubtitle>Fitted benchmark (per effort unit)</CardSubtitle>
               <div className="bg-[#F7F8F5] rounded-xl p-4 mb-2">
                 <div className="text-[36px] font-semibold text-[#1F2A1F] leading-none">
-                  {cell.expectedRichness.toFixed(1)}
+                  {formatMetric(cell.expectedRichness, 2)}
                 </div>
                 <div className="text-[11px] text-[#667066] mt-1.5">
-                  At habitat quality {cell.habitatQualityIndex.toFixed(3)} × max {MAX_EXPECTED_RICHNESS}
+                  Fitted from habitat {cell.habitatQualityIndex.toFixed(3)}, corridor, and access
                 </div>
               </div>
               <ExpectedRichnessExplainer cell={cell} />

@@ -228,53 +228,92 @@ Limitations:
 
 ## 6. Expected Richness
 
-Expected richness is modelled at two levels.
+Expected richness is the **fitted conditional expectation of the observed
+quantity**, not an index. That is what makes section 7 a residual: the same
+quantity stands on both sides of the subtraction, in the same units.
 
-### 6.1 Per-hex expected index (`pipeline/05_residuals/residuals.R`)
+The shared fit lives in `pipeline/05_residuals/expected_model.R` and is applied
+at two scales. Every run records its coefficients, R², RMSE, training row count,
+and any fallback in `expected_richness_model.json`, which is carried into the
+export manifest under `metricDefinitions.expectedRichness.model`.
 
-A relative, index-like value per 20 m hex, used only for the hex-level map
-layers and the per-hex ecological residual:
+### 6.1 Per-hex expected richness (`pipeline/05_residuals/residuals.R`)
 
 ```text
 expected_richness_i =
-  SPECIES_AREA_C * (CELL_SIZE ^ 2) ^ SPECIES_AREA_Z * (
-    0.65 * habitat_quality_i
-    + 0.20 * corridor_importance_i
-    + 0.15 * accessibility_component_i
-  )
+  fitted( effort_corrected_richness ~ habitat_component
+                                    + connectivity_component
+                                    + accessibility_component )
 ```
 
-Where:
+Fitted per city by OLS on **sampled cells only** — an unsampled cell has no
+observation to explain — then predicted for every cell and floored at 0. The
+predictors are unchanged from the previous formulation:
+`habitat_component` is `habitat_quality`, `connectivity_component` is
+`corridor_importance` clamped to `[0, 1]`, and
+`accessibility_component = log1p(path_local_m) / log1p(max_path_local_m)`
+clamped to `[0, 1]` and `0` for unsampled cells.
 
-- `SPECIES_AREA_C = 12` and `SPECIES_AREA_Z = 0.25`, the same species-area
-  parameters used at patch level (section 6.2), with the hex's own area
-  (`CELL_SIZE^2 = 400 m²`) as the area input. One model, two area scales.
-- the area term is therefore a constant `12 * 400^0.25 ≈ 53.7` for every hex,
-  which is the ceiling of `expected_richness` at quality 1.
-- `accessibility_component_i = log1p(path_local_m_i) / log1p(max_path_local_m)`
-  clamped to `[0, 1]`, and `0` for unsampled cells
+Below `EXPECTED_MODEL_MIN_CELLS` (30) usable rows — or with a constant response,
+no varying predictor, or collinear non-finite coefficients — the fit is refused
+and an intercept-only model is used instead (`expected = mean observed`). That
+keeps both sides of the residual in the same units and is flagged as
+`fallback: true` in the model record rather than failing silently.
 
-**This replaces an earlier `MAX_EXPECTED_RICHNESS * (...)` formulation**, which
-put the hex ceiling at 350 species — an implausible per-20 m-hex figure, and
-inconsistent with the patch-level species-area model. `MAX_EXPECTED_RICHNESS`
-(350) is still exported as `max_expected_richness` for transparency and is read
-by the frontend, but it no longer scales expected richness.
+**This replaces `SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (0.65 * habitat_quality + 0.20 * corridor_importance + 0.15 * accessibility)`.**
+At hex scale the area term was a constant — `12 * 400^0.25 ≈ 53.7`, identical for
+every hex — so it supplied scale and nothing else, on top of three
+expert-assigned weights. The scale was the defect. It put expected richness near
+20 (Porto sampled mean 20.01) while `effort_corrected_richness` — species per
+log-metre of path — sits near 0.05. Subtracting the second from the first is not
+a leftover of anything. Measured on the 2026-08-19 exports:
 
-This is a within-city relative index for hex comparison, not a species count and
-not calibrated per city.
+| | Porto | Amsterdam | Yokohama |
+|---|---|---|---|
+| sampled cells | 31,562 | 19,832 | 18,253 |
+| mean observed richness | 0.049 | 0.033 | 0.021 |
+| sampled cells with ≥1 species recorded | 10.8% | 10.0% | 4.6% |
+| corr(`ecological_residual`, `expected_richness`) | 0.9987 | 0.9996 | 0.9990 |
+| observed share of residual variance | 0.26% | 0.08% | 0.21% |
+| residual > 0 | 99.99% | 99.99% | 99.99% |
+
+The old residual was `expected_richness` under another name, and the documented
+positive bias in section 8 followed arithmetically from the scale clash rather
+than from ecology. Porto's top 20 intervention cells all carried
+`habitat_quality ≈ 0.94`, `species_richness = 0`, and an `ecological_residual`
+exactly equal to `expected_richness` — the ranking was selecting the best
+habitat, not the largest shortfall.
+
+`SPECIES_AREA_*` no longer applies at hex scale. `MAX_EXPECTED_RICHNESS` (350) is
+still exported as `max_expected_richness` for transparency and read by the
+frontend, but it scales nothing at either scale.
+
+Limitations:
+
+- Fitted per city, so hex expected richness is a within-city benchmark and is
+  **not comparable between cities**. Two cities' raw residuals are not the same
+  statement.
+- In-sample fit: the residual is centred on zero and orthogonal to the three
+  predictors by construction (section 7).
+- The response is 90–95% zeros at 20 m, so R² is very low and expected richness
+  is close to constant in practice. That is a fact about observation density at
+  400 m², not a defect in the fit: **a 20 m hex is too small a unit to estimate
+  richness from citizen-science records.** Until observations are pooled at a
+  coarser scale, the hex residual is unit-correct but carries little
+  information. The per-run R² and RMSE are recorded so this is visible rather
+  than implied.
 
 ### 6.2 Patch (park) expected richness (`pipeline/05_patch/patch_aggregation.R`)
 
-Per-park expected richness must scale with total park area — larger areas
-support more species (the species-area relationship), all else equal. It is
-therefore computed **once per patch** from total patch area using a power law,
-not by averaging the per-hex index (an area-weighted average does not scale with
-size, so a small park and a large park of similar per-hex quality would
-otherwise get nearly the same expected richness):
+Patch area genuinely varies, so an area term is meaningful here — larger areas
+support more species, all else equal (the species-area relationship). The
+coefficient on that term is now fitted rather than asserted:
 
 ```text
+area_term = patch_area_m2 ^ SPECIES_AREA_Z
+
 expected_richness_patch =
-  SPECIES_AREA_C * (patch_area_m2 ^ SPECIES_AREA_Z) * quality_modifier
+  fitted( effort_corrected_richness ~ area_term + quality_modifier )
 ```
 
 Where:
@@ -284,23 +323,36 @@ Where:
   `corridor_importance`, and accessibility across the park's hexes, clamped to
   `[0, 1]`. Averaging is appropriate here because these are intensive
   properties, not counts.
-- `SPECIES_AREA_Z = 0.25` is the species-area exponent. **This value is an
-  assumption informed by general species-area relationship literature, not
-  calibrated to Yokohama or Amsterdam specifically, and not sourced to a
-  specific citation.** It is set within the commonly cited 0.2–0.3 range pending
-  a proper literature review / local calibration.
-- `SPECIES_AREA_C = 12` is a scaling constant chosen so `expected_richness`
-  lands in a plausible range across the actual park-area distribution in both
-  cities (roughly 20 m² to 3.4×10⁵ m²). It is a tuning constant, not a
-  measured quantity.
+- Fitted on patches with at least one sampled cell, requiring
+  `EXPECTED_MODEL_MIN_PATCHES` (8) usable rows, with the same intercept-only
+  fallback as section 6.1.
+- Expected richness is computed once per patch from total area, not by averaging
+  the per-hex value — an area-weighted average does not scale with size, so a
+  small park and a large park of similar per-hex quality would otherwise get
+  nearly the same expected richness.
+
+- `SPECIES_AREA_Z = 0.25` remains the species-area exponent and sets the shape of
+  the area term. **This value is an assumption informed by general species-area
+  relationship literature, not calibrated to any of the three cities, and not
+  sourced to a specific citation.** It is set within the commonly cited 0.2–0.3
+  range pending a proper literature review or local calibration.
+- `SPECIES_AREA_C` is **no longer used**. It was a tuning constant chosen so
+  expected richness landed in a plausible range, and it set the entire patch
+  scale; the fitted coefficient on `area_term` replaces it. The constant remains
+  in `config.R` for reproducibility records and back-compatibility only.
 
 Limitations:
 
-- `SPECIES_AREA_Z` and `SPECIES_AREA_C` are documented assumptions, not
-  calibrated or cited values, and they now set the scale at both hex and patch
-  level.
-- Neither scale is calibrated per city.
-- Regional species-pool constraints are not yet modelled.
+- `SPECIES_AREA_Z` is still a documented assumption, not a calibrated or cited
+  value.
+- Patch observed richness is an area-weighted mean of cell-level
+  effort-corrected richness, so it inherits the sparsity of section 6.1: on the
+  Porto export, patch `observedRichness` had mean 0.048 and median 0 across 1,058
+  sampled parks. Pooling distinct species and effort across each patch — rather
+  than averaging per-cell ratios — would give patch richness real counts to work
+  with (Porto parks reach `speciesRichnessRaw` of 1,049), and is the natural next
+  step. It is not done yet.
+- Neither scale models regional species-pool constraints.
 
 ## 7. Ecological Residual
 
@@ -310,16 +362,29 @@ Formula:
 
 ```text
 ecological_residual_raw_i =
-  expected_richness_i - observed_richness_i
+  expected_richness_i - effort_corrected_richness_i
 
 ecological_residual_normalized_i =
   (ecological_residual_raw_i - city_mean(ecological_residual_raw)) /
   city_stddev(ecological_residual_raw)
 ```
 
-**The residual is expected minus observed — a gap, not a surplus.** It is
-signed so that the headline metric and the residual point the same way: bigger
-means further below expectation. The patch-level residual in
+Because `expected_richness` is the fitted expectation of
+`effort_corrected_richness` (section 6), this is a residual in the statistical
+sense — a leftover. Three consequences follow from the fit and hold by
+construction, not by calibration:
+
+- Both sides are the same quantity in the same units (species per effort unit).
+- The residual is **centred on zero** across sampled cells, so a diverging colour
+  ramp has a meaningful midpoint.
+- The residual is **orthogonal to the three fitted predictors**, so it measures
+  shortfall those predictors could not explain. It is not an absolute ecological
+  deficit, and a high-quality cell no longer scores a large gap merely for being
+  high quality.
+
+**The residual is expected minus observed — a gap, not a surplus.** It is signed
+so that the headline metric and the residual point the same way: bigger means
+further below expectation. The patch-level residual in
 `pipeline/05_patch/patch_aggregation.R` uses the same orientation.
 
 Interpretation:
@@ -328,18 +393,35 @@ Interpretation:
   backend analytics.
 - `ecological_residual_normalized` stores the city-wise standardized residual,
   exported for analytics and detail panels.
-- **Positive** residual: fewer species recorded than expected — habitat
-  pressure, restoration priority.
-- **Negative** residual: more species recorded than expected — above
+- **Positive** residual: fewer species recorded than the model predicts —
+  habitat pressure, restoration priority.
+- **Negative** residual: more species recorded than the model predicts — above
   expectation, potential refuge.
-- Near zero: observed richness aligns with expectation
-- Unsampled: `NA`
+- Near zero: observed richness aligns with the model.
+- Unsampled: `NA`.
 
 Rendering uses `residualNorm` (`norm_diverging(ecological_residual)` in
 `06_export/export.R`: the raw residual divided by the larger of |p10| and |p90|,
 clamped to `[-1, 1]`), not `ecological_residual_normalized`. Raw backend values
 are not clamped. `src/lib/layer-styles.ts` colours `+1` red and `-1` green,
 following the sign convention above.
+
+Downstream thresholds must not assume an absolute scale. The residual's spread
+now follows each city's own richness scale rather than a fixed ~0–50 index, so
+`06_export/export.R` derives its residual pressure cutoff from the sampled 75th
+percentile (`RESIDUAL_PRESSURE_CUTOFF`, recorded in the manifest as
+`metricDefinitions.ecologicalResidual.pressureCutoff`) instead of the previous
+hard-coded `> 20`, which could never fire on the new scale.
+
+Limitations:
+
+- Fitted per city and in-sample, so raw residuals are not comparable between
+  cities, and the zero point is a property of the fit rather than of the
+  ecology.
+- At hex scale the response is mostly zeros (section 6.1), so most of the
+  residual's variation is the observation itself. Treat hex residuals as
+  provisional until observations are pooled at a scale where richness counts are
+  non-trivial.
 
 ## 8. Nature Gap Score
 
@@ -392,27 +474,35 @@ single source of truth for `src/lib/utils.ts` and
 | `< 20` | `worse` |
 | `>= 20` | `much-worse` |
 
-**Known calibration issue.** The two deficit terms can only add to the score:
-`0.30 * (1 - habitat_quality)` and `0.20 * (1 - corridor_importance)` are
-non-negative by construction, and `corridor_importance` is 0 for every cell
-carrying no route at all — which is most of the grid. The score is therefore
-strongly biased positive in practice. Measured on the current Porto export
-(`city_layer_stats.json`): `nature_gap_score` spans 8.7 to 62.0 with
-p05–p95 = 54.5–59.7, and `ecological_residual` spans -18.5 to 48.9 with
-p05–p95 = 10.3–38.2. Two consequences:
+**Known calibration issue — partly resolved, must be re-measured.** The two
+deficit terms can only add to the score: `0.30 * (1 - habitat_quality)` and
+`0.20 * (1 - corridor_importance)` are non-negative by construction, and
+`corridor_importance` is 0 for every cell carrying no route at all — which is
+most of the grid.
 
-- Every band above resolves to `much-worse`, so the five-band scale carries no
-  information on that dataset.
+The larger cause has been removed. On the 2026-08-19 exports the biodiversity
+term was itself effectively a habitat term, because `ecological_residual`
+correlated with `expected_richness` at 0.999 and was positive in 99.99% of
+sampled cells (section 6.1). The score was therefore close to habitat quality
+composed with itself: `nature_gap_score` spanned 8.7 to 62.0 with
+p05–p95 = 54.5–59.7 on Porto, every band resolved to `much-worse`, and the
+five-band scale carried no information. With `expected_richness` now fitted,
+`ecological_residual` is centred on zero, so `bio_residual_norm` spans `[-1, 1]`
+in earnest and the biodiversity term contributes both signs.
+
+Two things remain open:
+
+- **The published figures above are stale.** Every number in this paragraph, the
+  `SCORE_THRESHOLDS` bands, and the p05–p95 spreads must be re-measured from a
+  post-fit run before they can be quoted.
 - `natureGapScoreNorm` and `residualNorm` divide by `max(|p10|, |p90|)` without
-  centring, so a distribution that never crosses zero maps almost entirely onto
-  one arm of the diverging ramp and the map renders near-uniform.
+  centring. The residual now crosses zero so this is far less damaging than it
+  was, but a score distribution that stays one-sided would still map onto one arm
+  of the diverging ramp. Re-centring the render normalisation on the city median
+  is still not done.
 
-Both are calibration problems, not sign problems: the direction is correct
-(Porto's cells genuinely record fewer species than the habitat model predicts).
-Fixing them means either re-centring the render normalisation on the city median,
-or rescaling the score so the bands describe within-city variation. Neither is
-done yet, and both change published numbers, so they are deliberately left as
-documented behaviour.
+The remaining items are calibration problems, not sign problems: the direction
+is correct.
 
 ## 9. Connectivity Analysis
 
@@ -614,6 +704,12 @@ Interpretation:
 - `underperformance` is the residual floored at zero, so a cell that already
   over-performs contributes nothing rather than a negative score. Since the
   residual is expected minus observed, underperformance is its positive side.
+  This floor only became selective once the residual was centred (section 6.1):
+  while the residual was positive in 99.99% of sampled cells, flooring at zero
+  excluded nothing and the ranking reduced to habitat quality × corridor
+  importance — it selected the best habitat on corridors rather than the largest
+  shortfall. Expect substantially fewer candidate cells after the change, and
+  re-check the top-20 list against `species_richness` before publishing it.
 - Higher score: stronger combination of underperformance and corridor relevance
 - A cell needs both: no corridor importance means no intervention score, however
   large the gap
@@ -701,9 +797,10 @@ PostgreSQL/PostGIS must not:
 2. Taxonomic bias: iNaturalist and GBIF skew toward visible and charismatic taxa.
 3. Temporal mismatch: satellite imagery and field records rarely align exactly.
 4. Data sparsity: unsampled cells are excluded, not treated as zero biodiversity.
-5. Uncalibrated defaults: index weights, `SPECIES_AREA_*`, connectivity and
-   network constants are shared across all cities and calibrated against none of
-   them. Three cities are configured (`yokohama-honmoku`,
+5. Uncalibrated defaults: habitat index weights, `SPECIES_AREA_Z`, connectivity
+   and network constants are shared across all cities and calibrated against none
+   of them. Expected richness is the exception — it is now fitted per city
+   (section 6) — which also means it is not comparable between cities. Three cities are configured (`yokohama-honmoku`,
    `amsterdam-schimmelstraat`, `porto-center`); NIR/CIR coverage exists for
    Amsterdam and Porto only, so Yokohama falls back to WorldCover fractions for
    permeability.
@@ -721,10 +818,18 @@ Every pipeline run should record:
 - CRS
 - bbox
 - `CELL_SIZE`
-- `SPECIES_AREA_Z` and `SPECIES_AREA_C` (expected-richness assumptions at both
-  hex and patch scale)
-- `MAX_EXPECTED_RICHNESS` (exported for transparency; no longer scales expected
-  richness)
+- the fitted expected-richness model at both scales, from
+  `expected_richness_model.json`: formula, response, terms, training row count,
+  coefficients, R², RMSE, and `fallback` / `fallbackReason` when the fit was
+  refused. Also carried in the export manifest under
+  `metricDefinitions.expectedRichness.model`.
+- `SPECIES_AREA_Z` (the patch-scale area exponent; still an assumption).
+  `SPECIES_AREA_C` is recorded for provenance only — it no longer affects any
+  output.
+- `RESIDUAL_PRESSURE_CUTOFF` (sampled p75 of the residual, used for the
+  detail-panel pressure string)
+- `MAX_EXPECTED_RICHNESS` (exported for transparency; scales nothing at either
+  scale)
 - `MIN_PATH_M` and `PATH_RADIUS_M` (effort-correction thresholds)
 - `CONN_*` and `NET_*` (connectivity and derived-network constants)
 - source data dates or versions
