@@ -12,6 +12,7 @@ library(igraph)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 source(here::here("score_scaling.R"), local = FALSE)
+source(here::here("cell_taxa.R"), local = FALSE)
 
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
 
@@ -980,38 +981,10 @@ species_list <- function(plant, bird, insect, mammal, fungi) {
   })
 }
 
+# Export cell ids carry the CITY_ID prefix; the taxa lookup is keyed by the local
+# id. Union and normalisation live in cell_taxa.R, shared with 05_patch.
 merge_park_taxa <- function(cell_ids, cell_taxa_lookup) {
-  types <- c("plant", "bird", "insect", "mammal", "fungi")
-  out <- setNames(vector("list", length(types)), types)
-  for (t in types) {
-    out[[t]] <- sort(unique(unlist(lapply(cell_ids, function(cid) {
-      local_id <- sub(paste0("^", CITY_ID, "-"), "", cid)
-      tx <- normalize_cell_taxa(cell_taxa_lookup[[local_id]])
-      if (is.null(tx)) return(character())
-      tx[[t]]
-    }))))
-  }
-  out
-}
-
-normalize_cell_taxa <- function(taxa) {
-  if (is.null(taxa)) return(NULL)
-  if (length(taxa) == 1L && is.list(taxa[[1L]]) && !is.null(taxa[[1L]]$plant)) {
-    taxa <- taxa[[1L]]
-  }
-  types <- c("plant", "bird", "insect", "mammal", "fungi")
-  out <- stats::setNames(vector("list", length(types)), types)
-  for (t in types) {
-    val <- taxa[[t]]
-    if (is.null(val)) {
-      out[[t]] <- character()
-    } else if (is.character(val)) {
-      out[[t]] <- val
-    } else {
-      out[[t]] <- as.character(unlist(val))
-    }
-  }
-  out
+  union_cell_taxa(sub(paste0("^", CITY_ID, "-"), "", cell_ids), cell_taxa_lookup)
 }
 
 cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
@@ -1087,6 +1060,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
   } else {
     NA_real_
   }
+  patch_species_richness <- finite_first(patch_metrics$species_richness_raw)
   patch_corridor <- finite_first(patch_metrics$corridor_importance)
   patch_betweenness <- finite_first(patch_metrics$betweenness_centrality)
   patch_rank <- finite_first(patch_metrics$intervention_rank)
@@ -1096,9 +1070,20 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     natureGapScore       = aggregate_nature_gap,
     habitatQuality       = pct_index(coalesce(patch_habitat_quality, hq_mean)),
     habitatQualityIndex  = round(replace_na(coalesce(patch_habitat_quality, hq_mean), 0), 4),
-    speciesRichnessRaw   = as.integer(sum(replace_na(rows$species_richness, 0L))),
-    observedRichness     = if (is.finite(patch_observed)) round(patch_observed, 1) else if (any(sampled)) round(sum(replace_na(rows$observed_richness[sampled], 0)), 1) else NA_real_,
-    effortCorrectedRichness = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 1) else if (any(sampled)) round(sum(replace_na(rows$effort_corrected_richness[sampled], 0)), 1) else NA_real_,
+    # Distinct taxa pooled across the park. 05_patch is the source of truth; the
+    # local union is the fallback. Neither is a sum of per-cell counts, which
+    # counted a species once per cell it occupied (1,049 against 637 distinct for
+    # Porto's largest park on the 2026-08-19 export).
+    speciesRichnessRaw   = as.integer(if (is.finite(patch_species_richness)) {
+      patch_species_richness
+    } else {
+      sum(lengths(park_taxa))
+    }),
+    # No sum fallback: summing per-cell ratios is a third, incompatible
+    # definition of the same quantity. If 05_patch could not pool, the value is
+    # missing rather than wrong.
+    observedRichness     = if (is.finite(patch_observed)) round(patch_observed, 4) else NA_real_,
+    effortCorrectedRichness = if (is.finite(patch_effort_corrected)) round(patch_effort_corrected, 4) else NA_real_,
     expectedRichness     = if (is.finite(patch_expected)) round(patch_expected, 1) else round(replace_na(finite_mean(rows$expected_richness), 0), 1),
     maxExpectedRichness  = as.integer(max_expected),
     ecologicalResidual   = if (is.finite(patch_residual)) round(patch_residual, 1) else if (any(sampled)) round(finite_mean(rows$ecological_residual[sampled]), 1) else NA_real_,
@@ -1171,6 +1156,7 @@ green_metrics <- tibble(
   effort_corrected_richness = numeric(),
   survey_effort_units = numeric(),
   expected_richness = numeric(),
+  species_richness_raw = numeric(),
   ecological_residual = numeric(),
   ecological_residual_normalized = numeric(),
   data_availability_ratio = numeric(),
@@ -1204,7 +1190,7 @@ if (file.exists(green_path)) {
   if (!"wardId" %in% names(green_raw)) green_raw$wardId <- NA_character_
   for (col in c(
     "habitat_quality_index", "observed_richness", "effort_corrected_richness",
-    "survey_effort_units", "expected_richness",
+    "survey_effort_units", "expected_richness", "species_richness_raw",
     "ecological_residual", "ecological_residual_normalized",
     "data_availability_ratio", "nature_gap_score", "corridor_importance",
     "betweenness_centrality", "intervention_rank", "tree_fraction", "veg_fraction", "ndvi_texture", "canopy_height_idx", "mean_lst"
@@ -1242,7 +1228,7 @@ if (file.exists(green_path)) {
     select(
       id, name, nameJa, wardId,
       habitat_quality_index, observed_richness, effort_corrected_richness,
-      survey_effort_units, expected_richness,
+      survey_effort_units, expected_richness, species_richness_raw,
       ecological_residual, ecological_residual_normalized,
       data_availability_ratio, nature_gap_score, corridor_importance,
       betweenness_centrality, intervention_rank,
@@ -1265,6 +1251,7 @@ if (file.exists(green_path)) {
       effort_corrected_richness,
       survey_effort_units,
       expected_richness,
+      species_richness_raw,
       ecological_residual,
       ecological_residual_normalized,
       data_availability_ratio,
@@ -1499,13 +1486,7 @@ cat(sprintf(
 ))
 n_cells <- nrow(grid_df)
 
-cell_taxa_lookup <- list()
-if (file.exists(PROC_CELL_TAXA)) {
-  cell_taxa_lookup <- jsonlite::read_json(PROC_CELL_TAXA, simplifyVector = FALSE)
-  cat(sprintf("  → Loaded taxa names for %d cells\n", length(cell_taxa_lookup)))
-} else {
-  message(sprintf("No %s — species counts only (no name lists)", PROC_CELL_TAXA))
-}
+cell_taxa_lookup <- read_cell_taxa()
 
 # Top interventions with park attribution. Full intervention descriptions are
 # stored in PostgreSQL for click-time detail, not in PMTiles.

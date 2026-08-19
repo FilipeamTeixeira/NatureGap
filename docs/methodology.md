@@ -205,9 +205,12 @@ Missing-value rule:
   `observed_richness_i = 0`.
 - Unsampled cells export `observed_richness_i = NA`; exporters may coalesce to
   `0` only for render-only PMTiles fields that cannot style nulls reliably.
-- Patch-level `observed_richness` is aggregated from the same cell-level
-  `observed_richness` field, weighted by cell/patch overlap, so patch and hex
-  values use the same pipeline semantics.
+- Patch-level `observed_richness` is **not** an aggregate of the cell-level
+  field. It is a ratio of pooled sums — distinct taxa pooled across the patch's
+  sampled cells, divided by those cells' pooled `survey_effort_units` (§6.2).
+  Hex and patch values are the same *kind* of quantity (species per effort unit)
+  but are not on the same scale, because the patch denominator sums over cells.
+  Do not compare a patch value to a hex value.
 
 Structured-survey rule:
 
@@ -345,18 +348,62 @@ Limitations:
 
 - `SPECIES_AREA_Z` is still a documented assumption, not a calibrated or cited
   value.
-- Patch observed richness is an area-weighted **mean of per-cell ratios**, which
-  is not the ratio of pooled sums, so it inherits the sparsity of section 6.1: on
-  the Porto export, patch `observedRichness` had mean 0.048 and median 0 across
-  1,058 sampled parks. Pooling distinct species and effort across each patch —
-  rather than averaging per-cell ratios — would give patch richness real counts to
-  work with: `merge_park_taxa()` in `06_export/export.R` already unions distinct
-  taxa per park, and Porto's largest park holds **637 distinct taxa**. Note that
-  the exported `speciesRichnessRaw` is *not* that figure — it sums per-cell
-  species counts and so counts the same species once per cell it occupies (1,049
-  for that park against 637 distinct, 1.2× inflation city-wide). Pooling is the
-  natural next step and is not done yet.
+- Patch observed richness is now a **ratio of pooled sums** (see below), not an
+  area-weighted mean of per-cell ratios. Pooling does **not** reduce sparsity: a
+  patch is zero exactly when no sampled cell in it holds a record, which is true
+  of 72% of Porto's 1,058 scored patches either way. What it fixes is the
+  estimator, not the data.
 - Neither scale models regional species-pool constraints.
+
+#### The pooled response
+
+Patch `observed_richness` / `effort_corrected_richness` — the response the model
+above is fitted against — is
+
+```text
+observed_richness_patch =
+  distinct_taxa(sampled cells in patch) / sum(survey_effort_units of those cells)
+```
+
+computed in `pipeline/05_patch/patch_aggregation.R` using the shared taxa reader
+in `pipeline/cell_taxa.R`.
+
+**Why a ratio of sums and not a mean of ratios.** The previous definition was the
+area-weighted mean of each cell's `species / effort` ratio. That is not an
+estimate of what a park holds: it depends on how the park happens to be tiled,
+and it is inflated by cells that hold a record and little path. On the
+2026-08-19 Porto export, the largest park read **1.198** under the mean of ratios
+against **0.781** pooled, from 637 distinct taxa over 142 sampled cells and
+816.0 pooled effort units.
+
+Both sides use whole-cell membership. `overlap_rank` in `patch_aggregation.R`
+assigns each cell to at most one green space, so a species cannot be
+double-counted across patches; and since presence cannot be prorated across a
+boundary, neither is the effort that found it. Only sampled cells count on either
+side — an unsampled cell's effort is below threshold by definition, so counting
+its taxa but not its effort would overstate richness per unit effort.
+
+`species_richness_raw` at patch scale is the same pooled distinct count. It
+previously summed per-cell counts, which counts a species once per cell it
+occupies: **1,049 against 637 distinct** for that park, and **1.37× inflation**
+across Porto's patches. `06_export/export.R` no longer carries a sum-of-ratios
+fallback for the patch response either — that was a third, incompatible
+definition of the same quantity.
+
+Limitations of the pooled response:
+
+- Pooled richness counts only taxa classified into the five groups
+  (`plant`, `bird`, `insect`, `mammal`, `fungi`). A record whose iconic taxon
+  falls outside them has no label in `cell_taxa.json` and is invisible here,
+  which is why pooled richness is positive in 27.8% of scored patches against
+  28.4% for the old mean of ratios — about six patches hold records that no
+  classified group claims.
+- The structured-survey weighting of §3 does **not** propagate. Hex
+  `species_richness` weights a structured-survey taxon 3×; the pooled label union
+  is unweighted, because `cell_taxa.json` carries labels without weights.
+- Pooled effort sums `log1p(path_local_m)` over cells, so it is not a length and
+  grows with cell count. It is a consistent denominator, not an interpretable
+  one.
 
 ## 7. Ecological Residual
 

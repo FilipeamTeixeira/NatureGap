@@ -241,6 +241,13 @@ Notes on specific fields:
   integer percentage. Exports generated before 2026-08-20 wrote the percentage
   into **both**, and `habitat_potential` was derived from the percentage against
   0.70/0.40 thresholds, so it reads `high` for every cell in those datasets.
+- At **patch** scale, `observed_richness` / `effortCorrectedRichness` is a ratio
+  of pooled sums — distinct taxa across the patch's sampled cells over their
+  pooled `survey_effort_units` — not an aggregate of the cell-level field, and
+  not on the same scale as a hex value. `speciesRichnessRaw` at patch scale is
+  the pooled **distinct** count. Exports before 2026-08-20 used an area-weighted
+  mean of per-cell ratios and a duplicate-counting sum respectively (1.37×
+  inflated on Porto). See docs/methodology.md §6.2.
 - `impact_score` is a legacy field, `round(bio_residual_norm * 50)` — the
   biodiversity term of `nature_gap_score` on its own, now on the centred scale.
 - `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`

@@ -402,9 +402,15 @@ records and records with pending or confirmed quality flags are excluded.
 
 `pipeline/05_patch/patch_aggregation.R`
 
-- Aggregates cell outputs to green-space patches by cell/patch overlap
-- Computes patch expected richness from total patch area with the same
-  species-area law (see docs/methodology.md section 6.2)
+- Aggregates cell outputs to green-space patches by cell/patch overlap for the
+  intensive metrics (habitat quality, corridor importance, accessibility)
+- Pools the observation response instead of averaging it: distinct taxa across
+  the patch's sampled cells over their pooled `survey_effort_units`, read via
+  `pipeline/cell_taxa.R`. A mean of per-cell ratios depends on how the patch is
+  tiled and is not an estimate of what the patch holds (docs/methodology.md §6.2)
+- Computes patch expected richness by fitting that pooled response against
+  `patch_area_m2^SPECIES_AREA_Z` and the quality modifier
+  (see docs/methodology.md section 6.2)
 
 `pipeline/06_export/export.R`
 

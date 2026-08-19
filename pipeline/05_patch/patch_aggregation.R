@@ -8,6 +8,7 @@ library(jsonlite)
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 source(here::here("05_residuals", "expected_model.R"), local = FALSE)
 source(here::here("score_scaling.R"), local = FALSE)
+source(here::here("cell_taxa.R"), local = FALSE)
 
 HABITAT_THRESHOLD <- 0.40
 
@@ -174,6 +175,33 @@ hex_weighted <- hex |>
     sampled_for_residual = !replace_na(is_unsampled, TRUE) & is.finite(ecological_residual)
   )
 
+# ── Pooled patch observation totals ──────────────────────────────────────────
+# A park's observed richness is a *ratio of pooled sums*, not a mean of per-cell
+# ratios. Averaging 300 cells that each read "0 species / 4.8 effort units" is
+# not an estimate of what the park holds: on the 2026-08-19 Porto export that
+# average had median 0 and a maximum of 2.1 across 1,058 scored parks, while the
+# largest park demonstrably holds 637 distinct taxa.
+#
+# Membership is exclusive — overlap_rank above assigns each cell to at most one
+# green space — so both sides use whole-cell membership: a species cannot be
+# prorated across a boundary, so neither is the effort that found it.
+#
+# Only sampled cells count, on both sides. An unsampled cell's effort is below
+# threshold by definition, so including its taxa but not its effort would
+# overstate richness per unit effort.
+cell_taxa_lookup <- read_cell_taxa()
+
+patch_pooled <- hex_weighted |>
+  st_drop_geometry() |>
+  filter(sampled_for_residual, !is.na(green_space_id)) |>
+  group_by(green_space_id) |>
+  summarise(
+    pooled_species_richness = count_cell_taxa(cell_id, cell_taxa_lookup),
+    pooled_effort_units = sum(survey_effort_units, na.rm = TRUE),
+    pooled_sampled_cells = dplyr::n(),
+    .groups = "drop"
+  )
+
 patch_base <- hex_weighted |>
   st_drop_geometry() |>
   group_by(green_space_id) |>
@@ -232,6 +260,7 @@ patch_area <- green_spaces |>
 patch_metrics <- patch_base |>
   left_join(patch_fragmentation, by = "green_space_id") |>
   left_join(patch_area, by = "green_space_id") |>
+  left_join(patch_pooled, by = "green_space_id") |>
   mutate(
     # quality_modifier: area-weighted mean of the patch's intensive quality
     # metrics (habitat quality, corridor importance, accessibility), clamped to
@@ -247,10 +276,30 @@ patch_metrics <- patch_base |>
     # Area term of the species-area relationship. Its coefficient is fitted
     # below; only the exponent stays an assumption.
     area_term = patch_area_m2 ^ SPECIES_AREA_Z,
-    effort_corrected_richness = if_else(sampled_cell_count == 0L, NA_real_, effort_corrected_richness),
-    observed_richness = if_else(sampled_cell_count == 0L, NA_real_, observed_richness),
-    survey_effort_units = if_else(sampled_cell_count == 0L, NA_real_, survey_effort_units),
-    species_richness_raw = if_else(sampled_cell_count == 0L, NA_real_, species_richness_raw),
+    # Ratio of pooled sums, replacing the area-weighted mean of per-cell ratios
+    # that patch_base still computes for the intensive metrics. Falls back to
+    # that mean only when no taxa file was available, so a missing
+    # cell_taxa.json degrades rather than blanking the layer.
+    pooled_effort_units = replace_na(pooled_effort_units, 0),
+    effort_corrected_richness = case_when(
+      sampled_cell_count == 0L ~ NA_real_,
+      is.na(pooled_species_richness) ~ effort_corrected_richness,
+      pooled_effort_units > 0 ~ pooled_species_richness / pooled_effort_units,
+      TRUE ~ NA_real_
+    ),
+    observed_richness = effort_corrected_richness,
+    survey_effort_units = if_else(
+      sampled_cell_count == 0L | pooled_effort_units <= 0,
+      NA_real_,
+      pooled_effort_units
+    ),
+    # Distinct taxa pooled across the patch, not a mean or a sum of per-cell
+    # counts. See cell_taxa.R on why a sum over cells is not a richness.
+    species_richness_raw = if_else(
+      sampled_cell_count == 0L,
+      NA_real_,
+      as.numeric(coalesce(as.numeric(pooled_species_richness), species_richness_raw))
+    ),
     data_availability_ratio = if_else(linked_area_m2 > 0, sampled_area_m2 / linked_area_m2, NA_real_),
     fragmentation = coalesce(fragmentation_index, fragmentation)
   )
