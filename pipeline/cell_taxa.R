@@ -74,3 +74,51 @@ count_cell_taxa <- function(local_cell_ids, lookup) {
   if (length(lookup) == 0L) return(NA_integer_)
   as.integer(sum(lengths(union_cell_taxa(local_cell_ids, lookup))))
 }
+
+# Guard for stages whose outputs depend on pooled taxa. The three failure modes
+# are not alike, so they are not treated alike:
+#
+#   absent          -> stop. 03_observations has not run for this dataset, and the
+#                      caller would fall back to a different estimator (the
+#                      area-weighted mean of per-cell ratios) while looking like a
+#                      normal run. See docs/methodology.md §6.2.
+#   present, empty  -> warn. This city genuinely has no classified taxa; pooled
+#                      richness is legitimately 0 and the run should continue.
+#   present, stale  -> stop. The file is keyed by cell_id, so a grid rebuilt
+#                      without re-running 03_observations leaves keys that match
+#                      nothing: pooling returns zero everywhere and nothing in the
+#                      output says so.
+assert_cell_taxa_usable <- function(lookup, cell_ids, path = PROC_CELL_TAXA,
+                                    min_match = 0.5) {
+  if (!file.exists(path)) {
+    stop(sprintf(paste0(
+      "%s not found — run 03_observations/observation_layer.R before this stage. ",
+      "Without it, patch richness silently falls back to the area-weighted mean of ",
+      "per-cell ratios, which is a different estimator (docs/methodology.md 6.2)."
+    ), path), call. = FALSE)
+  }
+
+  if (length(lookup) == 0L) {
+    warning(sprintf(paste0(
+      "%s is empty — this city has no classified taxa, so pooled patch richness ",
+      "is 0 everywhere. Continuing."
+    ), basename(path)), call. = FALSE)
+    return(invisible(0))
+  }
+
+  matched <- mean(names(lookup) %in% as.character(cell_ids))
+  if (!is.finite(matched) || matched < min_match) {
+    stop(sprintf(paste0(
+      "%s is stale: only %.1f%% of its %d cell keys match the current grid ",
+      "(minimum %.0f%%). The grid was rebuilt without re-running 03_observations, ",
+      "so pooled richness would be near zero everywhere while looking like a real ",
+      "result. Re-run 03_observations/observation_layer.R."
+    ), basename(path), 100 * matched, length(lookup), 100 * min_match), call. = FALSE)
+  }
+
+  cat(sprintf(
+    "  → cell taxa: %d cells, %.1f%% of keys match the current grid\n",
+    length(lookup), 100 * matched
+  ))
+  invisible(matched)
+}

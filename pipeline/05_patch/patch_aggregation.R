@@ -39,6 +39,12 @@ green_spaces <- st_read(PROC_GREEN_SPACES, quiet = TRUE) |>
 hex <- st_read(PROC_GRID_RESID, quiet = TRUE) |>
   st_transform(CRS_LOCAL)
 
+# Full-grid cell ids, captured before hex is filtered to green-space cells below.
+# cell_taxa.json is keyed against the whole grid, so its freshness check has to
+# compare against all of it: only ~30% of taxa-bearing cells fall inside a green
+# space, which reads as a stale file if the filtered subset is used instead.
+grid_cell_ids_all <- as.character(hex$cell_id)
+
 if (!"green_space_id" %in% names(green_spaces)) {
   stop("green_spaces.gpkg must contain green_space_id.", call. = FALSE)
 }
@@ -190,6 +196,7 @@ hex_weighted <- hex |>
 # threshold by definition, so including its taxa but not its effort would
 # overstate richness per unit effort.
 cell_taxa_lookup <- read_cell_taxa()
+assert_cell_taxa_usable(cell_taxa_lookup, grid_cell_ids_all)
 
 patch_pooled <- hex_weighted |>
   st_drop_geometry() |>
@@ -277,9 +284,11 @@ patch_metrics <- patch_base |>
     # below; only the exponent stays an assumption.
     area_term = patch_area_m2 ^ SPECIES_AREA_Z,
     # Ratio of pooled sums, replacing the area-weighted mean of per-cell ratios
-    # that patch_base still computes for the intensive metrics. Falls back to
-    # that mean only when no taxa file was available, so a missing
-    # cell_taxa.json degrades rather than blanking the layer.
+    # that patch_base still computes for the intensive metrics. The fallback to
+    # that mean is reachable only for a city with an empty (not missing, not
+    # stale) taxa file — assert_cell_taxa_usable() above stops the run in the
+    # other two cases rather than letting a different estimator through
+    # unannounced.
     pooled_effort_units = replace_na(pooled_effort_units, 0),
     effort_corrected_richness = case_when(
       sampled_cell_count == 0L ~ NA_real_,

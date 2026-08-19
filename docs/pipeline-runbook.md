@@ -212,6 +212,32 @@ Set it to `"1"` only when you need full `cell_attributes` / `green_spaces` rows
 in Postgres for PostGIS analysis. Heavy cell detail otherwise stays in Storage
 and is read by the frontend from PMTiles and the `cell-details` shards.
 
+## Stage Dependencies Worth Knowing
+
+`START_STEP` (`Rscript run_pipeline.R N`) is a floor, not a selector: it runs step
+N *and everything after it*, including step 4 connectivity, which the runner's own
+header says runs on its own schedule. To re-run a single stage, source it directly:
+
+```r
+CITY <- "porto-center"
+source("config.R")
+source("05_patch/patch_aggregation.R")
+```
+
+`05_patch/patch_aggregation.R` needs `cell_taxa.json`, written by **step 3**
+(`03_observations/observation_layer.R`), to pool distinct taxa per patch. It is
+keyed by `cell_id`, so it must be regenerated whenever the grid is rebuilt.
+`assert_cell_taxa_usable()` stops the run if the file is missing or if fewer than
+half its keys match the current grid — both cases would otherwise produce a
+different, wrong patch richness without saying so. To check by hand:
+
+```bash
+cd pipeline && Rscript -e 'suppressMessages({library(sf);library(jsonlite)}); t<-names(read_json(file.path("data",Sys.getenv("NATUREGAP_CITY","porto-center"),"processed/cell_taxa.json"),simplifyVector=FALSE)); g<-as.character(st_read(file.path("data",Sys.getenv("NATUREGAP_CITY","porto-center"),"processed/grid_residuals.gpkg"),quiet=TRUE,query="SELECT cell_id FROM grid_residuals")$cell_id); cat(sum(t %in% g),"of",length(t),"taxa keys match\n")'
+```
+
+Regenerating it is cheap when the tile caches (`tiled_combined.rds`,
+`tiled_obs_all.rds`) are present — step 3 loads them instead of re-tiling.
+
 ## Full Pipeline Refresh
 
 Run this when you want to regenerate ecological outputs and import them into

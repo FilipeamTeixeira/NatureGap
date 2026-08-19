@@ -392,6 +392,14 @@ definition of the same quantity.
 
 Limitations of the pooled response:
 
+- `cell_taxa.json` is keyed by `cell_id`, so `05_patch` guards it with
+  `assert_cell_taxa_usable()`: a **missing** file stops the run (03_observations
+  has not been run for this dataset, and the code would otherwise fall back to
+  the old mean-of-ratios estimator unannounced), a **stale** file whose keys match
+  under half the current grid also stops it (a grid rebuilt without re-running
+  03_observations would pool to zero everywhere while looking like a real result),
+  and an **empty** file only warns, since a city may genuinely have no classified
+  taxa.
 - Pooled richness counts only taxa classified into the five groups
   (`plant`, `bird`, `insect`, `mammal`, `fungi`). A record whose iconic taxon
   falls outside them has no label in `cell_taxa.json` and is invisible here,
