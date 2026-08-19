@@ -28,5 +28,6 @@ relation_id <- c(11960504L, 15419236L)           # Amsterdam. Add adjacent relat
 # ── Optional raster sources ───────────────────────────────────────────────────
 RASTER_DOWNLOADERS_EXTRA <- c(
   "00_download/download_canopy_height.R",
-  "00_download/download_planetscope_ndvi.R"
+  "00_download/download_planetscope_ndvi.R",
+  "00_download/download_nl_cir_ndvi.R"
 )

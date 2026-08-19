@@ -36,5 +36,6 @@ BBOX_CITY <- c(
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 RASTER_DOWNLOADERS_EXTRA <- c(
-  "00_download/download_canopy_height.R"
+  "00_download/download_canopy_height.R",
+  "00_download/download_pt_ortho_ndvi.R"
 )

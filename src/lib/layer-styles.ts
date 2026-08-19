@@ -33,6 +33,7 @@ export const LAYER_DRAW_ORDER = [
   'intervention',
   'habitat',
   'treecover',
+  'vegetation',
   'biodiversity',
   'connectivity',
   'heat',
@@ -57,6 +58,7 @@ export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
   intervention: 'intervention-patch-fill',
   habitat: 'habitat-quality-patch-fill',
   treecover: 'tree-cover-patch-fill',
+  vegetation: 'vegetation-patch-fill',
   biodiversity: 'biodiversity-patch-fill',
   connectivity: 'connectivity-patch-fill',
   heat: 'heat-exposure-patch-fill',
@@ -70,6 +72,7 @@ export const HEX_FILL_LAYER_IDS: Record<HexLayerId, string> = {
   intervention: 'intervention-hex-fill',
   habitat: 'habitat-quality-hex-fill',
   treecover: 'tree-cover-hex-fill',
+  vegetation: 'vegetation-hex-fill',
   biodiversity: 'biodiversity-hex-fill',
   connectivity: 'connectivity-hex-fill',
   heat: 'heat-exposure-hex-fill',
@@ -112,6 +115,7 @@ export const LAYER_REPRESENTATION: Record<HexLayerId, LayerRepresentation> = {
   landuse: 'surface',
   connectivity: 'surface',
   treecover: 'surface',
+  vegetation: 'surface',
   biodiversity: 'point',
 };
 
@@ -354,6 +358,7 @@ const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'residual' | 'landuse'>
   intervention: [[0, '#d8a7df'], [0.3, '#ab47bc'], [0.6, '#8e24aa'], [0.8, '#6a1b9a'], [1, '#4a148c']],
   habitat:      [[0, '#8ecf9a'], [0.25, '#52a868'], [0.5, '#3d8b57'], [0.75, '#2E6F40'], [1, '#1a4a28']],
   treecover:    [[0, '#66bb6a'], [0.25, '#43a047'], [0.5, '#2e7d32'], [0.75, '#1b5e20'], [1, '#0d3d12']],
+  vegetation:   [[0, '#f7fcb9'], [0.25, '#d9f0a3'], [0.5, '#addd8e'], [0.75, '#78c679'], [1, '#41ab5d']],
   biodiversity: [[0, '#42a5f5'], [5, '#1e88e5'], [15, '#1565c0'], [30, '#0d47a1'], [50, '#002171']],
   connectivity: [[0, '#ab47bc'], [0.25, '#8e24aa'], [0.5, '#7b1fa2'], [0.75, '#6a1b9a'], [1, '#4a148c']],
   heat:         [[0, '#4575b4'], [0.25, '#74add1'], [0.5, '#fdae61'], [0.75, '#f46d43'], [1, '#a50026']],
@@ -506,6 +511,36 @@ export function canopyStretchedExpression(cityStats: CityLayerStats[] = []): Exp
     : valueExpression;
 }
 
+/**
+ * CIR vegetated fraction stretched to the city's own p05–p95 range (0–1).
+ *
+ * veg_fraction is a true 0–1 share of 0.5 m pixels, so unlike canopyHeightIdx
+ * it has a meaningful absolute scale. It is still heavily bottom-weighted in a
+ * dense city — Porto's mean is 0.21 and 82% of cells read zero tree cover — so
+ * the same p05–p95 stretch keeps low-but-nonzero vegetation legible. Falls back
+ * to the raw fraction when the city has no veg_fraction stat, which is the case
+ * until export.R publishes one.
+ */
+export function vegetationStretchedExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
+  const stat = statForMetric(cityStats, 'veg_fraction');
+  const low = stat?.p05 ?? stat?.minVal;
+  const high = stat?.p95 ?? stat?.maxVal;
+  const valueExpression = unitInterval('vegFraction');
+  return low != null && high != null && high > low
+    ? ['max', 0, ['min', 1, ['/', ['-', valueExpression, low], ['-', high, low]]]] as ExpressionSpecification
+    : valueExpression;
+}
+
+/** Vegetated fraction — share of 0.5 m CIR pixels above the NDVI threshold. */
+function buildVegetationExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    vegetationStretchedExpression(cityStats),
+    ...LAYER_RAMPS.vegetation.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
 /** Canopy height — absolute 0–20 m index from PMTiles, stretched to the city's p05–p95 range. */
 function buildTreecoverExpression(cityStats: CityLayerStats[] = []): ExpressionSpecification {
   return [
@@ -577,6 +612,8 @@ export function patchFillColorExpression(
       return buildSequentialExpression('habitatQualityNorm', 'habitatQualityIndex', LAYER_RAMPS.habitat, stat);
     case 'treecover':
       return buildTreecoverExpression(cityStats);
+    case 'vegetation':
+      return buildVegetationExpression(cityStats);
     case 'connectivity':
       return buildSequentialExpression('corridorImportanceNorm', 'corridorImportance', LAYER_RAMPS.connectivity, stat);
     case 'heat':
@@ -649,6 +686,10 @@ export function hexFillColorExpression(
 
   if (layerId === 'treecover') {
     return buildTreecoverExpression(cityStats);
+  }
+
+  if (layerId === 'vegetation') {
+    return buildVegetationExpression(cityStats);
   }
 
   if (layerId === 'biodiversity') {
@@ -794,6 +835,19 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
       { color: '#66bb6a', label: '0–1 m' },
     ],
   },
+  vegetation: {
+    title: 'Vegetation (0.5 m)',
+    property: 'vegFraction',
+    rawMetric: 'veg_fraction',
+    note: 'Share of 0.5 m colour-infrared pixels above the NDVI threshold — any vegetation, tree or not. Available only where a national CIR orthophoto exists (Netherlands, Portugal).',
+    legend: [
+      { color: '#41ab5d', label: 'Mostly vegetated' },
+      { color: '#78c679', label: 'Substantial' },
+      { color: '#addd8e', label: 'Moderate' },
+      { color: '#d9f0a3', label: 'Sparse' },
+      { color: '#f7fcb9', label: 'Bare or built' },
+    ],
+  },
   biodiversity: {
     title: 'Observed biodiversity',
     property: 'nObs',
@@ -857,6 +911,6 @@ export const THEMATIC_LAYER_GROUPS = [
   },
   {
     title: 'Habitat',
-    ids: ['habitat', 'treecover', 'connectivity', 'heat', 'landuse'] as const satisfies readonly HexLayerId[],
+    ids: ['habitat', 'treecover', 'vegetation', 'connectivity', 'heat', 'landuse'] as const satisfies readonly HexLayerId[],
   },
 ] as const;

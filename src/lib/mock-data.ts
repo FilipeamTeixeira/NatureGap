@@ -11,6 +11,7 @@ export const MAP_LAYERS: MapLayer[] = [
   { id: 'intervention', label: 'Intervention priority',   enabled: false, color: '#7b1fa2' },
   { id: 'habitat',      label: 'Habitat quality',         enabled: false, color: '#2E6F40' },
   { id: 'treecover',    label: 'Tree cover',              enabled: false, color: '#388e3c' },
+  { id: 'vegetation',   label: 'Vegetation (0.5 m)',      enabled: false, color: '#78c679' },
   { id: 'biodiversity', label: 'Observed biodiversity',   enabled: false, color: '#1976d2' },
   { id: 'connectivity', label: 'Connectivity',            enabled: false, color: '#7b1fa2' },
   { id: 'heat',         label: 'Heat exposure',           enabled: false, color: '#E8A44C' },

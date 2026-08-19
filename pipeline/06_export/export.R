@@ -1429,10 +1429,22 @@ park_intervention_lookup <- setNames(park_interventions$interventions, park_inte
 # habitat_quality > 0 is NOT a vegetation test: it blends in lst_idx and
 # disturbance_idx, both continuous and rarely exactly 0, so nearly every cell
 # in the city clears it regardless of actual tree/shrub/grass cover.
+#
+# The WorldCover bar alone drops green that neither OSM nor a 10 m raster can
+# see: a rooftop garden, a wildflower strip in front of a building, a courtyard
+# lawn. On Porto that is ~5,700 cells (~2 km2) at >= 0.30 CIR veg_fraction,
+# excluded from the tileset entirely rather than merely uncoloured. Admit them
+# on the sub-metre CIR measurement where a city has one.
+#
+# 0.30, not the WorldCover bar's 0.10: veg_fraction is DN-based NDVI on a lossy
+# JPEG product, so a low cut admits dark roofs and wet asphalt as vegetation.
+# Lower it only after inspecting what a run at 0.30 actually surfaces.
+# coalesce(veg_fraction, 0) leaves cities without CIR unchanged.
 hexgrid_render <- grid |>
   filter(
     (!is.na(park_id) & park_id != "city-green") |
-      coalesce(tree_fraction, shrub_fraction, grass_fraction, green_fraction_wc, 0) >= 0.10
+      coalesce(tree_fraction, shrub_fraction, grass_fraction, green_fraction_wc, 0) >= 0.10 |
+      coalesce(veg_fraction, 0) >= 0.30
   )
 
 if (!is.null(green)) {

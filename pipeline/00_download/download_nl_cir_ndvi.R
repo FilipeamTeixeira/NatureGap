@@ -12,8 +12,9 @@
 # PDOK serves this layer as JPEG only (WMS/WMTS; no lossless WCS). JPEG is
 # lossy, so individual pixels are not trustworthy; values averaged into a
 # 20 m hex still carry a usable greenness signal. JPEG also carries no
-# georeferencing — ext()/crs() assignment from the requested bbox is
-# load-bearing, not optional.
+# georeferencing — the world file written per tile (orientation) plus the
+# ext()/crs() assignment from the requested bbox (placement) are load-bearing,
+# not optional. See nl_cir_write_world_file().
 #
 # IMPORTANT — this is DN-based NDVI, not reflectance-based. The WMS returns
 # an 8-bit visual product (0-255 per band), not calibrated surface
@@ -72,6 +73,26 @@ nl_cir_tile_bboxes <- function(bbox_28992, max_pixels = WMS_MAX_PIXELS, gsd = TA
   tiles
 }
 
+nl_cir_write_world_file <- function(jpg_path, tile_bbox, width_px, height_px) {
+  # A bare JPEG carries no georeferencing, and GDAL hands it the default
+  # geotransform (0, 1, 0, 0, 0, 1) — y increasing DOWNWARD. terra cannot
+  # represent a y-down grid, so rast() flips the image vertically on read;
+  # stamping ext() on that lands the tile upside-down inside its own (correct)
+  # extent. Per tile this is invisible; across the mosaic it leaves a hard seam
+  # at every horizontal tile boundary. Writing a world file gives GDAL a proper
+  # north-up geotransform, so the tile is read in the orientation PDOK sent it.
+  x_res <- unname(tile_bbox["xmax"] - tile_bbox["xmin"]) / width_px
+  y_res <- unname(tile_bbox["ymax"] - tile_bbox["ymin"]) / height_px
+  writeLines(
+    sprintf("%.10f", c(
+      x_res, 0, 0, -y_res,
+      unname(tile_bbox["xmin"]) + x_res / 2,   # centre of the upper-left pixel
+      unname(tile_bbox["ymax"]) - y_res / 2
+    )),
+    sub("\\.jpg$", ".jgw", jpg_path)
+  )
+}
+
 nl_cir_fetch_tile <- function(tile_bbox, gsd = TARGET_GSD_M) {
   width_px  <- max(1L, round((tile_bbox["xmax"] - tile_bbox["xmin"]) / gsd))
   height_px <- max(1L, round((tile_bbox["ymax"] - tile_bbox["ymin"]) / gsd))
@@ -109,13 +130,27 @@ nl_cir_fetch_tile <- function(tile_bbox, gsd = TARGET_GSD_M) {
     )
   }
 
+  nl_cir_write_world_file(tmp_jpg, tile_bbox, width_px, height_px)
+
   r <- rast(tmp_jpg)
   if (nlyr(r) < 2L) {
     stop(
       "PDOK CIR WMS returned ", nlyr(r), " band(s); need at least NIR and Red."
     )
   }
-  # JPEG has no georeferencing. Assign from the exact bbox we requested.
+  # If the world file was not picked up, terra falls back to the "unknown
+  # extent" (0, ncol, 0, nrow) and the tile is upside-down. That is silent and
+  # only shows up as seams in the finished mosaic — fail loudly instead.
+  if (isTRUE(all.equal(as.vector(ext(r)), c(0, ncol(r), 0, nrow(r)), tolerance = 0))) {
+    stop(
+      "Tile JPEG was read without its world file — orientation cannot be ",
+      "trusted. Expected a north-up geotransform from ",
+      sub("\\.jpg$", ".jgw", tmp_jpg), ".",
+      call. = FALSE
+    )
+  }
+  # Snap to the exact bbox we requested, so tiles share one grid regardless of
+  # world-file rounding. Orientation is already correct at this point.
   ext(r) <- ext(tile_bbox["xmin"], tile_bbox["xmax"], tile_bbox["ymin"], tile_bbox["ymax"])
   crs(r) <- WMS_CRS
   r

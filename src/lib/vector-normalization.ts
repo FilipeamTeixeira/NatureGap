@@ -64,6 +64,11 @@ const ECOLOGICAL_METRICS = [
     aliases: ['canopy_height_idx', 'canopyHeightIdx', 'treeCover', 'tree_cover'],
   },
   {
+    sourceField: 'veg_fraction',
+    outputField: 'vegFraction',
+    aliases: ['veg_fraction', 'vegFraction'],
+  },
+  {
     sourceField: 'betweenness_centrality',
     outputField: 'betweennessCentrality',
     aliases: ['betweenness_centrality', 'betweennessCentrality', 'corridor_importance', 'corridorImportance', 'connectivity_score'],

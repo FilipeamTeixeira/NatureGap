@@ -5,6 +5,7 @@ export type LayerId =
   | 'intervention'
   | 'habitat'
   | 'treecover'
+  | 'vegetation'
   | 'biodiversity'
   | 'connectivity'
   | 'heat'
