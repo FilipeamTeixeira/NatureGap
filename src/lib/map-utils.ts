@@ -157,10 +157,19 @@ export function isFeatureCollection(value: unknown): value is GeoJSON.FeatureCol
   );
 }
 
-export async function fetchCorridorLinksGeoJSON(): Promise<GeoJSON.FeatureCollection> {
+export async function fetchConnectivityNetworkEdges(): Promise<GeoJSON.FeatureCollection> {
   const data = await fetchPipelineJson(
-    'corridor-links.geojson',
-    'corridor-links.manifest.json',
+    'connectivity-network-edges.geojson',
+    'connectivity-network-edges.manifest.json',
+    mergeFeatureCollectionChunks,
+  );
+  return isFeatureCollection(data) ? data : emptyFeatureCollection();
+}
+
+export async function fetchConnectivityNetworkNodes(): Promise<GeoJSON.FeatureCollection> {
+  const data = await fetchPipelineJson(
+    'connectivity-network-nodes.geojson',
+    'connectivity-network-nodes.manifest.json',
     mergeFeatureCollectionChunks,
   );
   return isFeatureCollection(data) ? data : emptyFeatureCollection();

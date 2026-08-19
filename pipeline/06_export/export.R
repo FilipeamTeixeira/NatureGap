@@ -52,6 +52,7 @@ PMTILES_REQUIRED_FIELDS <- c(
   "lstNorm",
   "disturbanceNorm",
   "betweennessNorm",
+  "corridorImportanceNorm",
   "residualNorm",
   "natureGapScoreNorm",
   "expectedNorm",
@@ -376,15 +377,20 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
   # Both spellings are listed for the gzipped products and filtered by
   # existence below, so this keeps working if a product is ever written
   # uncompressed and while re-staging an export produced before compression.
-  compressible <- c("parks.geojson", "cell_attributes.geojson", "corridor-links.geojson")
+  compressible <- c(
+    "parks.geojson", "cell_attributes.geojson",
+    "connectivity-network-edges.geojson", "connectivity-network-nodes.geojson"
+  )
   files <- c(
     "hexgrid.pmtiles",
     compressible, gz_path(compressible),
     "park-stats.json",
     "cell_attributes.manifest.json", "cell-details.manifest.json",
-    "corridor-links.manifest.json", "top_interventions.json", "city_layer_stats.json"
+    "connectivity-network-edges.manifest.json",
+    "connectivity-network-nodes.manifest.json",
+    "top_interventions.json", "city_layer_stats.json"
   )
-  for (base in c("cell_attributes", "corridor-links")) {
+  for (base in c("cell_attributes", "connectivity-network-edges", "connectivity-network-nodes")) {
     parts <- list.files(export_dir, pattern = paste0("^", base, "-part-[0-9]+\\.(json|geojson)(\\.gz)?$"))
     files <- c(files, parts)
   }
@@ -475,7 +481,8 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       parks = list(path = "parks.geojson.gz", purpose = "Green-space polygons for Storage and PostgreSQL import (gzip)"),
       cellAttributes = list(path = "cell_attributes.geojson.gz", purpose = "Full ecological cell outputs for Storage/archive use (gzip)"),
       cellDetails = list(path = "cell-details.manifest.json", purpose = "Sharded per-cell detail lookup served from Storage; shards are gzip"),
-      corridorLinks = list(path = "corridor-links.geojson.gz", purpose = "Full connectivity graph edges for MapLibre line rendering (gzip)"),
+      connectivityNetworkEdges = list(path = "connectivity-network-edges.geojson.gz", purpose = "Derived ecological corridor centrelines for MapLibre line rendering (gzip)"),
+      connectivityNetworkNodes = list(path = "connectivity-network-nodes.geojson.gz", purpose = "Derived ecological network nodes, tiered major/secondary/stepping-stone (gzip)"),
       parkStats = list(path = "park-stats.json", purpose = "Frontend detail statistics"),
       topInterventions = list(path = "top_interventions.json", purpose = "Pipeline audit output"),
       cityLayerStats = list(path = "city_layer_stats.json", purpose = "Per-metric percentile bounds for city_layer_stats import (legend/render stretching)"),
@@ -1497,6 +1504,13 @@ hexgrid_tiles <- hexgrid_render |>
     lstNorm            = round(replace_na(lst_norm, 0), 4),
     disturbanceNorm    = round(replace_na(disturbance_norm, 0), 4),
     betweennessNorm    = round(replace_na(betweenness_norm, 0), 4),
+    # corridor_importance is already a 0-1 percentile rank from
+    # 04_connectivity, so it needs no further normalisation — re-stretching it
+    # by p05/p95 would only clip the tails of an intentionally uniform scale.
+    # This is what the connectivity layer draws: betweennessNorm stretches raw
+    # betweenness, which under a dispersal cutoff peaks around 8e-05 with a
+    # median of 0 and carries almost no visible signal.
+    corridorImportanceNorm = round(replace_na(corridor_importance, 0), 4),
     expectedNorm       = round(replace_na(expected_richness_norm, 0), 4),
     habitatQualityNorm = round(replace_na(habitat_quality_norm, 0), 4),
     # Biodiversity-inference layers stay excluded (zeroed) for unsampled cells.
@@ -1509,48 +1523,39 @@ hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
 pmtiles_validation <- write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
 cat(sprintf("Written: %s (source-layer: %s)\n", hexgrid_pmtiles_path, PMTILES_SOURCE_LAYER))
 
-if (exists("PROC_CONNECTIVITY_GRAPH") && file.exists(PROC_CONNECTIVITY_GRAPH)) {
-  connectivity_graph <- readRDS(PROC_CONNECTIVITY_GRAPH)
-  graph_edges <- igraph::as_data_frame(connectivity_graph, what = "edges")
-  graph_vertices <- igraph::as_data_frame(connectivity_graph, what = "vertices") |>
-    select(name, x, y)
+# Derived ecological network (04_connectivity/network_derive.R): simplified
+# nodes and corridor centrelines. This replaces the old corridor-links export,
+# which emitted one line per hex adjacency — ~32k segments that rendered as a
+# dense mesh rather than a network. The cells themselves stay in
+# hexgrid.pmtiles and carry the analytical detail at close zoom.
+network_paths_present <- exists("PROC_NETWORK_EDGES") && exists("PROC_NETWORK_NODES") &&
+  file.exists(PROC_NETWORK_EDGES) && file.exists(PROC_NETWORK_NODES)
 
-  if (nrow(graph_edges) > 0L && all(c("from", "to", "weight") %in% names(graph_edges))) {
-    edge_coords <- graph_edges |>
-      left_join(graph_vertices |> rename(from = name, x_from = x, y_from = y), by = "from") |>
-      left_join(graph_vertices |> rename(to = name, x_to = x, y_to = y), by = "to") |>
-      filter(
-        is.finite(x_from), is.finite(y_from),
-        is.finite(x_to), is.finite(y_to)
-      )
+if (network_paths_present) {
+  network_edges <- st_read(PROC_NETWORK_EDGES, quiet = TRUE) |> st_transform(4326)
+  network_nodes <- st_read(PROC_NETWORK_NODES, quiet = TRUE) |> st_transform(4326)
 
-    corridor_links <- st_sf(
-      linkId = paste(edge_coords$from, edge_coords$to, sep = "--"),
-      fromCellId = as.character(edge_coords$from),
-      toCellId = as.character(edge_coords$to),
-      weight = edge_coords$weight,
-      geometry = st_sfc(
-        lapply(seq_len(nrow(edge_coords)), function(i) {
-          st_linestring(matrix(
-            c(
-              edge_coords$x_from[i], edge_coords$y_from[i],
-              edge_coords$x_to[i], edge_coords$y_to[i]
-            ),
-            ncol = 2,
-            byrow = TRUE
-          ))
-        }),
-        crs = CRS_LOCAL
-      )
-    ) |>
-      st_transform(4326)
+  network_edges_path <- file.path(DATA_EXPORT, "connectivity-network-edges.geojson")
+  write_geojson_chunked(network_edges, network_edges_path)
+  cat(sprintf(
+    "Written: connectivity-network-edges.geojson.gz (%d corridor segments)\n",
+    nrow(network_edges)
+  ))
 
-    corridor_links_path <- file.path(DATA_EXPORT, "corridor-links.geojson")
-    write_geojson_chunked(corridor_links, corridor_links_path)
-    cat(sprintf("Written: corridor-links.geojson.gz (%d graph edges)\n", nrow(corridor_links)))
-  }
+  network_nodes_path <- file.path(DATA_EXPORT, "connectivity-network-nodes.geojson")
+  write_geojson_chunked(network_nodes, network_nodes_path)
+  cat(sprintf(
+    "Written: connectivity-network-nodes.geojson.gz (%d nodes: %d major, %d secondary, %d stepping stones)\n",
+    nrow(network_nodes),
+    sum(network_nodes$tier == "major"),
+    sum(network_nodes$tier == "secondary"),
+    sum(network_nodes$tier == "stepping-stone")
+  ))
 } else {
-  message(sprintf("Skipping corridor-links.geojson — %s not found", PROC_CONNECTIVITY_GRAPH))
+  message(sprintf(
+    "Skipping connectivity network export — %s not found. Re-run 04_connectivity/connectivity.R.",
+    PROC_NETWORK_EDGES
+  ))
 }
 
 if (exists("PROC_CELL_ATTR") && file.exists(PROC_CELL_ATTR)) {

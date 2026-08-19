@@ -334,8 +334,14 @@ records and records with pending or confirmed quality flags are excluded.
 
 `pipeline/04_connectivity/connectivity.R`
 
-- Builds the hex adjacency graph
-- Computes corridor importance, fragmentation, node importance, and connectivity score
+- Builds the hex adjacency graph, weighted by habitat resistance (vegetation
+  discounted by built cover), keeping only cells above the permeability floor
+- Computes dispersal-limited betweenness and derives `corridor_importance` from
+  it as a percentile rank; `connectivity_score` and `node_importance` are views
+  on the same two values
+- Does **not** compute `fragmentation_index`, `edge_density`, `patch_isolation`
+  or `patch_size_distribution` — these remain `NA` placeholders (see
+  docs/methodology.md section 9)
 
 `pipeline/05_residuals/residuals.R`
 

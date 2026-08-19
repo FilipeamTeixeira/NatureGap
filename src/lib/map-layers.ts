@@ -11,7 +11,7 @@ import { CITY, MAP_CONFIG } from '@/lib/config';
 import type { HexPmtilesDataset } from '@/lib/pmtiles-storage';
 import type { MapLayer } from '@/lib/types';
 import {
-  CORRIDOR_LINES_LAYER_ID,
+  NETWORK_LAYER_IDS,
   hasHexOverlay,
   type HexLayerId,
   hexFillColorExpression,
@@ -105,7 +105,12 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
 
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, INTERVENTION_RANK_LABELS_LAYER_ID, activeLayerId === 'intervention');
-  setMapLayerVisibility(map, CORRIDOR_LINES_LAYER_ID, false);
+  // The derived ecological network — corridor centrelines plus tiered nodes.
+  // Shown only with the connectivity layer; per-tier zoom gating lives on the
+  // layers themselves (see networkNodeMinZoom), so this is a straight on/off.
+  for (const networkLayerId of NETWORK_LAYER_IDS) {
+    setMapLayerVisibility(map, networkLayerId, activeLayerId === 'connectivity');
+  }
 
   const datasets = getHexDatasets(map);
 

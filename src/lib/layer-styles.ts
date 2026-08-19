@@ -9,9 +9,18 @@ import { POINT_ICON_ID } from './map-icons';
 import type { CityLayerStats } from './data';
 import type { LayerId } from './types';
 
+/**
+ * How a legend row draws its mark. Every layer but connectivity is a graduated
+ * fill and uses the default swatch; the derived network needs to distinguish
+ * node tiers from corridor classes, because they are different kinds of thing
+ * rather than steps on one ramp.
+ */
+export type LegendSymbol = 'swatch' | 'node-major' | 'node-secondary' | 'node-stepping' | 'line';
+
 export interface LayerLegendItem {
   color: string;
   label: string;
+  symbol?: LegendSymbol;
 }
 
 export interface LayerStyleSpec {
@@ -46,7 +55,128 @@ export const THEMATIC_LAYER_IDS = LAYER_DRAW_ORDER;
 /** MapLibre layer IDs — must match the visualisation spec exactly. */
 export const PATCH_OUTLINE_LAYER_ID = 'patch-outline-always';
 export const HEX_OUTLINE_LAYER_ID = 'hex-outline-always';
+/**
+ * Derived ecological network. Three separate node layers rather than one with a
+ * data-driven radius, so each tier can be zoom-gated independently — stepping
+ * stones would otherwise speckle the overview scale (Amsterdam has 315 of them
+ * against 5 major nodes).
+ */
 export const CORRIDOR_LINES_LAYER_ID = 'corridor-lines';
+export const NETWORK_NODE_MAJOR_LAYER_ID = 'network-node-major';
+export const NETWORK_NODE_SECONDARY_LAYER_ID = 'network-node-secondary';
+export const NETWORK_NODE_STEPPING_LAYER_ID = 'network-node-stepping';
+
+export const NETWORK_LAYER_IDS = [
+  CORRIDOR_LINES_LAYER_ID,
+  NETWORK_NODE_MAJOR_LAYER_ID,
+  NETWORK_NODE_SECONDARY_LAYER_ID,
+  NETWORK_NODE_STEPPING_LAYER_ID,
+] as const;
+
+/**
+ * Zoom hand-over between the two representations of the same data. The network
+ * owns the overview and transition scales; the 20 m cells take over for
+ * analytical inspection. They overlap slightly on purpose so the cells fade in
+ * under the network rather than replacing it in one jump.
+ */
+export const NETWORK_REGIME = {
+  /** Stepping stones and secondary nodes stay hidden below this. */
+  detail: 14,
+  /** Above this the analytical cells lead and the network steps back. */
+  handover: 16.5,
+} as const;
+
+/** Corridor strength classes, weakest first — order matches the legend. */
+export const CORRIDOR_STRENGTH_COLORS = {
+  fragmented: '#d1495b',
+  weak: '#e8862a',
+  moderate: '#d4b106',
+  strong: '#5a9e46',
+  strongest: '#1f6b3a',
+} as const;
+
+export function corridorLineColor(): ExpressionSpecification {
+  return [
+    'match',
+    ['get', 'strength'],
+    'strongest', CORRIDOR_STRENGTH_COLORS.strongest,
+    'strong', CORRIDOR_STRENGTH_COLORS.strong,
+    'moderate', CORRIDOR_STRENGTH_COLORS.moderate,
+    'weak', CORRIDOR_STRENGTH_COLORS.weak,
+    CORRIDOR_STRENGTH_COLORS.fragmented,
+  ] as ExpressionSpecification;
+}
+
+/**
+ * Width carries corridor importance and scales with zoom. Kept deliberately
+ * modest — the spec asks for a restrained ecological network, not glowing
+ * arteries.
+ */
+export function corridorLineWidth(): ExpressionSpecification {
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    11, ['interpolate', ['linear'], ['get', 'importance'], 0, 0.8, 1, 2.2],
+    14, ['interpolate', ['linear'], ['get', 'importance'], 0, 1.4, 1, 4],
+    17, ['interpolate', ['linear'], ['get', 'importance'], 0, 2, 1, 6],
+  ] as ExpressionSpecification;
+}
+
+export function corridorLineOpacity(): ExpressionSpecification {
+  // Two things at once. Across zoom: fade back once the analytical cells take
+  // over, so the network reads as context rather than competing with the
+  // hexagons. Within the overview scale: suppress the weaker segments entirely,
+  // so far zoom shows principal corridors rather than all 211 of them — a
+  // complete network at city scale is just a mesh again, in green.
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    11, ['interpolate', ['linear'], ['get', 'importance'], 0.5, 0, 0.8, 0.9],
+    NETWORK_REGIME.detail, ['interpolate', ['linear'], ['get', 'importance'], 0, 0.5, 1, 0.9],
+    NETWORK_REGIME.handover, 0.85,
+    19, 0.35,
+  ] as ExpressionSpecification;
+}
+
+export type NetworkNodeTier = 'major' | 'secondary' | 'stepping-stone';
+
+/** Radii in px, from the spec: major 12-16 dia, secondary 7-10, stepping 4-6. */
+const NETWORK_NODE_RADIUS: Record<NetworkNodeTier, [number, number]> = {
+  major: [6, 8],
+  secondary: [3.5, 5],
+  'stepping-stone': [2, 3],
+};
+
+export function networkNodeRadius(tier: NetworkNodeTier): ExpressionSpecification {
+  const [near, far] = NETWORK_NODE_RADIUS[tier];
+  return ['interpolate', ['linear'], ['zoom'], 11, near, 17, far] as ExpressionSpecification;
+}
+
+export function networkNodeFill(tier: NetworkNodeTier): string {
+  // Major reads as a filled habitat concentration; the lighter tiers step back
+  // so the hierarchy is legible without colour doing the work twice.
+  if (tier === 'major') return '#1f6b3a';
+  if (tier === 'secondary') return '#4c8f5a';
+  return '#8fb08a';
+}
+
+export function networkNodeOpacity(): ExpressionSpecification {
+  return [
+    'interpolate', ['linear'], ['zoom'],
+    11, 0.95,
+    NETWORK_REGIME.handover, 0.9,
+    19, 0.4,
+  ] as ExpressionSpecification;
+}
+
+/**
+ * Minimum zoom per tier. Only major nodes and their corridors survive the
+ * overview scale, which is what makes the map read as a network rather than a
+ * field of dots.
+ */
+export function networkNodeMinZoom(tier: NetworkNodeTier): number {
+  if (tier === 'major') return 0;
+  if (tier === 'secondary') return NETWORK_REGIME.detail;
+  return NETWORK_REGIME.detail + 1;
+}
 export const INTERVENTION_RANK_BADGES_LAYER_ID = 'intervention-rank-badges';
 export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
 export type PatchFillLayerId = HexLayerId;
@@ -709,7 +839,7 @@ export function hexFillColorExpression(
   const rawPropertyByLayer: Partial<Record<HexLayerId, string>> = {
     intervention: 'interventionRank',
     habitat: 'habitatQuality',
-    connectivity: 'betweennessCentrality',
+    connectivity: 'corridorImportance',
   };
 
   return withUnsampledFallback(layerId, buildSequentialExpression(
@@ -747,6 +877,20 @@ export function hexFillOpacityForLayer(layerId: HexLayerId): number | Expression
   // drawn, but queryRenderedFeatures still returns the cell, so clicking
   // anywhere inside the grid still opens that cell's analytical detail.
   if (isPointLayer(layerId)) return 0;
+  if (layerId === 'connectivity') {
+    // Connectivity is the one layer with a second, derived representation. The
+    // cells stay invisible until the network hands over, so the overview scale
+    // reads as an ecological network rather than a hexagonal raster — but they
+    // stay in the style at zero opacity so clicking a cell still opens its
+    // analytical detail at any zoom.
+    const base = HEX_FILL_OPACITY.connectivity ?? HEX_FILL_OPACITY_DEFAULT;
+    return [
+      'interpolate', ['linear'], ['zoom'],
+      NETWORK_REGIME.handover - 0.5, 0,
+      NETWORK_REGIME.handover + 1, base * 0.6,
+      HEX_REGIME.veryClose, base * 0.75,
+    ] as ExpressionSpecification;
+  }
   return hexOpacityRamp(HEX_FILL_OPACITY[layerId] ?? HEX_FILL_OPACITY_DEFAULT);
 }
 
@@ -755,7 +899,10 @@ export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | 
   // the patch fill is hidden outright and 'park-area' keeps park clicks working.
   if (isPointLayer(layerId)) return 0;
   if (layerId === 'connectivity') {
-    return ['interpolate', ['linear'], ['zoom'], 13, 0.7, 14, 0.2] as ExpressionSpecification;
+    // The derived network is the overview representation now. This patch fill
+    // was the second semi-transparent purple layer that made the grid read as a
+    // dark mesh where it blended with the hex fill.
+    return 0;
   }
   return 0.7;
 }
@@ -863,14 +1010,29 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
   },
   connectivity: {
     title: 'Connectivity',
-    property: 'betweennessNorm',
-    rawMetric: 'betweenness_centrality',
+    // corridorImportance is a percentile rank over the habitat-resistance
+    // graph, spanning 0-1. betweennessNorm (the previous property here)
+    // stretches raw dispersal-limited betweenness, which peaks around 8e-05
+    // with a median of 0 — almost no visible signal once stretched. This still
+    // drives the 20 m cell fill, which now only appears at analytical zoom;
+    // the network layers below carry the overview representation.
+    property: 'corridorImportanceNorm',
+    // Deliberately no rawMetric: the legend rows below are node tiers and
+    // corridor classes, not steps on one ramp, so appending percentile bounds
+    // to the first and last row (see MapView's legend formatter) would be
+    // nonsense.
+    note: 'Ecological corridors represent connected areas of the underlying connectivity surface.',
     legend: [
-      { color: '#4a148c', label: 'Critical corridor' },
-      { color: '#6a1b9a', label: 'High' },
-      { color: '#7b1fa2', label: 'Moderate' },
-      { color: '#8e24aa', label: 'Low' },
-      { color: '#ab47bc', label: 'Isolated' },
+      { color: networkNodeFill('major'), label: 'Major node', symbol: 'node-major' },
+      { color: networkNodeFill('secondary'), label: 'Secondary node', symbol: 'node-secondary' },
+      { color: networkNodeFill('stepping-stone'), label: 'Stepping stone', symbol: 'node-stepping' },
+      { color: CORRIDOR_STRENGTH_COLORS.strongest, label: 'Strong corridor', symbol: 'line' },
+      { color: CORRIDOR_STRENGTH_COLORS.moderate, label: 'Moderate corridor', symbol: 'line' },
+      { color: CORRIDOR_STRENGTH_COLORS.weak, label: 'Weak corridor', symbol: 'line' },
+      { color: CORRIDOR_STRENGTH_COLORS.fragmented, label: 'Fragmented corridor', symbol: 'line' },
+      // 'Connectivity break' is intentionally absent until barriers are actually
+      // derived. Listing a symbol the map never draws is how fragmentation_index
+      // ended up documented as a real metric while always being null.
     ],
   },
   heat: {

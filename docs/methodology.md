@@ -334,16 +334,112 @@ Connectivity is computed in `pipeline/04_connectivity/connectivity.R`.
 
 Graph construction:
 
-- Nodes: 20 m hex centroids
-- Edges: neighbouring 20 m hexes within the configured adjacency distance
-- Edge weight: habitat resistance derived from `1 - habitat_quality`
+- Nodes: 20 m hex centroids, restricted to cells above `CONN_MIN_PERMEABILITY`
+- Edges: hexes that share a boundary (`sf::st_touches`)
+- Edge weight: centroid distance scaled by the mean habitat resistance of the
+  two cells it joins
 - Graph engine: `igraph`
+
+Permeability and resistance:
+
+    permeability = vegetation * (1 - built_fraction_wc)
+    resistance   = 1 + (CONN_MAX_RESISTANCE - 1) * (1 - permeability)
+
+`vegetation` is `veg_fraction` where available, falling back to
+`tree_fraction + shrub_fraction + grass_fraction` and then `green_fraction_wc`
+(Yokohama has no `veg_fraction`; the fallbacks correlate 0.78 with it on
+Amsterdam and are close to binary, so corridors are blockier there).
+
+Resistance is floored at 1 rather than reaching 0, so ideal habitat still costs
+its true length; zero-cost edges make shortest paths degenerate. Cells below
+the permeability floor are dropped from the graph entirely rather than carried
+at high cost — nothing disperses through a building — and they receive `NA`
+corridor values, not zero.
+
+**This replaces an earlier specification of `resistance = 1 - habitat_quality`,
+which was documented but never implemented.** It does not work in practice:
+`habitat_quality` is an NDVI-led blend with almost no dynamic range (Amsterdam
+interquartile range 0.436–0.598) that scores a cell which is 87.5% built and
+3.3% vegetated at 0.515. Resistance derived from it varies only between about
+8.6 and 11.7 city-wide, producing a near-uniform lattice on which betweenness
+degenerates into geometry. Measured on Amsterdam, that formulation left 205
+isolated top-decile "corridor" cells; the formulation above leaves 15.
+
+Until this change, corridors were computed on the **OSM pedestrian path
+network** rather than on habitat at all — betweenness over footway junctions,
+transferred to cells by nearest-node snap. That ranked busy streets as prime
+habitat links, made green space with no footway invisible, and produced
+scattered single-cell corridors with nothing adjacent to them. Paths now appear
+only in observation-effort correction (section on effort), where they belong:
+they model where observers walk, not where wildlife can move.
 
 Metrics:
 
-- `corridor_importance`: normalised betweenness centrality — the only
-  connectivity metric currently computed, and the value used for intervention
-  ranking.
+- `betweenness_centrality`: raw dispersal-limited betweenness on the graph
+  above, capped at `CONN_DISPERSAL_M` effective metres (1 unit = 1 m through
+  ideal habitat). The cap is both an ecological statement — dispersal is
+  bounded, organisms do not route across an entire city — and what keeps the
+  computation tractable.
+- `corridor_importance`: `betweenness_centrality` expressed as a percentile
+  rank among the cells that carry any route at all, so it spans 0–1. Cells with
+  no route through them stay at 0 rather than being ranked up into the lower
+  percentiles: they are not weak corridors, they are not corridors. This is the
+  value used for intervention ranking.
+
+The percentile step matters for more than presentation. Raw betweenness is a
+tiny, heavily skewed number — on the old path graph Amsterdam's maximum was
+0.0187 against a median of 0 — so every absolute threshold downstream
+(`corridor_importance > 0.7` for the corridor intervention,
+`> 0.25` for the corridor pressure note) was unreachable and had never once
+fired. Ranking restores a scale those thresholds can express.
+
+### 9a. Derived ecological network
+
+The 20 m cells are the analytical surface, but they are not the map's primary
+representation. `pipeline/04_connectivity/network_derive.R` reduces them to a
+simplified network — nodes joined by corridor centrelines — which is what the
+connectivity layer draws at overview and transition zoom. The cells themselves
+fade in only at analytical zoom (`NETWORK_REGIME.handover` in
+`lib/layer-styles.ts`).
+
+Derivation, per city:
+
+1. Cells at or above `NET_MIN_IMPORTANCE` are grouped into **connected areas**
+   with `igraph::components()` on the habitat graph.
+2. Each area is reduced to a **skeleton** by farthest-point growth: take the two
+   most remote cells and the least-cost path between them as the trunk, then
+   repeatedly attach the most remote unattached cell to the existing skeleton by
+   its least-cost path, pruning branches shorter than `NET_MIN_BRANCH_CELLS`.
+   Every centreline is therefore a least-cost path through the resistance
+   surface, so a corridor that follows a canal bank or park edge does so as a
+   consequence of the habitat data, never because that feature was used as
+   geometry.
+3. Degree-2 runs are contracted into one polyline per corridor **segment**, then
+   corner-cut (`NET_SMOOTH_PASSES`) to relax the 60° zigzag of a hex centroid
+   path into a curve.
+4. **Nodes**: one per connected area, tiered by area size
+   (`NET_MAJOR_CELLS` / `NET_SECONDARY_CELLS`); plus junctions (degree ≥ 3,
+   promoted to major at degree ≥ 4) and corridor endpoints. Areas too small to
+   skeletonise (`NET_MIN_COMPONENT_CELLS`) become a single stepping stone rather
+   than an invented corridor.
+5. Segments are classed `strongest | strong | moderate | weak | fragmented` by
+   mean `corridor_importance` along their cells.
+
+Node tiering is deliberately not a function of score alone: a large connected
+area earns one major node, and a busy junction earns one on its own merit. An
+earlier version gave every terminal of a large area that area's tier, which
+produced 55 "major" nodes in Amsterdam instead of 5.
+
+Amsterdam yields 143 connected areas → 211 corridor segments (25.3 km) and 404
+nodes (5 major, 84 secondary, 315 stepping stones), about 108 KB of line
+GeoJSON. This replaces `corridor-links.geojson`, which emitted one line per hex
+adjacency — roughly 32,000 segments that rendered as a dense mesh rather than a
+network.
+
+Not yet derived: **connectivity breaks** where a road or railway severs a
+corridor. That needs a roads/rail loader at the connectivity stage, which does
+not exist yet — roads are currently only read per-tile in `02_habitat`. The
+legend deliberately omits a break symbol until the data behind it exists.
 
 `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`, and
 `patch_size_distribution` exist as placeholder fields in the pipeline but are

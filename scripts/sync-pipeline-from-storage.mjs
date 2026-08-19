@@ -36,7 +36,8 @@ const IMPORT_FILES = [
   'park-stats.json',
   'cell-details.manifest.json',
   'hexgrid.pmtiles',
-  'corridor-links.geojson',
+  'connectivity-network-edges.geojson',
+  'connectivity-network-nodes.geojson',
   'top_interventions.json',
 ];
 
@@ -164,11 +165,19 @@ async function stageCityExport(supabaseUrl, city, datasetId, current, withCellAt
       await downloadFile(url, targetPath);
       console.log(`  downloaded ${objectPath}`);
     } catch (error) {
-      if (file === 'parks.geojson' || file === 'corridor-links.geojson' || file === 'top_interventions.json') {
+      const OPTIONAL_FILES = new Set([
+        'parks.geojson',
+        // The derived connectivity network is absent from exports produced
+        // before 04_connectivity started emitting it.
+        'connectivity-network-edges.geojson',
+        'connectivity-network-nodes.geojson',
+        'top_interventions.json',
+      ]);
+      if (OPTIONAL_FILES.has(file)) {
         console.warn(`  optional file missing: ${objectPath}`);
         continue;
       }
-      if (/^cell_attributes-part-|^corridor-links-part-/.test(file)) {
+      if (/^cell_attributes-part-|^connectivity-network-(edges|nodes)-part-/.test(file)) {
         await downloadFile(url, targetPath);
         console.log(`  downloaded ${objectPath}`);
         continue;

@@ -21,7 +21,13 @@ if (!file.exists(file.path(tiles_dir, "core_tiles.gpkg"))) {
   )
 }
 
-grid <- get_tiled_results(force = isTRUE(as.logical(Sys.getenv("FORCE_TILED_REPROCESS", unset = "FALSE"))))
+# as.logical("1") is NA, not TRUE, so FORCE_TILED_REPROCESS=1 was silently
+# ignored and the stale tile cache loaded anyway. Same fix as
+# FORCE_CONNECTIVITY in 04_connectivity/connectivity.R.
+grid <- get_tiled_results(
+  force = toupper(trimws(Sys.getenv("FORCE_TILED_REPROCESS", unset = ""))) %in%
+    c("1", "TRUE", "T", "YES")
+)
 
 cat(sprintf(
   "Habitat quality: min=%.3f, mean=%.3f, max=%.3f\n",

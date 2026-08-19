@@ -11,6 +11,16 @@ import {
   biodiversityCellLayout,
   biodiversityCellPaint,
   CORRIDOR_LINES_LAYER_ID,
+  NETWORK_NODE_MAJOR_LAYER_ID,
+  NETWORK_NODE_SECONDARY_LAYER_ID,
+  NETWORK_NODE_STEPPING_LAYER_ID,
+  corridorLineColor,
+  corridorLineWidth,
+  corridorLineOpacity,
+  networkNodeRadius,
+  networkNodeFill,
+  networkNodeOpacity,
+  networkNodeMinZoom,
   hasHexOverlay,
   hexFillAntialias,
   hexFillOutlineColor,
@@ -36,7 +46,8 @@ import {
 import { registerPointIcons } from '@/lib/map-icons';
 import {
   emptyFeatureCollection,
-  fetchCorridorLinksGeoJSON,
+  fetchConnectivityNetworkEdges,
+  fetchConnectivityNetworkNodes,
   parkCentroidsGeoJSON,
   parkPolygonsGeoJSON,
   registerPmtilesProtocol,
@@ -183,17 +194,26 @@ export default function MapView({
     map.on('load', async () => {
       map.addSource('parks', { type: 'geojson', data: parkPolygonsGeoJSON() });
       map.addSource('park-centroids', { type: 'geojson', data: parkCentroidsGeoJSON() });
-      map.addSource('corridor-links', {
-        type: 'geojson',
-        data: emptyFeatureCollection(),
-      });
-      void fetchCorridorLinksGeoJSON().then((fc) => {
+      // Derived ecological network: corridor centrelines and tiered nodes. Two
+      // small GeoJSON exports rather than the 20 m cell source, so the overview
+      // scale can show a network instead of a hexagonal raster.
+      map.addSource('corridor-network', { type: 'geojson', data: emptyFeatureCollection() });
+      map.addSource('network-nodes', { type: 'geojson', data: emptyFeatureCollection() });
+      void fetchConnectivityNetworkEdges().then((fc) => {
         if (mapRef.current !== map) return;
-        const source = map.getSource('corridor-links') as maplibregl.GeoJSONSource | undefined;
+        const source = map.getSource('corridor-network') as maplibregl.GeoJSONSource | undefined;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         source?.setData(fc as any);
       }).catch(() => {
-        /* Optional export: keep the line layer empty until corridor-links.geojson exists. */
+        /* Layers stay empty until 04_connectivity + 06_export have produced the network. */
+      });
+      void fetchConnectivityNetworkNodes().then((fc) => {
+        if (mapRef.current !== map) return;
+        const source = map.getSource('network-nodes') as maplibregl.GeoJSONSource | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        source?.setData(fc as any);
+      }).catch(() => {
+        /* As above. */
       });
 
       const initialCityStats = getCityLayerStats();
@@ -373,27 +393,39 @@ export default function MapView({
       map.addLayer({
         id: CORRIDOR_LINES_LAYER_ID,
         type: 'line',
-        source: 'corridor-links',
+        source: 'corridor-network',
         layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': '#5b2a86',
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['coalesce', ['get', 'importance'], ['get', 'weight'], 0],
-            0, 0.5,
-            0.5, 2,
-            1, 5,
-          ],
-          'line-opacity': [
-            'interpolate',
-            ['linear'],
-            ['coalesce', ['get', 'importance'], ['get', 'weight'], 0],
-            0, 0.2,
-            0.5, 0.55,
-            1, 0.9,
-          ],
+          'line-color': corridorLineColor(),
+          'line-width': corridorLineWidth(),
+          'line-opacity': corridorLineOpacity(),
         },
+      });
+
+      // Nodes drawn over the corridors, weakest tier first so a major node is
+      // never occluded by a stepping stone sitting on the same cell.
+      ([
+        ['stepping-stone', NETWORK_NODE_STEPPING_LAYER_ID],
+        ['secondary', NETWORK_NODE_SECONDARY_LAYER_ID],
+        ['major', NETWORK_NODE_MAJOR_LAYER_ID],
+      ] as const).forEach(([tier, layerId]) => {
+        map.addLayer({
+          id: layerId,
+          type: 'circle',
+          source: 'network-nodes',
+          minzoom: networkNodeMinZoom(tier),
+          filter: ['==', ['get', 'tier'], tier],
+          layout: { visibility: 'none' },
+          paint: {
+            'circle-radius': networkNodeRadius(tier),
+            'circle-color': tier === 'secondary' ? '#FFFFFF' : networkNodeFill(tier),
+            'circle-opacity': networkNodeOpacity(),
+            // Secondary nodes read as hollow rings, matching the legend's ○.
+            'circle-stroke-width': tier === 'stepping-stone' ? 0 : tier === 'secondary' ? 1.5 : 1,
+            'circle-stroke-color': tier === 'secondary' ? networkNodeFill('secondary') : '#FFFFFF',
+            'circle-stroke-opacity': networkNodeOpacity(),
+          },
+        });
       });
 
       map.addLayer({
@@ -745,7 +777,7 @@ export default function MapView({
                 {legend.title}
               </p>
               <div className="flex flex-col gap-1.5">
-                {legend.legend.map(({ color, label }, i, arr) => {
+                {legend.legend.map(({ color, label, symbol }, i, arr) => {
                   let formattedLabel = label;
                   if (legend.rawMetric) {
                     const statsList = getCityLayerStats(displayCityId ?? CITY.id);
@@ -780,7 +812,22 @@ export default function MapView({
                   
                   return (
                     <div key={label} className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="w-2.5 h-2.5 flex-shrink-0 flex items-center justify-center">
+                        {symbol === 'line' ? (
+                          <span className="w-2.5 h-[2px] rounded-full" style={{ backgroundColor: color }} />
+                        ) : symbol === 'node-major' ? (
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                        ) : symbol === 'node-secondary' ? (
+                          <span
+                            className="w-[7px] h-[7px] rounded-full border-[1.5px]"
+                            style={{ borderColor: color, backgroundColor: 'transparent' }}
+                          />
+                        ) : symbol === 'node-stepping' ? (
+                          <span className="w-[4px] h-[4px] rounded-full" style={{ backgroundColor: color }} />
+                        ) : (
+                          <span className="w-2.5 h-2.5 rounded-[3px]" style={{ backgroundColor: color }} />
+                        )}
+                      </span>
                       <span className="text-[10px] text-[#667066] leading-tight">{formattedLabel}</span>
                     </div>
                   );

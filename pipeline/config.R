@@ -268,6 +268,58 @@ CELL_SIZE <- 20   # metres
 PATH_RADIUS_M <- 40   # neighbourhood radius for path length (~2 hex rings)
 MIN_PATH_M    <- 50   # minimum path length in that neighbourhood to count as sampled
 
+# ── Habitat-resistance connectivity ──────────────────────────────────────────
+# Corridors run on a hex-adjacency graph weighted by habitat resistance, NOT on
+# the pedestrian path network. Paths model *observer effort* (where people walk,
+# hence where records come from) and stay confined to the effort correction
+# above; they are not a model of where wildlife can move. Reusing them for
+# corridors ranked busy streets as prime habitat links and made green space with
+# no footway invisible. See docs/methodology.md section 9.
+#
+# Permeability is vegetation discounted by built cover:
+#   permeability = vegetation * (1 - built_fraction_wc)
+# docs/methodology.md originally specified resistance as 1 - habitat_quality.
+# That does not work: habitat_quality is an NDVI-led blend with almost no
+# dynamic range (Amsterdam IQR 0.436-0.598) and it scores a cell that is 87.5%
+# built and 3.3% vegetated at 0.515. Resistance built from it spans only ~8.6
+# to ~11.7 city-wide — a near-uniform lattice, on which betweenness degenerates
+# into geometry and scatters isolated "corridor" cells. Measured on Amsterdam:
+# 1 - habitat_quality left 205 isolated top-decile cells; the formula above
+# leaves 5.
+#
+# Resistance is floored at 1 so ideal habitat still costs its real length in
+# metres, rising linearly to CONN_MAX_RESISTANCE at zero permeability.
+# Zero-cost edges would make shortest paths degenerate, so the floor is
+# structural, not cosmetic.
+CONN_MAX_RESISTANCE   <- 20    # step cost at permeability = 0, relative to ideal = 1
+
+# Cells at or below this permeability are walls: nothing disperses through
+# them, so they are dropped from the graph rather than carried as very-high-cost
+# nodes. In a dense city this is most of the grid (Amsterdam keeps 16.5k of
+# 53.9k cells), which is both ecologically correct and what makes the job cheap.
+# Walls leave the corridor ranking as NA, not as a weak-but-present value.
+CONN_MIN_PERMEABILITY <- 0.05
+
+# Dispersal cutoff in effective metres (1 unit = 1 m through ideal habitat).
+# Unbounded betweenness assumes an organism routes across the entire AOI to
+# reach anywhere else; real dispersal is limited, and on a 259k-cell grid the
+# unbounded computation does not finish. 500 m suits small urban birds,
+# pollinators and generalist mammals — roughly 25 cells of ideal habitat.
+CONN_DISPERSAL_M      <- 500
+
+
+# ── Derived ecological network (nodes + corridor centrelines) ─────────────────
+# The 20 m cells remain the analytical surface; this is the simplified network
+# drawn on top of them at overview and transition zooms. Cells above
+# NET_MIN_IMPORTANCE are grouped into connected areas, each reduced to a
+# skeleton of least-cost centrelines with nodes at junctions and endpoints.
+NET_MIN_IMPORTANCE      <- 0.5  # corridor_importance floor for network membership
+NET_MIN_COMPONENT_CELLS <- 8    # smaller connected areas become a single stepping stone
+NET_MIN_BRANCH_CELLS    <- 4    # prune skeleton branches shorter than this, in cells
+NET_MAJOR_CELLS         <- 200  # connected-area size that earns a major node
+NET_SECONDARY_CELLS     <- 40   # ... and a secondary node
+NET_SMOOTH_PASSES       <- 2    # corner-cutting passes on centreline geometry
+
 # Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
 # process_tile.R (per-tile halo grid) must both offset from this exact point,
 # or adjacent tiles' hexagons fall out of phase and leave a seam along every
@@ -463,6 +515,8 @@ PROC_GRID_HABITAT <- file.path(DATA_PROC, "grid_habitat.gpkg")
 PROC_GRID_OBS     <- file.path(DATA_PROC, "grid_observations.gpkg")
 PROC_GRID_CONN    <- file.path(DATA_PROC, "grid_connectivity.gpkg")
 PROC_CONNECTIVITY_GRAPH <- file.path(DATA_PROC, "connectivity_graph.rds")
+PROC_NETWORK_NODES <- file.path(DATA_PROC, "connectivity_network_nodes.gpkg")
+PROC_NETWORK_EDGES <- file.path(DATA_PROC, "connectivity_network_edges.gpkg")
 PROC_GREEN_SPACES_AGG <- file.path(DATA_PROC, "green_spaces_agg.gpkg")
 PROC_GRID_RESID   <- file.path(DATA_PROC, "grid_residuals.gpkg")
 PROC_CELL_ATTR    <- file.path(DATA_PROC, "cell_attributes.gpkg")

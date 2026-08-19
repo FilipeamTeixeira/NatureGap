@@ -43,7 +43,8 @@ a single city's export can exceed the entire Supabase free-tier storage budget.
 | --- | --- |
 | `cell_attributes.geojson` (and `-part-NNN` chunks) | yes |
 | `parks.geojson` | yes |
-| `corridor-links.geojson` (and chunks) | yes |
+| `connectivity-network-edges.geojson` (and chunks) | yes |
+| `connectivity-network-nodes.geojson` (and chunks) | yes |
 | `cell-details/cell-details-NNN.json` | yes |
 | `hexgrid.pmtiles` | no — already compressed internally |
 | `manifest.json`, `current.json`, `*.manifest.json` | no — see below |

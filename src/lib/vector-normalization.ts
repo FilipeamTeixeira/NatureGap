@@ -1,4 +1,8 @@
-export type VectorLayer = 'green-spaces' | 'hex-cells' | 'corridor-links';
+export type VectorLayer =
+  | 'green-spaces'
+  | 'hex-cells'
+  | 'connectivity-network-edges'
+  | 'connectivity-network-nodes';
 
 type Primitive = string | number | boolean | null;
 type Properties = Record<string, unknown>;
@@ -327,16 +331,34 @@ function hexCellProperties(props: Properties, domains: Record<string, MetricDoma
   };
 }
 
-function corridorProperties(props: Properties, domains: Record<string, MetricDomain>): StrictProperties {
-  const weight = rawNumber(props, ['weight']);
-  const importance = normalizeMetric(weight, domains.importance);
+const CORRIDOR_STRENGTHS = ['fragmented', 'weak', 'moderate', 'strong', 'strongest'] as const;
+const NODE_TIERS = ['major', 'secondary', 'stepping-stone'] as const;
 
+// The derived network arrives pre-classified from 04_connectivity: `importance`
+// is already a 0-1 percentile and `strength`/`tier` are already bucketed, so
+// nothing here re-derives them. Unknown class values fall back to the weakest
+// bucket rather than being passed through, so a bad value cannot reach a
+// MapLibre match expression and paint an undefined colour.
+function networkEdgeProperties(props: Properties): StrictProperties {
+  const strength = asString(props.strength);
   return {
-    linkId: asString(props.linkId ?? props.link_id),
-    fromCellId: asString(props.fromCellId ?? props.from_cell_id),
-    toCellId: asString(props.toCellId ?? props.to_cell_id),
-    weight,
-    importance,
+    segmentId: asString(props.segmentId ?? props.segment_id),
+    componentId: rawNumber(props, ['componentId', 'component_id']),
+    cells: rawNumber(props, ['cells']),
+    importance: roundNormalized(clamp01(asNumber(props.importance) ?? 0)),
+    strength: (CORRIDOR_STRENGTHS as readonly string[]).includes(strength) ? strength : 'fragmented',
+  };
+}
+
+function networkNodeProperties(props: Properties): StrictProperties {
+  const tier = asString(props.tier);
+  return {
+    cellId: asString(props.cellId ?? props.cell_id),
+    tier: (NODE_TIERS as readonly string[]).includes(tier) ? tier : 'stepping-stone',
+    degree: rawNumber(props, ['degree']),
+    componentId: rawNumber(props, ['componentId', 'component_id']),
+    componentCells: rawNumber(props, ['componentCells', 'component_cells']),
+    importance: roundNormalized(clamp01(asNumber(props.importance) ?? 0)),
   };
 }
 
@@ -370,16 +392,17 @@ export function normalizeVectorGeoJSON(
   cityId?: string,
 ): NormalizedFeatureCollection {
   const features = Array.isArray(input.features) ? input.features : [];
-  const metricSpecs = layer === 'corridor-links'
-    ? [{ sourceField: 'weight', outputField: 'importance', aliases: ['weight'] }]
-    : NORMALIZED_METRICS;
-  const domains = buildDomains(features, metricSpecs);
+  // The network layers carry their own already-normalised fields, so they need
+  // no domain pass over the collection.
+  const isNetwork = layer === 'connectivity-network-edges' || layer === 'connectivity-network-nodes';
+  const domains = isNetwork ? {} : buildDomains(features, NORMALIZED_METRICS);
 
   const normalizedFeatures = features.map((feature) => {
     const props = asObject(feature.properties);
     if (layer === 'green-spaces') return strictFeature(feature, greenSpaceProperties(props, domains));
     if (layer === 'hex-cells') return strictFeature(feature, hexCellProperties(props, domains));
-    return strictFeature(feature, corridorProperties(props, domains));
+    if (layer === 'connectivity-network-nodes') return strictFeature(feature, networkNodeProperties(props));
+    return strictFeature(feature, networkEdgeProperties(props));
   });
 
   return {
@@ -396,5 +419,8 @@ export function normalizeVectorGeoJSON(
 }
 
 export function isVectorLayer(value: string): value is VectorLayer {
-  return value === 'green-spaces' || value === 'hex-cells' || value === 'corridor-links';
+  return value === 'green-spaces'
+    || value === 'hex-cells'
+    || value === 'connectivity-network-edges'
+    || value === 'connectivity-network-nodes';
 }

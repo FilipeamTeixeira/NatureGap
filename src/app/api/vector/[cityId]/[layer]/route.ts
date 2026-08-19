@@ -35,7 +35,14 @@ type ChunkManifest = {
 // function memory. Keep hex cells out of the chunk-merging path entirely.
 const LAYER_FILES = {
   'green-spaces': { fileName: 'parks.geojson', manifestName: null },
-  'corridor-links': { fileName: 'corridor-links.geojson', manifestName: 'corridor-links.manifest.json' },
+  'connectivity-network-edges': {
+    fileName: 'connectivity-network-edges.geojson',
+    manifestName: 'connectivity-network-edges.manifest.json',
+  },
+  'connectivity-network-nodes': {
+    fileName: 'connectivity-network-nodes.geojson',
+    manifestName: 'connectivity-network-nodes.manifest.json',
+  },
 } as const satisfies Partial<Record<VectorLayer, { fileName: string; manifestName: string | null }>>;
 
 type ServableLayer = keyof typeof LAYER_FILES;
