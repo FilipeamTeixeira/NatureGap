@@ -225,8 +225,24 @@ Notes on specific fields:
   means fewer species recorded than the model predicts. Because expected is a
   fitted value, the residual is centred on zero across sampled cells; do not
   apply absolute thresholds to it (see docs/methodology.md §7).
+- `nature_gap_score` is **within-city relative**: each of its three terms is
+  centred on this city's median and scaled by a percentile half-spread
+  (`pipeline/score_scaling.R`). Zero means "typical cell for this city", positive
+  is worse than typical. The centring parameters are recomputed per run, so
+  scores are comparable **within one `dataset_id` only** — not across cities and
+  not across dataset versions of the same city. Parameters ship in the manifest
+  at `metricDefinitions.natureGapScore.scaling`. See docs/methodology.md §8.
+- `status` follows `SCORE_BREAKS` in `pipeline/06_export/export.R`, which matches
+  `SCORE_THRESHOLDS` in `src/lib/config.ts`: higher score is worse. Exports
+  generated before 2026-08-20 have this **inverted** — every scored Porto park in
+  the 2026-08-19 dataset reads `much-better` at a median score of +41.6. Do not
+  trust `status` or the score colour from those datasets.
+- `habitat_quality_index` is the 0–1 index; `habitat_quality` is its 0–100
+  integer percentage. Exports generated before 2026-08-20 wrote the percentage
+  into **both**, and `habitat_potential` was derived from the percentage against
+  0.70/0.40 thresholds, so it reads `high` for every cell in those datasets.
 - `impact_score` is a legacy field, `round(bio_residual_norm * 50)` — the
-  biodiversity term of `nature_gap_score` on its own.
+  biodiversity term of `nature_gap_score` on its own, now on the centred scale.
 - `fragmentation_index`, `node_importance`, `edge_density`, `patch_isolation`
   and `patch_size_distribution` exist as columns but are always null; do not
   publish them as values.

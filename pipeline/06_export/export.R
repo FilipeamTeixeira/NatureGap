@@ -11,6 +11,7 @@ library(jsonlite)
 library(igraph)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
+source(here::here("score_scaling.R"), local = FALSE)
 
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
 
@@ -377,6 +378,26 @@ write_hexgrid_pmtiles <- function(value, output_path) {
 # Carried into the manifest so a published dataset states the model that produced
 # its expected values (docs/methodology.md §14). Absent for datasets exported
 # before the fitted model landed.
+# Nature Gap score centring parameters written by 05_residuals / 05_patch. The
+# score is within-city relative, so these values are part of the published number
+# and belong in the manifest (docs/methodology.md §14).
+score_scaling_record <- function(path = PROC_SCORE_SCALING) {
+  if (!file.exists(path)) {
+    message(sprintf(
+      "No score scaling record at %s — manifest will omit it", path
+    ))
+    return(NULL)
+  }
+  tryCatch(
+    jsonlite::read_json(path, simplifyVector = FALSE),
+    error = function(e) {
+      warning(sprintf("Unreadable score scaling record: %s", conditionMessage(e)),
+              call. = FALSE)
+      NULL
+    }
+  )
+}
+
 expected_model_record <- function(path = PROC_EXPECTED_MODEL) {
   if (!file.exists(path)) {
     message(sprintf(
@@ -500,7 +521,16 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       ),
       natureGapScore = list(
         sourceField = "nature_gap_score",
-        definition = "Composite headline: 0.50 biodiversity residual + 0.30 habitat deficit + 0.20 connectivity deficit, scaled to [-100, 100]."
+        definition = paste(
+          "Composite headline: 0.50 biodiversity residual + 0.30 habitat deficit",
+          "+ 0.20 connectivity deficit. Each term is centred on this city's median",
+          "and scaled by a percentile half-spread, so the score is signed around a",
+          "typical cell for this city: positive is worse than typical, negative better.",
+          "Within-city relative and per-run — not comparable across cities or across",
+          "dataset versions."
+        ),
+        bandBreaks = as.list(SCORE_BREAKS),
+        scaling = score_scaling_record()
       ),
       ecologicalResidualNormalized = list(
         sourceField = "ecological_residual_normalized",
@@ -591,16 +621,26 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
   invisible(list(manifest = manifest_path, current = CURRENT_POINTER_PATH, files = files))
 }
 
-# Colour scale — must stay in sync with SCORE_COLORS in src/lib/config.ts
-# and IMPACT_LEGEND in src/lib/utils.ts
+# Band breaks — the single source of truth for score_status() and score_color()
+# below, and must stay in sync with SCORE_THRESHOLDS / SCORE_COLORS in
+# src/lib/config.ts and IMPACT_LEGEND in src/lib/utils.ts.
+#
+# nature_gap_score is signed so that POSITIVE means further below expectation
+# (docs/methodology.md §8): higher is worse. Both ladders here previously used
+# the opposite convention — `score < -20` was labelled much-worse — which
+# inverted every published verdict: all 1,058 scored Porto parks in the
+# 2026-08-19 export carry status "much-better" at a median natureGapScore of
+# +41.6. Keeping the breaks in one constant is what makes the next drift visible.
+SCORE_BREAKS <- c(much_better = -15, better = -5, as_expected = 10, worse = 20)
+
 score_color <- function(score) {
   case_when(
-    is.na(score) ~ "#B8C9AE",   # treat missing as "as expected"
-    score < -20  ~ "#C95B4B",   # much worse than expected
-    score < -10  ~ "#E8A44C",   # worse than expected
-    score <   5  ~ "#B8C9AE",   # as expected
-    score <  15  ~ "#73A56D",   # better than expected
-    TRUE         ~ "#2E6F40"    # much better than expected
+    is.na(score) ~ "#B8C9AE",                          # treat missing as "as expected"
+    score < SCORE_BREAKS[["much_better"]] ~ "#2E6F40",  # much better than expected
+    score < SCORE_BREAKS[["better"]]      ~ "#73A56D",  # better than expected
+    score < SCORE_BREAKS[["as_expected"]] ~ "#B8C9AE",  # as expected
+    score < SCORE_BREAKS[["worse"]]       ~ "#E8A44C",  # worse than expected
+    TRUE                                  ~ "#C95B4B"   # much worse than expected
   )
 }
 
@@ -689,14 +729,15 @@ norm_sequential <- function(x) {
   pmin(1, pmax(0, (x - p5) / (p95 - p5)))
 }
 
+# Diverging render scale, centred on the median rather than on zero. Dividing a
+# distribution that never crosses zero by max(|p10|, |p90|) maps it almost
+# entirely onto one arm of the ramp and renders near-uniform — the second half of
+# the calibration problem in docs/methodology.md §8. This uses the same centring
+# as the score itself (score_scaling.R) so legend and score cannot disagree.
+# Unlike the previous version, a degenerate spread yields 0 only where a value
+# exists and NA elsewhere, instead of 0 everywhere.
 norm_diverging <- function(x) {
-  finite_vals <- x[is.finite(x)]
-  if (length(finite_vals) == 0L) return(rep(NA_real_, length(x)))
-  p10 <- quantile(finite_vals, 0.10, names = FALSE)
-  p90 <- quantile(finite_vals, 0.90, names = FALSE)
-  bound <- max(abs(p10), abs(p90), na.rm = TRUE)
-  if (!is.finite(bound) || bound == 0) return(rep(0, length(x)))
-  pmin(1, pmax(-1, x / bound))
+  robust_centre(x)
 }
 
 norm_rank <- function(x) {
@@ -733,14 +774,15 @@ compute_city_stats <- function(values, metric_name, city_id) {
 
 # ── Shared helpers for JSON export ───────────────────────────────────────────
 
+# See SCORE_BREAKS above: higher score = worse, matching config.ts.
 score_status <- function(score) {
   dplyr::case_when(
     is.na(score) ~ "as-expected",
-    score < -20  ~ "much-worse",
-    score < -10  ~ "worse",
-    score <   5  ~ "as-expected",
-    score <  15  ~ "better",
-    TRUE         ~ "much-better"
+    score < SCORE_BREAKS[["much_better"]] ~ "much-better",
+    score < SCORE_BREAKS[["better"]]      ~ "better",
+    score < SCORE_BREAKS[["as_expected"]] ~ "as-expected",
+    score < SCORE_BREAKS[["worse"]]       ~ "worse",
+    TRUE                                  ~ "much-worse"
   )
 }
 
@@ -1686,14 +1728,22 @@ cell_detail_attrs <- grid_all |>
     cell_id,
     impact_score = as.integer(round(replace_na(nature_gap_score, 0))),
     nature_gap_score = if_else(is_unsampled, NA_real_, round(replace_na(nature_gap_score, 0), 1)),
-    habitat_quality = pct_index(habitat_quality),
+    # Order matters: mutate() evaluates sequentially, so the index must be taken
+    # before pct_index() overwrites habitat_quality with an integer 0-100. The
+    # previous order exported habitat_quality_index as that percentage (Porto
+    # median 40 against a true index of 0.397), which the detail panel then
+    # rendered as "40.000".
     habitat_quality_index = round(replace_na(habitat_quality, 0), 4),
+    habitat_quality = pct_index(habitat_quality),
     species_richness_raw = as.integer(replace_na(species_richness, 0L)),
     observed_richness = if_else(is_unsampled, NA_real_, round(replace_na(observed_richness, 0), 1)),
     max_expected_richness = as.integer(MAX_EXPECTED_RICHNESS),
     n_obs = as.integer(replace_na(n_obs, 0L)),
     n_survey_dates = as.integer(replace_na(n_survey_dates, 0L)),
-    habitat_potential = habitat_potential(habitat_quality),
+    # Reads the 0-1 index, not the overwritten percentage: habitat_potential()
+    # thresholds at 0.70/0.40, so against a 0-100 value every cell scored "high"
+    # (all 119,785 Porto cells in the 2026-08-19 export).
+    habitat_potential = habitat_potential(habitat_quality_index),
     observer_effort_score = round(replace_na(n_obs, 0) / pmax(replace_na(path_km, 0), 0.01), 1),
     taxonomic_diversity = round(replace_na(taxonomic_shannon, 0), 1),
     species = vapply(

@@ -7,6 +7,7 @@ library(jsonlite)
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 source(here::here("05_residuals", "expected_model.R"), local = FALSE)
+source(here::here("score_scaling.R"), local = FALSE)
 
 HABITAT_THRESHOLD <- 0.40
 
@@ -306,20 +307,33 @@ patch_metrics <- patch_metrics |>
       NA_real_,
       (ecological_residual - patch_residual_mean) / patch_residual_sd
     ),
-    bio_residual_norm = if_else(
-      is.na(ecological_residual) | !is.finite(patch_residual_max) | patch_residual_max <= 0,
-      NA_real_,
-      pmax(-1, pmin(1, ecological_residual / patch_residual_max))
-    ),
     habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality_index, 0))),
-    connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),
+    connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0)))
+  )
+
+# Same within-city centring as the hex score (score_scaling.R), with patch-level
+# parameters: a park's score is relative to a typical scored park, not to a
+# typical hex.
+patch_scored <- !is.na(patch_metrics$ecological_residual)
+patch_score_params <- list(
+  biodiversity        = robust_centre_params(patch_metrics$ecological_residual[patch_scored]),
+  habitatDeficit      = robust_centre_params(patch_metrics$habitat_quality_deficit[patch_scored]),
+  connectivityDeficit = robust_centre_params(patch_metrics$connectivity_deficit[patch_scored])
+)
+record_score_scaling("patch", patch_score_params)
+
+patch_metrics <- patch_metrics |>
+  mutate(
+    bio_residual_norm = apply_robust_centre(ecological_residual, patch_score_params$biodiversity),
+    habitat_deficit_norm = apply_robust_centre(habitat_quality_deficit, patch_score_params$habitatDeficit),
+    connectivity_deficit_norm = apply_robust_centre(connectivity_deficit, patch_score_params$connectivityDeficit),
     nature_gap_score = if_else(
       is.na(bio_residual_norm),
       NA_real_,
       (
         0.50 * bio_residual_norm +
-        0.30 * habitat_quality_deficit +
-        0.20 * connectivity_deficit
+        0.30 * replace_na(habitat_deficit_norm, 0) +
+        0.20 * replace_na(connectivity_deficit_norm, 0)
       ) * 100
     )
   )

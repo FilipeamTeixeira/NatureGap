@@ -477,22 +477,37 @@ Source: `pipeline/05_residuals/residuals.R`
 Current implementation:
 
 ```text
-bio_residual_norm = clamp(ecological_residual / max_abs_residual, -1, 1)
+robust_centre(v) =
+  clamp((v - median(v)) / max(|p10(v) - median(v)|, |p90(v) - median(v)|), -1, 1)
 
 nature_gap_score =
   (
-    0.50 * bio_residual_norm +
-    0.30 * (1 - habitat_quality) +
-    0.20 * (1 - corridor_importance)
+    0.50 * robust_centre(ecological_residual) +
+    0.30 * robust_centre(1 - habitat_quality) +
+    0.20 * robust_centre(1 - corridor_importance)
   ) * 100
 ```
 
-- **Positive** Nature Gap score: ecosystem under pressure
-- **Negative** Nature Gap score: ecological surplus
-- Range `[-50, +100]`
+Scaling helper: `pipeline/score_scaling.R`, shared with
+`05_patch/patch_aggregation.R` and with `norm_diverging()` in `06_export`.
+Parameters are derived from the scored cells only and written to
+`score_scaling.json`.
 
-Band edges for status/colour live in `SCORE_THRESHOLDS` (`src/lib/config.ts`)
-and are documented in docs/methodology.md section 8.
+- **Positive** Nature Gap score: worse than a typical cell in this city
+- **Negative** Nature Gap score: better than a typical cell in this city
+- **Zero**: typical for this city
+- Range `[-100, +100]`
+
+This is a within-city relative index. Scores are not comparable across cities,
+and because the centring parameters are recomputed per run, not across dataset
+versions of the same city either. It replaces a formulation whose biodiversity
+term was crushed by a single outlier and whose two deficit terms could only add
+— see docs/methodology.md §8.1 for the measurements.
+
+Band edges live in `SCORE_THRESHOLDS` (`src/lib/config.ts`) and `SCORE_BREAKS`
+(`pipeline/06_export/export.R`), which must agree; they are documented in
+docs/methodology.md §8.2. The pipeline's `score_status()` / `score_color()`
+ladders were inverted relative to both before 2026-08-20.
 
 `impact_score` (`round(bio_residual_norm * 50)`) is still exported as a legacy
 field carrying the biodiversity term alone. Do not treat `nature_gap_score`,

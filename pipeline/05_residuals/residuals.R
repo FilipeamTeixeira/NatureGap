@@ -10,7 +10,10 @@
 # are the same quantity in the same units and the residual is centred on zero.
 #
 # Nature Gap score = composite headline (0.50 biodiversity + 0.30 habitat + 0.20 connectivity),
-# scaled to [-100, 100] and separate from raw ecological_residual.
+# separate from raw ecological_residual. Each term is centred on this city's
+# median and scaled by a percentile spread (score_scaling.R), so the score is
+# signed around a typical cell for this city rather than biased positive by two
+# non-negative deficit terms.
 #
 # Intervention ranking:
 #   intervention_score = underperformance * corridor_importance weighting
@@ -28,6 +31,7 @@ if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 source(here::here("04_connectivity", "connectivity_load.R"), local = FALSE)
 source(here::here("05_residuals", "expected_model.R"), local = FALSE)
+source(here::here("score_scaling.R"), local = FALSE)
 
 TOP_N         <- 20    # number of cells for counterfactual connectivity
 
@@ -154,6 +158,12 @@ if (!is.finite(city_residual_max) || city_residual_max <= 0) {
       ecological_residual_std = city_residual_sd,
       ecological_residual_normalized = NA_real_,
       bio_residual_norm = NA_real_,
+      # Defined even here: intervention export and top_interventions.csv read
+      # these columns unconditionally.
+      habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality, 0))),
+      connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),
+      habitat_deficit_norm = NA_real_,
+      connectivity_deficit_norm = NA_real_,
       nature_gap_score = NA_real_
     )
 } else {
@@ -166,25 +176,37 @@ if (!is.finite(city_residual_max) || city_residual_max <= 0) {
         NA_real_,
         (ecological_residual - city_residual_mean) / city_residual_sd
       ),
-      bio_residual_norm = if_else(
-        is.na(ecological_residual),
-        NA_real_,
-        pmax(-1, pmin(1, ecological_residual / city_residual_max))
-      ),
+      habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality, 0))),
+      connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0)))
+    )
+
+  # Centring parameters come from the scored cells only, so an unsampled cell
+  # cannot move the median that scored cells are measured against.
+  scored <- !is.na(grid$ecological_residual)
+  score_params <- list(
+    biodiversity        = robust_centre_params(grid$ecological_residual[scored]),
+    habitatDeficit      = robust_centre_params(grid$habitat_quality_deficit[scored]),
+    connectivityDeficit = robust_centre_params(grid$connectivity_deficit[scored])
+  )
+  record_score_scaling("hex", score_params, reset = TRUE)
+
+  grid <- grid |>
+    mutate(
+      bio_residual_norm = apply_robust_centre(ecological_residual, score_params$biodiversity),
+      habitat_deficit_norm = apply_robust_centre(habitat_quality_deficit, score_params$habitatDeficit),
+      connectivity_deficit_norm = apply_robust_centre(connectivity_deficit, score_params$connectivityDeficit),
       impact_score = if_else(
         is.na(bio_residual_norm),
         NA_real_,
         round(bio_residual_norm * 50)
       ),
-      habitat_quality_deficit = 1 - pmin(1, pmax(0, replace_na(habitat_quality, 0))),
-      connectivity_deficit = 1 - pmin(1, pmax(0, replace_na(corridor_importance, 0))),
       nature_gap_score = if_else(
         is.na(bio_residual_norm),
         NA_real_,
         (
           0.50 * bio_residual_norm +
-            0.30 * habitat_quality_deficit +
-            0.20 * connectivity_deficit
+            0.30 * replace_na(habitat_deficit_norm, 0) +
+            0.20 * replace_na(connectivity_deficit_norm, 0)
         ) * 100
       )
     )

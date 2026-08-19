@@ -401,10 +401,12 @@ Interpretation:
 - Unsampled: `NA`.
 
 Rendering uses `residualNorm` (`norm_diverging(ecological_residual)` in
-`06_export/export.R`: the raw residual divided by the larger of |p10| and |p90|,
-clamped to `[-1, 1]`), not `ecological_residual_normalized`. Raw backend values
-are not clamped. `src/lib/layer-styles.ts` colours `+1` red and `-1` green,
-following the sign convention above.
+`06_export/export.R`: the residual **centred on its median** and divided by the
+larger of |p10 − median| and |p90 − median|, clamped to `[-1, 1]`), not
+`ecological_residual_normalized`. The centring is what stops a one-sided
+distribution collapsing onto one arm of the diverging ramp — see §8.1. Raw
+backend values are not clamped. `src/lib/layer-styles.ts` colours `+1` red and
+`-1` green, following the sign convention above.
 
 Downstream thresholds must not assume an absolute scale. The residual's spread
 now follows each city's own richness scale rather than a fixed ~0–50 index, so
@@ -425,46 +427,109 @@ Limitations:
 
 ## 8. Nature Gap Score
 
-Nature Gap score is computed in `pipeline/05_residuals/residuals.R`.
+Nature Gap score is computed in `pipeline/05_residuals/residuals.R`, with the
+patch-level equivalent in `pipeline/05_patch/patch_aggregation.R`. Both use the
+shared scaling in `pipeline/score_scaling.R`.
 
 Current implementation:
 
 ```text
-bio_residual_norm_i =
-  clamp(ecological_residual_i / max_abs(ecological_residual), -1, 1)
+robust_centre(v) =
+  clamp( (v - median(v)) / max(|p10(v) - median(v)|, |p90(v) - median(v)|), -1, 1 )
 
 nature_gap_score_i =
   (
-    0.50 * bio_residual_norm_i +
-    0.30 * (1 - habitat_quality_i) +
-    0.20 * (1 - corridor_importance_i)
+    0.50 * robust_centre(ecological_residual)_i +
+    0.30 * robust_centre(1 - habitat_quality)_i +
+    0.20 * robust_centre(1 - corridor_importance)_i
   ) * 100
 ```
 
-Where `max_abs(ecological_residual)` is the largest absolute finite residual in
-the city. The biodiversity term is scaled by that maximum, not by the standard
-deviation: `ecological_residual_normalized` is exported alongside it but does
-not enter the score.
+Each term is centred on the median of the **scored** cells and scaled by a
+percentile half-spread, so an unsampled cell cannot move the median that scored
+cells are measured against. The centring parameters — median, spread, quantiles,
+n, and the share of values clamped — are written to `score_scaling.json` per
+scale and carried into the export manifest under
+`metricDefinitions.natureGapScore.scaling`.
 
-Interpretation (the residual is expected minus observed, so the score rises as
-a cell underperforms):
+Interpretation:
 
-- **Positive** Nature Gap score: ecosystem under pressure — the gap is real
-- **Negative** Nature Gap score: ecological surplus
-- Zero: near expected or no finite residual range
-- Range: `[-50, +100]` — the biodiversity term spans `±50`, the two deficit
-  terms add `0` to `+50`
+- **Positive**: worse than a typical cell in this city — the gap is real relative
+  to local conditions.
+- **Negative**: better than a typical cell in this city.
+- **Zero**: typical for this city.
+- Range: `[-100, +100]` — each term spans `±` its weight.
+- Unsampled: `NA`.
 
-This is intentionally separate from `ecological_residual`. PMTiles expose
-`natureGapScore` (plus `natureGapScoreNorm` for styling), and
-`ecologicalResidual` / `ecologicalResidualNormalized` / `residualNorm` for the
-residual layer. `impactScore` is also exported — a legacy field holding
-`round(bio_residual_norm * 50)`, i.e. the biodiversity term alone. Prefer
-`natureGapScore`.
+**This is a within-city relative index, and zero means "typical cell for this
+city", not "as expected" in any absolute sense.** The score was already
+city-relative in substance — the biodiversity term always divided by a
+city-specific maximum — so this makes an existing property explicit rather than
+introducing one. Two consequences follow and are not fixable by calibration:
 
-Current colour/status thresholds (`SCORE_THRESHOLDS` in `src/lib/config.ts`, the
-single source of truth for `src/lib/utils.ts` and
-`src/lib/cell-detail.ts`):
+- Scores are **not comparable between cities**.
+- The centring parameters are computed per run, so scores are **not comparable
+  across dataset versions** of the same city either: a re-run with new
+  observations shifts the median and therefore shifts the score of a cell whose
+  own data did not change. Compare cells within one `dataset_id`, not across two.
+
+### 8.1 What this replaced, and why
+
+The previous formulation was
+
+```text
+0.50 * clamp(ecological_residual / max|ecological_residual|, -1, 1)
+  + 0.30 * (1 - habitat_quality)
+  + 0.20 * (1 - corridor_importance)
+```
+
+and it failed in three separate ways, all measured on the 2026-08-19 Porto
+export:
+
+1. **The biodiversity term was destroyed by a single outlier.** Dividing by
+   `max|ecological_residual|` is only stable if the maximum is representative.
+   With the fitted residual of section 6.1 the residual has sd 0.44 while one hex
+   reaches -50.6 (272 species in ~350 m²), so the term spanned **-0.17 to +0.14
+   of its nominal ±50**. The headline score would have contained no measurable
+   biodiversity signal at all.
+2. **The two deficit terms could only add.** `1 - habitat_quality` and
+   `1 - corridor_importance` are non-negative by construction. Measured medians:
+   `0.30 * (1 - habitat_quality) * 100` = **+18.3**, and
+   `0.20 * (1 - corridor_importance) * 100` = **+20.0** — the latter pinned at
+   exactly its maximum because `corridor_importance` is 0 in **88%** of sampled
+   cells. A term at its ceiling for 88% of the grid is a constant, not a
+   measurement. Together they imposed a ~+38 floor.
+3. **The render normalisation did not centre.** `norm_diverging()` divided by
+   `max(|p10|, |p90|)` without subtracting the median, so a distribution that
+   never crossed zero mapped almost entirely onto one arm of the diverging ramp
+   and the map rendered near-uniform.
+
+Band distributions on Porto's 31,562 sampled cells, against the `SCORE_THRESHOLDS`
+below:
+
+| | p05 | p50 | p95 | much-better / better / as-expected / worse / much-worse |
+|---|---|---|---|---|
+| as published 2026-08-19 | 54.5 | 57.4 | 59.7 | 0 / 0 / 0 / 0 / **100%** |
+| fitted expected richness only | 15.8 | 38.3 | 45.8 | 0 / 0 / 2 / 4 / **93%** |
+| + robust biodiversity term only | −15.2 | 38.6 | 74.0 | 5 / 4 / 1 / 0 / **89%** |
+| **all three terms centred (current)** | **−65.5** | **3.0** | **43.6** | **20 / 10 / 35 / 11 / 24** |
+
+Fixing expected richness alone left 93% of cells in one band; only centring all
+three terms produces a distribution the five-band scale can describe. The median
+cell now reads `as-expected`, which is what a median cell should read.
+
+`norm_diverging()` now applies the same `robust_centre` as the score, so legend
+and score cannot disagree. One behavioural difference from the old version: where
+a term has no spread at all, it yields `0` for cells that have a value and `NA`
+elsewhere, rather than `0` everywhere.
+
+### 8.2 Bands
+
+`SCORE_THRESHOLDS` in `src/lib/config.ts` is the single frontend source of truth
+for `src/lib/utils.ts` and `src/lib/cell-detail.ts`. `SCORE_BREAKS` in
+`pipeline/06_export/export.R` holds the same values for `score_status()` and
+`score_color()`, and is exported in the manifest as
+`metricDefinitions.natureGapScore.bandBreaks`.
 
 | Nature Gap score range | Status |
 | --- | --- |
@@ -474,35 +539,25 @@ single source of truth for `src/lib/utils.ts` and
 | `< 20` | `worse` |
 | `>= 20` | `much-worse` |
 
-**Known calibration issue — partly resolved, must be re-measured.** The two
-deficit terms can only add to the score: `0.30 * (1 - habitat_quality)` and
-`0.20 * (1 - corridor_importance)` are non-negative by construction, and
-`corridor_importance` is 0 for every cell carrying no route at all — which is
-most of the grid.
+These breaks were re-verified against the centred distribution and left
+unchanged; they partition Porto 20 / 10 / 35 / 11 / 24.
 
-The larger cause has been removed. On the 2026-08-19 exports the biodiversity
-term was itself effectively a habitat term, because `ecological_residual`
-correlated with `expected_richness` at 0.999 and was positive in 99.99% of
-sampled cells (section 6.1). The score was therefore close to habitat quality
-composed with itself: `nature_gap_score` spanned 8.7 to 62.0 with
-p05–p95 = 54.5–59.7 on Porto, every band resolved to `much-worse`, and the
-five-band scale carried no information. With `expected_richness` now fitted,
-`ecological_residual` is centred on zero, so `bio_residual_norm` spans `[-1, 1]`
-in earnest and the biodiversity term contributes both signs.
+**Previously the pipeline's own ladders were inverted.** `score_status()` and
+`score_color()` in `06_export/export.R` tested `score < -20 ~ "much-worse"` and
+`score >= 15 ~ "much-better"` — the opposite of the convention above and of
+`config.ts`, despite a comment asserting they were in sync. Every scored park in
+the published Porto export therefore carries `status: "much-better"` at a median
+`natureGapScore` of **+41.6**. Both ladders now read from `SCORE_BREAKS`.
 
-Two things remain open:
+### 8.3 Related exported fields
 
-- **The published figures above are stale.** Every number in this paragraph, the
-  `SCORE_THRESHOLDS` bands, and the p05–p95 spreads must be re-measured from a
-  post-fit run before they can be quoted.
-- `natureGapScoreNorm` and `residualNorm` divide by `max(|p10|, |p90|)` without
-  centring. The residual now crosses zero so this is far less damaging than it
-  was, but a score distribution that stays one-sided would still map onto one arm
-  of the diverging ramp. Re-centring the render normalisation on the city median
-  is still not done.
-
-The remaining items are calibration problems, not sign problems: the direction
-is correct.
+`natureGapScore` is intentionally separate from `ecological_residual`. PMTiles
+expose `natureGapScore` (plus `natureGapScoreNorm` for styling), and
+`ecologicalResidual` / `ecologicalResidualNormalized` / `residualNorm` for the
+residual layer. `impactScore` is a legacy field holding
+`round(bio_residual_norm * 50)` — the biodiversity term alone, and now on the
+centred scale, so its values change meaning with this revision. Prefer
+`natureGapScore`.
 
 ## 9. Connectivity Analysis
 
@@ -826,6 +881,13 @@ Every pipeline run should record:
 - `SPECIES_AREA_Z` (the patch-scale area exponent; still an assumption).
   `SPECIES_AREA_C` is recorded for provenance only — it no longer affects any
   output.
+- the Nature Gap score centring parameters at both scales, from
+  `score_scaling.json`: per-term median, spread, quantile bounds, n, and
+  `clampedShare`, plus the term weights. The score is within-city relative and
+  these parameters are recomputed per run, so they are part of the published
+  number, not metadata about it. Also carried in the manifest under
+  `metricDefinitions.natureGapScore.scaling`, with the band breaks under
+  `bandBreaks`.
 - `RESIDUAL_PRESSURE_CUTOFF` (sampled p75 of the residual, used for the
   detail-panel pressure string)
 - `MAX_EXPECTED_RICHNESS` (exported for transparency; scales nothing at either

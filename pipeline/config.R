@@ -621,6 +621,10 @@ PROC_CELL_TAXA    <- file.path(DATA_PROC, "cell_taxa.json")
 # Fitted expected-richness model record (hex + patch blocks), written by
 # 05_residuals and 05_patch, read by 06_export for the manifest.
 PROC_EXPECTED_MODEL <- file.path(DATA_PROC, "expected_richness_model.json")
+# Nature Gap score centring parameters (hex + patch blocks), written by
+# 05_residuals and 05_patch, read by 06_export for the manifest. The score is
+# within-city relative, so these are part of the published number.
+PROC_SCORE_SCALING <- file.path(DATA_PROC, "score_scaling.json")
 
 # ── Robust geometry helpers ────────────────────────────────────────────────────
 # st_intersection()/st_union() on real-world OSM geometry against the hex grid
