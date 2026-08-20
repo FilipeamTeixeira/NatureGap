@@ -8,7 +8,7 @@
 # Supabase and as the folder name in Storage (pipeline-export/<CITY_ID>/).
 # Changing it later means migrating existing database rows.
 
-CITY_ID      <- "porto-center"
+CITY_ID      <- "porto"
 CITY_NAME    <- "Porto"
 CITY_COUNTRY <- "Portugal"
 

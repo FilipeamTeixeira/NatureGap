@@ -3,7 +3,7 @@
 #
 # Sources:
 #   - iNaturalist  (REST API — research + needs_id / “Verifiable”)
-#   - GBIF         (rgbif)
+#   - GBIF         (rgbif — occ_download when credentialed, else occ_search)
 #   - OpenStreetMap (osmdata)
 #   - ESA WorldCover 10m landcover classification (from data/raw/)
 #   - EMC-BUILT impervious surface fraction       (from data/raw/)
@@ -490,6 +490,191 @@ if ("quality_grade" %in% names(inat_sf)) {
 
 # ── 2. GBIF observations ──────────────────────────────────────────────────────
 
+gbif_credentials_present <- function() {
+  all(nzchar(Sys.getenv(c("GBIF_USER", "GBIF_PWD", "GBIF_EMAIL"))))
+}
+
+# Predicates shared by the download request and its cache key. Longitude and
+# latitude ranges reproduce the occ_search bbox semantics exactly, without the
+# WKT winding rules pred_within() imposes. There is no taxonRank predicate in
+# the download API, so rank is filtered after import instead.
+gbif_download_predicates <- function(bounds) {
+  preds <- list(
+    pred("hasCoordinate", TRUE),
+    pred("hasGeospatialIssue", FALSE),
+    pred("occurrenceStatus", "PRESENT"),
+    pred_gte("decimalLatitude",  unname(bounds["ymin"])),
+    pred_lte("decimalLatitude",  unname(bounds["ymax"])),
+    pred_gte("decimalLongitude", unname(bounds["xmin"])),
+    pred_lte("decimalLongitude", unname(bounds["xmax"]))
+  )
+
+  year_min <- if (exists("GBIF_YEAR_MIN")) GBIF_YEAR_MIN else NULL
+  if (length(year_min) == 1L && !is.na(year_min)) {
+    preds <- c(preds, list(pred_gte("year", as.integer(year_min))))
+  }
+
+  basis <- if (exists("GBIF_BASIS_OF_RECORD")) GBIF_BASIS_OF_RECORD else NULL
+  if (length(basis) > 0L) {
+    preds <- c(preds, list(pred_in("basisOfRecord", basis)))
+  }
+
+  preds
+}
+
+# Cache key over the predicate set, so changing the bbox or a scope filter
+# requests a fresh archive while an unchanged re-run reuses the zip on disk.
+gbif_predicate_hash <- function(preds) {
+  # occ_predicate objects have no asJSON method, so hash the unclassed lists.
+  substr(digest::digest(lapply(preds, unclass), algo = "xxhash64"), 1L, 12L)
+}
+
+# occ_download_wait() polls indefinitely; this honours GBIF_DOWNLOAD_TIMEOUT_MIN
+# so a stuck job fails loudly instead of hanging ingest.
+gbif_await_download <- function(dl_key, timeout_min) {
+  deadline <- Sys.time() + as.difftime(timeout_min, units = "mins")
+  repeat {
+    meta <- tryCatch(occ_download_meta(dl_key), error = function(e) NULL)
+    status <- if (is.null(meta)) NA_character_ else meta$status
+
+    if (identical(status, "SUCCEEDED")) return(TRUE)
+    if (status %in% c("KILLED", "CANCELLED", "FAILED")) {
+      warning(sprintf("GBIF download %s ended with status %s", dl_key, status),
+              call. = FALSE)
+      return(FALSE)
+    }
+    if (Sys.time() > deadline) {
+      warning(sprintf(
+        "GBIF download %s still %s after %d min; giving up (the job keeps running — see https://www.gbif.org/occurrence/download/%s)",
+        dl_key, status, timeout_min, dl_key
+      ), call. = FALSE)
+      return(FALSE)
+    }
+
+    cat(sprintf("    … %s, waiting\n", status))
+    Sys.sleep(30)
+  }
+}
+
+# Server-side download: one query, no offset ceiling, full bbox coverage.
+# Returns NULL so the caller can fall back to occ_search paging.
+fetch_gbif_via_download <- function(bounds) {
+  if (!gbif_credentials_present()) {
+    warning(paste0(
+      "GBIF_USE_DOWNLOAD is TRUE but GBIF_USER / GBIF_PWD / GBIF_EMAIL are not set; ",
+      "falling back to occ_search paging (slow, and capped at 100,000 records). ",
+      "Add them to ~/.Renviron to use occ_download."
+    ), call. = FALSE)
+    return(NULL)
+  }
+
+  preds <- gbif_download_predicates(bounds)
+  dir.create(GBIF_DOWNLOAD_DIR, recursive = TRUE, showWarnings = FALSE)
+  cache_zip <- file.path(GBIF_DOWNLOAD_DIR, sprintf("gbif_%s.zip", gbif_predicate_hash(preds)))
+
+  dl_key <- NA_character_
+  dl_doi <- NA_character_
+
+  if (file.exists(cache_zip)) {
+    cat(sprintf("  → reusing cached GBIF download %s\n", basename(cache_zip)))
+  } else {
+    cat("  → requesting GBIF occ_download (server-side query)…\n")
+    req <- tryCatch(
+      do.call(occ_download, c(preds, list(format = "SIMPLE_CSV"))),
+      error = function(e) {
+        warning(sprintf("GBIF occ_download request failed: %s", conditionMessage(e)),
+                call. = FALSE)
+        NULL
+      }
+    )
+    if (is.null(req)) return(NULL)
+
+    dl_key <- as.character(req)
+    dl_doi <- attr(req, "doi")
+    cat(sprintf("  → download key %s — GBIF is preparing the archive\n", dl_key))
+
+    timeout_min <- if (exists("GBIF_DOWNLOAD_TIMEOUT_MIN")) GBIF_DOWNLOAD_TIMEOUT_MIN else 90L
+    if (!gbif_await_download(dl_key, timeout_min)) return(NULL)
+
+    got <- tryCatch(
+      occ_download_get(req, path = GBIF_DOWNLOAD_DIR, overwrite = TRUE),
+      error = function(e) {
+        warning(sprintf("Fetching GBIF download %s failed: %s", dl_key, conditionMessage(e)),
+                call. = FALSE)
+        NULL
+      }
+    )
+    if (is.null(got)) return(NULL)
+    file.rename(as.character(got), cache_zip)
+  }
+
+  out <- tryCatch(
+    as_tibble(occ_download_import(rgbif::as.download(cache_zip))),
+    error = function(e) {
+      warning(sprintf("Reading GBIF archive %s failed: %s",
+                      basename(cache_zip), conditionMessage(e)), call. = FALSE)
+      NULL
+    }
+  )
+  if (is.null(out) || nrow(out) == 0L) return(NULL)
+  n_raw <- nrow(out)
+
+  # SIMPLE_CSV names gbifID where occ_search names key; align so the shared
+  # dedup and geometry code below needs no branch.
+  if (!"key" %in% names(out) && "gbifID" %in% names(out)) {
+    out$key <- as.character(out$gbifID)
+  }
+
+  # Rank filter, applied here because the download API has no taxonRank
+  # predicate. Lossless: process_tile.R drops every record whose taxon_name
+  # (GBIF `species`) is NA, so these rows were never used.
+  ranks <- if (exists("GBIF_TAXON_RANKS")) GBIF_TAXON_RANKS else NULL
+  if (length(ranks) > 0L && "taxonRank" %in% names(out)) {
+    out <- out[toupper(out$taxonRank) %in% toupper(ranks), , drop = FALSE]
+  }
+  if ("species" %in% names(out)) {
+    out <- out[!is.na(out$species) & nzchar(out$species), , drop = FALSE]
+  }
+
+  if (nrow(out) == 0L) {
+    warning("GBIF download held no species-level records after filtering", call. = FALSE)
+    return(NULL)
+  }
+
+  # SIMPLE_CSV carries ~50 columns; a large bbox would otherwise write a
+  # multi-hundred-MB GeoPackage of fields nothing reads. Keep what
+  # process_tile.R consumes plus provenance. Note SIMPLE_CSV has no
+  # vernacularName — process_tile.R already defaults it to NA, so GBIF common
+  # labels are simply absent on this path.
+  keep <- c("key", "occurrenceID", "species", "class", "eventDate", "recordedBy",
+            "taxonRank", "scientificName", "kingdom", "basisOfRecord", "year",
+            "coordinateUncertaintyInMeters", "datasetKey", "license",
+            "decimalLatitude", "decimalLongitude")
+  out <- out[, intersect(keep, names(out)), drop = FALSE]
+
+  # Record the provenance of what is about to be written to RAW_GBIF.
+  if (exists("GBIF_DOWNLOAD_META")) {
+    write_json(
+      list(
+        download_key = dl_key,
+        doi          = if (is.null(dl_doi)) NA_character_ else dl_doi,
+        archive      = basename(cache_zip),
+        records_raw  = n_raw,
+        records_kept = nrow(out),
+        bbox         = as.list(bounds),
+        taxon_ranks  = ranks,
+        year_min     = if (exists("GBIF_YEAR_MIN")) GBIF_YEAR_MIN else NULL,
+        basis        = if (exists("GBIF_BASIS_OF_RECORD")) GBIF_BASIS_OF_RECORD else NULL
+      ),
+      GBIF_DOWNLOAD_META, auto_unbox = TRUE, pretty = TRUE, na = "null"
+    )
+  }
+
+  cat(sprintf("  → GBIF: %d of %d downloaded records kept (species-level)\n",
+              nrow(out), n_raw))
+  out
+}
+
 fetch_gbif_for_bbox <- function(bounds, max_total = 10000L) {
   page_size <- 300L
   offset <- 0L
@@ -562,8 +747,15 @@ fetch_gbif_for_bbox <- function(bounds, max_total = 10000L) {
 }
 
 cat("Fetching GBIF observations…\n")
-gbif_max <- if (exists("GBIF_MAX_RESULTS")) GBIF_MAX_RESULTS else 10000L
-gbif_raw <- fetch_gbif_for_bbox(BBOX_FETCH, gbif_max)
+gbif_raw <- if (!exists("GBIF_USE_DOWNLOAD") || isTRUE(GBIF_USE_DOWNLOAD)) {
+  fetch_gbif_via_download(BBOX_FETCH)
+} else {
+  NULL
+}
+if (is.null(gbif_raw)) {
+  gbif_max <- if (exists("GBIF_MAX_RESULTS")) GBIF_MAX_RESULTS else 10000L
+  gbif_raw <- fetch_gbif_for_bbox(BBOX_FETCH, gbif_max)
+}
 
 if (is.null(gbif_raw) || nrow(gbif_raw) == 0) {
   warning("No GBIF observations returned for this bbox")

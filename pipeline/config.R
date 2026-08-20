@@ -242,7 +242,39 @@ INAT_MAX_RESULTS    <- 100000L  # total cap for bbox cursor pagination
 # credentialed occ_download. This is that ceiling, not a chosen sample size.
 # At 300 records per request a full 100k fetch is ~334 sequential calls, so
 # lower it deliberately if ingest runtime matters more than completeness.
+# Only used when GBIF_USE_DOWNLOAD is FALSE or credentials are missing.
 GBIF_MAX_RESULTS    <- 100000L
+
+# GBIF's occ_search paging degrades badly with depth — measured on Amsterdam's
+# bbox, one 300-record page costs ~4.5 s at offset 0 and ~42 s at offset 45,000
+# (server-side deep paging), so a full 100k fetch runs ~4 hours. Worse, 100,000
+# is a fraction of what a large bbox holds (Amsterdam's four boroughs: ~1.1M
+# records), and it is the *first* 100k in GBIF's internal result order, not a
+# random sample. occ_download runs the query server-side instead: one request,
+# no offset ceiling, full coverage, and a citable DOI.
+#
+# Needs a free GBIF account (https://www.gbif.org/user/profile) exported as
+# GBIF_USER / GBIF_PWD / GBIF_EMAIL, normally in ~/.Renviron. Without them
+# ingest falls back to occ_search paging and warns.
+GBIF_USE_DOWNLOAD <- TRUE
+# Minutes to wait for GBIF to prepare the archive. Queue time is usually a few
+# minutes; large requests can take longer at busy times.
+GBIF_DOWNLOAD_TIMEOUT_MIN <- 90L
+# Scope filters. Lossless with respect to the current pipeline: process_tile.R
+# drops any record whose taxon_name (GBIF `species`) is NA, so keeping only
+# species-or-finer ranks discards nothing that was ever used. Absence records
+# and coordinate-flagged records are excluded server-side for the same reason.
+# The download API has no taxonRank predicate, so this one is applied on import.
+GBIF_TAXON_RANKS <- c("SPECIES", "SUBSPECIES", "VARIETY", "FORM")
+# Optional and analysis-affecting, so unset by default: NULL keeps every year
+# in the bbox. Set per city (e.g. 2015L) to trade coverage for a recency window.
+GBIF_YEAR_MIN <- NULL
+# Amsterdam's bbox turns up records that are not field observations of urban
+# biota: 27,642 MATERIAL_SAMPLE rows are 16S microbial sequences (MiCoDa),
+# FOSSIL_SPECIMEN is self-explanatory, and LIVING_SPECIMEN would place zoo and
+# botanical-garden animals in whichever hex holds Artis. Excluding them keeps
+# richness a measure of what lives in a cell. Set to NULL to keep everything.
+GBIF_BASIS_OF_RECORD <- c("HUMAN_OBSERVATION", "PRESERVED_SPECIMEN", "OCCURRENCE")
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
 # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
@@ -650,6 +682,11 @@ RAW_VEG_FRACTION <- file.path(DATA_RAW, "veg_fraction.tif")
 RAW_LST        <- file.path(DATA_RAW, "lst.tif")
 RAW_INAT       <- file.path(DATA_RAW, "inat_observations.gpkg")
 RAW_GBIF       <- file.path(DATA_RAW, "gbif_observations.gpkg")
+# Requested occ_download archives, cached by predicate hash so a re-run reuses
+# the zip instead of queueing a fresh job on GBIF's side.
+GBIF_DOWNLOAD_DIR <- file.path(DATA_RAW, "gbif_downloads")
+# Download key + DOI of the archive behind RAW_GBIF, for citation.
+GBIF_DOWNLOAD_META <- file.path(DATA_RAW, "gbif_download_meta.json")
 RAW_SUPABASE_OBS <- file.path(DATA_RAW, "supabase_observations.gpkg")
 RAW_OSM_GREEN  <- file.path(DATA_RAW, "osm_green_spaces.gpkg")
 RAW_OSM_GROUND_VEG <- file.path(DATA_RAW, "osm_ground_veg.gpkg")
