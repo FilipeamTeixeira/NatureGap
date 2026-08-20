@@ -306,8 +306,59 @@ zonal_stat_by_cell <- function(r, core_vect, fun, hex_area, zone = NULL) {
   list(values = out, zone = zone)
 }
 
+# Peak memory in a tile worker is not the raster crop, it is terra::zonal() and
+# terra::extract(), which materialise full value vectors however the raster is
+# stored. Measured with `/usr/bin/time -l` on a real process_tile() call --
+# Amsterdam tile_0019, 11500 core cells, whose 3500 m halo covers 49 Mpx of
+# cir_ndvi at 0.5 m:
+#
+#     terra memmax     peak footprint   max RSS   wall
+#     default                 6.19 GB   5.36 GB   71.6 s
+#     1 GB                    3.50 GB   3.99 GB   68.8 s
+#
+# So capping terra costs nothing in time and saves ~2.7 GB per worker. Worth
+# doing because terra sizes its own budget from the whole machine (memfrac of
+# total RAM) and knows nothing about its sibling workers, so N workers each
+# helped themselves to N x that budget.
+#
+# Workers are reused across a chunk of tiles and R does not readily return heap
+# to the OS, so a worker settles at its high-water mark rather than at any one
+# tile's peak -- observed ~5 GB in a live 3-worker run. TILE_WORKER_MEM_GB is
+# set from that steady state, not from the single-tile figure above.
+TILE_WORKER_TERRA_MEMMAX_GB <- 1
+TILE_WORKER_MEM_GB <- 4.5   # observed worker steady state, capped as above
+TILE_HOST_RESERVE_GB <- 4   # OS, plus the parent process holding obs_all
+
+host_ram_gb <- function() {
+  bytes <- suppressWarnings(tryCatch(switch(
+    Sys.info()[["sysname"]],
+    Darwin = as.numeric(system2("sysctl", c("-n", "hw.memsize"), stdout = TRUE)),
+    Linux  = {
+      line <- grep("^MemTotal:", readLines("/proc/meminfo"), value = TRUE)[[1L]]
+      as.numeric(gsub("\\D", "", line)) * 1024
+    },
+    NA_real_
+  ), error = function(e) NA_real_))
+  # terra::free_RAM() reports what is *available* rather than installed, which
+  # is a fine budget to fall back on and needs no new dependency.
+  if (length(bytes) != 1L || !is.finite(bytes) || bytes <= 0) {
+    bytes <- suppressWarnings(tryCatch(terra::free_RAM() * 1024,
+                                       error = function(e) NA_real_))
+  }
+  if (length(bytes) != 1L || !is.finite(bytes) || bytes <= 0) return(NA_real_)
+  bytes / 2^30
+}
+
 process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NULL) {
   if (is.null(cfg)) cfg <- list()
+
+  # Set inside the worker, not the parent: terraOptions() is per-process and
+  # future's multisession workers are fresh R sessions that do not inherit it.
+  memmax_gb <- cfg$TERRA_MEMMAX_GB %||% TILE_WORKER_TERRA_MEMMAX_GB
+  if (is.numeric(memmax_gb) && is.finite(memmax_gb) && memmax_gb > 0) {
+    terra::terraOptions(memmax = memmax_gb, progress = 0)
+  }
+
   crs_local <- cfg$CRS_LOCAL %||% CRS_LOCAL
   cell_size <- cfg$CELL_SIZE %||% CELL_SIZE
   halo_m <- cfg$halo_m %||% halo_m
@@ -998,7 +1049,8 @@ run_tiled_processing <- function(force = FALSE) {
     CIR_VEG_NDVI_THRESHOLD = if (exists("CIR_VEG_NDVI_THRESHOLD")) CIR_VEG_NDVI_THRESHOLD else 0.2,
     RAW_LST = RAW_LST,
     CANOPY_HEIGHT_FILE = if (exists("CANOPY_HEIGHT_FILE")) CANOPY_HEIGHT_FILE else NA_character_,
-    CANOPY_LOCAL_PATH = NA_character_
+    CANOPY_LOCAL_PATH = NA_character_,
+    TERRA_MEMMAX_GB = TILE_WORKER_TERRA_MEMMAX_GB
   )
 
   canopy_path <- cfg$CANOPY_HEIGHT_FILE
@@ -1032,19 +1084,32 @@ run_tiled_processing <- function(force = FALSE) {
 
   workers <- suppressWarnings(as.integer(Sys.getenv("TILED_WORKERS", unset = "")))
   if (is.na(workers) || workers < 1L) {
-    workers <- max(1L, parallel::detectCores() - 1L)
-    canopy_active <- is.character(cfg$CANOPY_LOCAL_PATH) && !is.na(cfg$CANOPY_LOCAL_PATH)
-    if (canopy_active) {
-      # Memory-safety cap when large pre-projected rasters are in play —
-      # scales with available cores instead of a hard 4, so this doesn't
-      # needlessly throttle machines with more headroom. Was previously
-      # checking !is.null(cfg$CANOPY_LOCAL_PATH), which is always TRUE (the
-      # unset default is NA_character_, not NULL) — so this cap silently
-      # applied on every run regardless of whether canopy was even in use.
-      workers <- min(workers, max(6L, parallel::detectCores() %/% 2L))
+    by_cores <- max(1L, parallel::detectCores() - 1L)
+
+    # The cap has to come from RAM, not from the core count. It used to be
+    # min(workers, max(6L, detectCores() %/% 2L)) — a "memory-safety cap" whose
+    # own floor was 6 workers, so on an 8-core/16 GB machine it allowed 6, each
+    # peaking at ~5 GB in terra::zonal(): ~30 GB asked of 16 GB, which the OS
+    # served by swapping. That swapping is what made this step slow; it never
+    # ran out of cores.
+    ram_gb <- host_ram_gb()
+    by_mem <- if (is.finite(ram_gb)) {
+      max(1L, as.integer((max(ram_gb - TILE_HOST_RESERVE_GB, TILE_WORKER_MEM_GB)) %/%
+                           TILE_WORKER_MEM_GB))
+    } else {
+      by_cores
     }
+
+    workers <- min(by_cores, by_mem)
+    message(sprintf(
+      "[tile_processing] Worker cap: %d by cores, %d by memory (%.1f GB RAM, %.1f GB reserved, %.1f GB/worker) -> %d",
+      by_cores, by_mem, ram_gb, TILE_HOST_RESERVE_GB, TILE_WORKER_MEM_GB, workers
+    ))
   }
-  message(sprintf("[tile_processing] Processing %d tiles with %d workers…", nrow(core_tiles), workers))
+  message(sprintf(
+    "[tile_processing] Processing %d tiles with %d workers (terra memmax %.1f GB each)…",
+    nrow(core_tiles), workers, TILE_WORKER_TERRA_MEMMAX_GB
+  ))
   plan(multisession, workers = workers)
 
   core_list <- lapply(seq_len(nrow(core_tiles)), function(i) core_tiles[i, , drop = FALSE])

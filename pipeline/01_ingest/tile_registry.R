@@ -24,23 +24,33 @@ if (length(missing_cfg) > 0L) {
   )
 }
 
-# osmium extract's "complete_ways" strategy builds a node-id index per extract
-# and holds them all at once, so peak memory grows linearly with the number of
-# extracts in one invocation -- not with the size of the regional PBF. Measured
-# on noord-holland-latest.osm.pbf (188 MB) on a 16 GB machine:
+# osmium extract allocates a node-ID index per extract listed in the config and
+# holds every one of them for the whole run, so peak memory grows with the
+# number of extracts in a single invocation. Measured with `/usr/bin/time -l`,
+# cutting Amsterdam tile halos out of noord-holland-latest.osm.pbf (188 MB) on a
+# 16 GB machine:
 #
-#     8 extracts -> 23.6 GB footprint   ok
-#    12 extracts -> 35.5 GB footprint   ok
-#    16 extracts -> 46.4 GB footprint   ok
-#    24 extracts -> 69.6 GB footprint   ok (no headroom)
-#    31 extracts -> 76.8 GB footprint   KILLED, every output left 0 bytes
+#     extracts   peak footprint   wall
+#            1           2.6 GB    1.1 s
+#            2           6.1 GB    1.6 s
+#            4          12.7 GB    3.9 s
+#            8          25.4 GB    9.9 s
 #
-# The old 2-relation Amsterdam AOI produced 10 tiles (31.1 GB) and fit, which is
-# why the previous value of 500 -- effectively "never batch" -- looked fine. Keep
-# this low enough that each osmium run stays well inside the smallest machine
-# that has to build tiles; the cost is one extra pass over the PBF per batch
-# (~13 s each), which is far cheaper than a silent all-empty extract.
-OSMIUM_MAX_EXTRACTS <- 8L
+# ~3 GB per extract, and it is not a function of the input: a single extract out
+# of a 4 MB tile PBF still peaks at 3.6 GB. The index is sized by the OSM
+# node-ID space, which a city-sized file spans as sparsely as a regional one, so
+# pre-clipping the PBF to the AOI would not buy anything.
+#
+# One extract per invocation is therefore the only setting that stays inside RAM
+# -- and it is also the fastest, because a pass over the regional PBF is cheap
+# (~1 s) while the memory is not. The 31 tiles of the 4-relation Amsterdam AOI
+# rebuild in 35 s at a flat 3.8 GB peak. Batching them 8 at a time asks for
+# 25 GB on a 16 GB machine: it completes, but only by swapping, and that
+# swapping was the slowness this replaced.
+#
+# Verified equivalent: all 31 tiles built one-per-invocation are byte-identical
+# to the same tiles built in batches of 8.
+OSMIUM_MAX_EXTRACTS <- 1L
 
 TILES_DIR <- file.path(PIPELINE_ROOT, "data", "tiles", city)
 HALOS_DIR <- file.path(TILES_DIR, "halos")
@@ -267,7 +277,7 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
     total_tiles <- sum(vapply(config_paths, extracts_in_config, integer(1L)), na.rm = TRUE)
     stop(
       sprintf(
-        "osmium extract failed for %d of %d batch(es), covering %d of %d tile(s): %s\nSee messages above for each batch's actual osmium error. Fix the underlying cause and re-run — a silent failure here means the affected tiles have no local .osm.pbf, and downstream steps (e.g. connectivity) will silently fall back to slower/less-consistent Overpass-sourced data instead of failing loudly.\nIf osmium was killed (exit 137) or left every output at 0 bytes, it ran out of memory: lower OSMIUM_MAX_EXTRACTS (currently %d) and re-run.",
+        "osmium extract failed for %d of %d batch(es), covering %d of %d tile(s): %s\nSee messages above for each batch's actual osmium error. Fix the underlying cause and re-run — a silent failure here means the affected tiles have no local .osm.pbf, and downstream steps (e.g. connectivity) will silently fall back to slower/less-consistent Overpass-sourced data instead of failing loudly.\nIf osmium was killed (exit 137) or left every output at 0 bytes, it ran out of memory: each extract needs ~3 GB and OSMIUM_MAX_EXTRACTS is %d, so lower it if it is above 1, otherwise free memory before re-running.",
         length(failed), length(config_paths), failed_tiles, total_tiles,
         paste(basename(failed), collapse = ", "), OSMIUM_MAX_EXTRACTS
       ),
