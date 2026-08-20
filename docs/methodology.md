@@ -952,7 +952,11 @@ PostgreSQL/PostGIS must not:
 4. Data sparsity: unsampled cells are excluded, not treated as zero biodiversity.
 5. Uncalibrated defaults: habitat index weights, `SPECIES_AREA_Z`, connectivity
    and network constants are shared across all cities and calibrated against none
-   of them. Expected richness is the exception — it is now fitted per city
+   of them. Their effect on the published intervention ranking is measured in
+   [sensitivity-analysis.md](sensitivity-analysis.md): the habitat weights and
+   `SPECIES_AREA_Z` barely move it, but **`CONN_MAX_RESISTANCE` does** — at
+   R = 100 only 1 of Amsterdam's top 20 cells survives. The top-20 list should not
+   be presented as robust until that constant is calibrated. Expected richness is the exception — it is now fitted per city
    (section 6) — which also means it is not comparable between cities. Three cities are configured (`yokohama-honmoku`,
    `amsterdam-schimmelstraat`, `porto-center`); NIR/CIR coverage exists for
    Amsterdam and Porto only, so Yokohama falls back to WorldCover fractions for

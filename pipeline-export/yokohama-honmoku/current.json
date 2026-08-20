@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "cityId": "yokohama-honmoku",
-  "datasetId": "20260820T000137Z",
-  "dataVersion": "20260820T000137Z",
-  "generatedAt": "2026-08-20T00:01:37Z",
-  "manifest": "20260820T000137Z/manifest.json",
+  "datasetId": "20260820T004121Z",
+  "dataVersion": "20260820T004121Z",
+  "generatedAt": "2026-08-20T00:41:21Z",
+  "manifest": "20260820T004121Z/manifest.json",
   "sourceLayer": "hexgrid",
-  "hexgrid": "20260820T000137Z/hexgrid.pmtiles"
+  "hexgrid": "20260820T004121Z/hexgrid.pmtiles"
 }

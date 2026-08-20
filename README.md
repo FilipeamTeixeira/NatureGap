@@ -139,6 +139,9 @@ See [`docs/methodology.md`](docs/methodology.md) for:
 - Intervention ranking
 - Known biases and caveats
 
+See [`docs/sensitivity-analysis.md`](docs/sensitivity-analysis.md) for how much
+the intervention ranking depends on each uncalibrated parameter.
+
 See also [`docs/system-architecture.md`](docs/system-architecture.md) (component
 and database contract), [`docs/data-contract.md`](docs/data-contract.md)
 (exported artefacts and field semantics), and
