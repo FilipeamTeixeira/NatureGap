@@ -31,8 +31,12 @@ relation_id <- c(11960504L, 15419236L, 15419239L, 15419240L)           # Amsterd
 # Oost - 15419240
 
 # ── Optional raster sources ───────────────────────────────────────────────────
+# The PDOK CIR downloader is added automatically by config.R, from
+# CIR_DOWNLOADER_BY_COUNTRY — CITY_COUNTRY is "The Netherlands".
+#
+# No PlanetScope here. Amsterdam's high-resolution greenness already comes from
+# CIR (~1,385 px per 20 m hex vs PlanetScope's ~39), and PlanetScope's output is
+# never read by ingest. See CIR_DOWNLOADER_BY_COUNTRY in config.R.
 RASTER_DOWNLOADERS_EXTRA <- c(
-  "00_download/download_canopy_height.R",
-  "00_download/download_planetscope_ndvi.R",
-  "00_download/download_nl_cir_ndvi.R"
+  "00_download/download_canopy_height.R"
 )

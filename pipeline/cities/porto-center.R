@@ -27,15 +27,16 @@ relation_id <- 3372453L                      # Porto
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.
 # Porto analyses the city centre, not the full municipality relation.
 
-BBOX_CITY <- c(
-  xmin = -8.653278,
-  ymin = 41.140140,
-  xmax = -8.572168,
-  ymax = 41.177104
-)
+#BBOX_CITY <- c(
+#  xmin = -8.653278,
+#  ymin = 41.140140,
+#  xmax = -8.572168,
+#  ymax = 41.177104
+#)
 
 # ── Optional raster sources ───────────────────────────────────────────────────
+# The DGT CIR downloader is added automatically by config.R, from
+# CIR_DOWNLOADER_BY_COUNTRY — CITY_COUNTRY is "Portugal".
 RASTER_DOWNLOADERS_EXTRA <- c(
-  "00_download/download_canopy_height.R",
-  "00_download/download_pt_ortho_ndvi.R"
+  "00_download/download_canopy_height.R"
 )

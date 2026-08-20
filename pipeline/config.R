@@ -495,6 +495,57 @@ AUTO_DOWNLOAD_RASTER_INPUTS <- TRUE
 
 if (!exists("RASTER_DOWNLOADERS_EXTRA")) RASTER_DOWNLOADERS_EXTRA <- character(0)
 
+# National CIR orthophoto coverage is a property of the country, not of the
+# city, so a city file should not have to remember it. Keyed on a normalised
+# CITY_COUNTRY; every entry must be a real script carrying that country's own
+# WMS endpoint, layer name and band order — there is no generic "fetch CIR"
+# path. Belgium is absent deliberately: its orthophotos are regional (Flanders
+# and Wallonia are separate agencies), so it needs its own script(s) first.
+#
+# Countries absent here simply get no CIR. veg_fraction and ndvi_texture stay
+# NA and connectivity falls back to the WorldCover tree/shrub/grass fractions —
+# a handled, documented path (see 04_connectivity/connectivity_load.R).
+#
+# PlanetScope is deliberately NOT an automatic fallback for those countries.
+# Ingest reads RAW_NDVI from S2_NDVI_FILE / S2_SAFE_DIR only, so its output
+# would go unread, and with AUTO_DOWNLOAD_RASTER_INPUTS = TRUE it would place a
+# paid Planet order on first run merely because a city file was added. It stays
+# an explicit, per-city opt-in.
+CIR_DOWNLOADER_BY_COUNTRY <- c(
+  "netherlands" = "00_download/download_nl_cir_ndvi.R",
+  "portugal"    = "00_download/download_pt_ortho_ndvi.R"
+)
+
+# Each CIR script hardcodes WMS_CRS and assigns ext()/crs() from the requested
+# bbox with no reprojection, so a CRS_LOCAL mismatch misplaces the raster
+# silently instead of erroring. Assert the pairing up front.
+CIR_EXPECTED_CRS <- c(
+  "netherlands" = "EPSG:28992",
+  "portugal"    = "EPSG:3763"
+)
+
+# Trim and lowercase before stripping the article: doing it the other way
+# round lets a leading space defeat the "The " strip and silently skip CIR.
+cir_country_key <- sub("^the[[:space:]]+", "", tolower(trimws(CITY_COUNTRY)))
+
+if (cir_country_key %in% names(CIR_DOWNLOADER_BY_COUNTRY)) {
+  if (!identical(CRS_LOCAL, CIR_EXPECTED_CRS[[cir_country_key]])) {
+    stop(sprintf(
+      paste0(
+        "%s has national CIR coverage, which requires CRS_LOCAL = \"%s\", ",
+        "but %s sets \"%s\". Either correct CRS_LOCAL or drop the country ",
+        "from CIR_DOWNLOADER_BY_COUNTRY."
+      ),
+      CITY_COUNTRY, CIR_EXPECTED_CRS[[cir_country_key]],
+      basename(CITY_FILE), CRS_LOCAL
+    ), call. = FALSE)
+  }
+  RASTER_DOWNLOADERS_EXTRA <- union(
+    RASTER_DOWNLOADERS_EXTRA,
+    CIR_DOWNLOADER_BY_COUNTRY[[cir_country_key]]
+  )
+}
+
 RASTER_INPUT_DOWNLOADERS <- file.path(
   PIPELINE_ROOT,
   c(
