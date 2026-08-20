@@ -316,6 +316,72 @@ validate_pmtiles_contract <- function(output_path) {
   jsonlite::fromJSON(paste(result, collapse = "\n"))
 }
 
+# Supabase Storage caps a single object at 50 MB, and hexgrid.pmtiles is the
+# one product that cannot be chunked like the GeoJSON/JSON exports: PMTiles is
+# read by HTTP range request straight off its public Storage URL, so byte parts
+# would have to be reassembled before any tile could be decoded. It is also
+# already compressed — tippecanoe gzips every tile inside the archive — so
+# there is nothing left for gzip to reclaim.
+#
+# What does drive the size is the number of zoom levels. Every level carries a
+# full copy of all render attributes for all cells, and those attributes are
+# ~82% of the bytes (Amsterdam: 67 MB with them, 12 MB for geometry + cellId
+# alone), so each extra level costs another whole attribute pass. Amsterdam
+# measures 65 MB at zoom 18, 46 MB at 17, 34 MB at 16, 26 MB at 15.
+#
+# Capping the top zoom is invisible on this data and needs no frontend change:
+# MapLibre overzooms above a source's maxzoom, and the frontend reads that
+# maxzoom from the archive header (src/lib/pmtiles-storage.ts feeds it to the
+# source in MapView.tsx), so a shorter pyramid is picked up automatically. At
+# zoom 16 a tile's 4096-unit extent quantizes to ~15 cm against 20 m hexes.
+PMTILES_MAX_ZOOM <- 18L
+# Floor for the retiling ladder. Below this the quantization starts to be
+# coarse relative to a 20 m hex (~30 cm at 15, ~60 cm at 14), and a city still
+# over the cap here is too large to fix by dropping zooms at all.
+PMTILES_MIN_MAX_ZOOM <- 15L
+
+tile_hexgrid <- function(tippecanoe, source_path, output_path, max_zoom) {
+  if (file.exists(output_path)) unlink(output_path)
+
+  # Internal vector tile source-layer is exactly "hexgrid".
+  # Frontend URL format:
+  # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
+  args <- c(
+    "--output", output_path,
+    "--layer", PMTILES_SOURCE_LAYER,
+    "--force",
+    "--no-feature-limit",
+    "--no-tile-size-limit",
+    "--no-tiny-polygon-reduction",
+    # Matches the frontend's own minzoom on this source (src/components/map/
+    # MapView.tsx: DETAIL_ZOOM). Cutting this at 14 left MapLibre with no
+    # analytical tiles at city/region zoom, so the map fell back to shading
+    # OSM park polygons — a different geometry answering a different question
+    # than the 20 m grid does. Zoom 11-13 is a rendering level of detail over
+    # the same cells: every cell is still emitted with its own exported
+    # values, nothing is aggregated or averaged for the wider view. It stays
+    # cheap because at those zooms the whole city is a handful of tiles
+    # (~4 MB for Porto's 21k cells against 13.5 MB for zoom 14-18).
+    "--minimum-zoom", "11",
+    "--maximum-zoom", as.character(max_zoom),
+    source_path
+  )
+  status <- system2(tippecanoe, args = args)
+  if (is.na(status) || status != 0) {
+    stop(sprintf(
+      "tippecanoe failed to generate hexgrid.pmtiles at zoom 11-%d (exit status: %s)",
+      max_zoom, status
+    ))
+  }
+  if (!file.exists(output_path) || file.info(output_path)$size <= 0) {
+    stop(sprintf(
+      "tippecanoe exited successfully but did not create a PMTiles file at %s",
+      output_path
+    ))
+  }
+  file.info(output_path)$size
+}
+
 write_hexgrid_pmtiles <- function(value, output_path) {
   tippecanoe <- Sys.which("tippecanoe")
   if (tippecanoe == "") {
@@ -336,39 +402,31 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   on.exit(unlink(tmp_pmtiles), add = TRUE)
   if (file.exists(output_path)) unlink(output_path)
 
-  # Internal vector tile source-layer is exactly "hexgrid".
-  # Frontend URL format:
-  # pmtiles://<SUPABASE_URL>/storage/v1/object/public/pipeline-export/<CITY_ID>/<DATA_VERSION>/hexgrid.pmtiles
-  args <- c(
-    "--output", tmp_pmtiles,
-    "--layer", PMTILES_SOURCE_LAYER,
-    "--force",
-    "--no-feature-limit",
-    "--no-tile-size-limit",
-    "--no-tiny-polygon-reduction",
-    # Matches the frontend's own minzoom on this source (src/components/map/
-    # MapView.tsx: DETAIL_ZOOM). Cutting this at 14 left MapLibre with no
-    # analytical tiles at city/region zoom, so the map fell back to shading
-    # OSM park polygons — a different geometry answering a different question
-    # than the 20 m grid does. Zoom 11-13 is a rendering level of detail over
-    # the same cells: every cell is still emitted with its own exported
-    # values, nothing is aggregated or averaged for the wider view. It stays
-    # cheap because at those zooms the whole city is a handful of tiles
-    # (~4 MB for Porto's 21k cells against 13.5 MB for zoom 14-18).
-    "--minimum-zoom", "11",
-    "--maximum-zoom", "18",
-    tmp
-  )
-  status <- system2(tippecanoe, args = args)
-  if (is.na(status) || status != 0) {
-    stop(sprintf("tippecanoe failed to generate hexgrid.pmtiles (exit status: %s)", status))
-  }
-  if (!file.exists(tmp_pmtiles) || file.info(tmp_pmtiles)$size <= 0) {
-    stop(sprintf(
-      "tippecanoe exited successfully but did not create a PMTiles file at %s",
-      tmp_pmtiles
+  # Retiling is cheap next to the rest of the export (~15s for Amsterdam's 75k
+  # cells) and each retry does strictly less work than the one before, so the
+  # ladder just measures rather than trying to predict the size.
+  max_zoom <- PMTILES_MAX_ZOOM
+  repeat {
+    size <- tile_hexgrid(tippecanoe, tmp, tmp_pmtiles, max_zoom)
+    cat(sprintf("  → hexgrid.pmtiles zoom 11-%d: %.1f MB\n", max_zoom, size / 1024^2))
+    if (size <= MAX_UPLOAD_BYTES || max_zoom <= PMTILES_MIN_MAX_ZOOM) break
+    max_zoom <- max_zoom - 1L
+    cat(sprintf(
+      "    over the %.0f MB upload cap — retiling at zoom 11-%d\n",
+      MAX_UPLOAD_BYTES / 1024^2, max_zoom
     ))
   }
+  if (size > MAX_UPLOAD_BYTES) {
+    warning(sprintf(
+      paste0(
+        "hexgrid.pmtiles is %.1f MB at the zoom %d floor, still over the %.0f MB ",
+        "upload cap — Storage will reject it. Reduce PMTILES_REQUIRED_FIELDS or the ",
+        "exported cell count for this city."
+      ),
+      size / 1024^2, PMTILES_MIN_MAX_ZOOM, MAX_UPLOAD_BYTES / 1024^2
+    ), call. = FALSE)
+  }
+
   if (!file.copy(tmp_pmtiles, output_path, overwrite = TRUE)) {
     stop(sprintf("Failed to copy generated PMTiles to %s", output_path))
   }
