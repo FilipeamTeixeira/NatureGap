@@ -236,32 +236,53 @@ quantity**, not an index. That is what makes section 7 a residual: the same
 quantity stands on both sides of the subtraction, in the same units.
 
 The shared fit lives in `pipeline/05_residuals/expected_model.R` and is applied
-at two scales. Every run records its coefficients, R², RMSE, training row count,
+at two scales. Every run records its family, link, coefficients, dispersion,
+explained deviance, training row count,
 and any fallback in `expected_richness_model.json`, which is carried into the
 export manifest under `metricDefinitions.expectedRichness.model`.
 
 ### 6.1 Per-hex expected richness (`pipeline/05_residuals/residuals.R`)
 
 ```text
-expected_richness_i =
-  fitted( effort_corrected_richness ~ habitat_component
-                                    + connectivity_component
-                                    + accessibility_component )
+species_richness_i ~ quasipoisson( log link ),
+  habitat_component + connectivity_component + accessibility_component
+  + offset( log(survey_effort_units_i) )
+
+expected_richness_i = exp( X_i . beta )        # expected count per effort unit
 ```
 
-Fitted per city by OLS on **sampled cells only** — an unsampled cell has no
-observation to explain — then predicted for every cell and floored at 0. The
-predictors are unchanged from the previous formulation:
+A quasi-Poisson GLM with a log link and `log(survey_effort_units)` as an offset —
+the standard form for a count observed under varying effort. Fitted per city on
+**sampled cells only** (an unsampled cell has no observation to explain). Because
+the offset's coefficient is fixed at 1, the expected *rate* is `exp(X.beta)` and
+needs no exposure at prediction time, which is how an unsampled cell still
+receives an expected value without inventing a reference effort.
+
+Measured on Porto: explained deviance **0.1987**, dispersion **10.53**. The heavy
+overdispersion is why the quasi- family is required — plain Poisson would report
+standard errors far too small.
+
+The predictors are unchanged from the previous formulation:
 `habitat_component` is `habitat_quality`, `connectivity_component` is
 `corridor_importance` clamped to `[0, 1]`, and
 `accessibility_component = log1p(path_local_m) / log1p(max_path_local_m)`
 clamped to `[0, 1]` and `0` for unsampled cells.
 
 Below `EXPECTED_MODEL_MIN_CELLS` (30) usable rows — or with a constant response,
-no varying predictor, or collinear non-finite coefficients — the fit is refused
-and an intercept-only model is used instead (`expected = mean observed`). That
-keeps both sides of the residual in the same units and is flagged as
-`fallback: true` in the model record rather than failing silently.
+no varying predictor, non-convergence, or collinear non-finite coefficients — the
+fit is refused and a constant rate is used instead
+(`sum(response) / sum(exposure)`, the constant-rate MLE). That keeps both sides of
+the residual in the same units and is flagged as `fallback: true` in the model
+record rather than failing silently.
+
+**This replaces OLS on the pre-divided ratio**, which was the first version of
+this fit. OLS was wrong in two ways here. It can predict a negative richness, and
+did for **19.5%** of Porto's sampled cells; those were clamped to 0, so for a
+fifth of the sampled grid the "expected" value was a floor artefact and the
+residual was simply `-observed`. And a linear model on an 89%-zero count
+understates the relationship: R² 0.0148 against the GLM's explained deviance of
+0.1987. A low linear R² on this data was therefore partly a wrong-model artefact,
+not only a data-density limit.
 
 **This replaces `SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * (0.65 * habitat_quality + 0.20 * corridor_importance + 0.15 * accessibility)`.**
 At hex scale the area term was a constant — `12 * 400^0.25 ≈ 53.7`, identical for
@@ -296,15 +317,19 @@ Limitations:
 - Fitted per city, so hex expected richness is a within-city benchmark and is
   **not comparable between cities**. Two cities' raw residuals are not the same
   statement.
-- In-sample fit: the residual is centred on zero and orthogonal to the three
-  predictors by construction (section 7).
-- The response is 90–95% zeros at 20 m, so R² is very low and expected richness
-  is close to constant in practice. That is a fact about observation density at
-  400 m², not a defect in the fit: **a 20 m hex is too small a unit to estimate
-  richness from citizen-science records.** Until observations are pooled at a
-  coarser scale, the hex residual is unit-correct but carries little
-  information. The per-run R² and RMSE are recorded so this is visible rather
-  than implied.
+- In-sample fit, so the residual is not independent of the predictors. Note that
+  a log link minimises deviance rather than squared error, so — unlike the earlier
+  OLS version — the raw gap is **not** centred on the response scale: it is
+  positive in ~90% of sampled cells (section 7).
+- The response is 89% zeros at 20 m and dispersion is 10.5, so much of the
+  variation remains unexplained. But roughly 20% of the deviance *is* explained by
+  habitat and accessibility, so an earlier characterisation of "essentially no
+  signal at hex scale" was too strong — it rested on a linear R² of 0.0148 that
+  the wrong link function had depressed. The honest reading is that the hex-scale
+  gap is weakly but genuinely determined. Whether it is determined well enough to
+  act on cell by cell is a separate question, which a comparison across grain
+  sizes would answer. Per-run explained deviance and dispersion are recorded so
+  this stays visible rather than implied.
 
 ### 6.2 Patch (park) expected richness (`pipeline/05_patch/patch_aggregation.R`)
 
@@ -315,9 +340,14 @@ coefficient on that term is now fitted rather than asserted:
 ```text
 area_term = patch_area_m2 ^ SPECIES_AREA_Z
 
-expected_richness_patch =
-  fitted( effort_corrected_richness ~ area_term + quality_modifier )
+pooled_species_richness ~ quasipoisson( log link ),
+  area_term + quality_modifier + offset( log(pooled_effort_units) )
+
+expected_richness_patch = exp( X . beta )      # expected count per effort unit
 ```
+
+Measured on Porto: explained deviance **0.2771**, dispersion **5.91**, against
+OLS R² 0.0532 on the pre-divided ratio.
 
 Where:
 
@@ -327,7 +357,7 @@ Where:
   `[0, 1]`. Averaging is appropriate here because these are intensive
   properties, not counts.
 - Fitted on patches with at least one sampled cell, requiring
-  `EXPECTED_MODEL_MIN_PATCHES` (8) usable rows, with the same intercept-only
+  `EXPECTED_MODEL_MIN_PATCHES` (8) usable rows, with the same constant-rate
   fallback as section 6.1.
 - Expected richness is computed once per patch from total area, not by averaging
   the per-hex value — an area-weighted average does not scale with size, so a
@@ -428,18 +458,24 @@ ecological_residual_normalized_i =
   city_stddev(ecological_residual_raw)
 ```
 
-Because `expected_richness` is the fitted expectation of
-`effort_corrected_richness` (section 6), this is a residual in the statistical
-sense — a leftover. Three consequences follow from the fit and hold by
-construction, not by calibration:
+Because `expected_richness` is the fitted expectation of the same quantity
+(section 6), this is a residual in the statistical sense — a leftover:
 
 - Both sides are the same quantity in the same units (species per effort unit).
-- The residual is **centred on zero** across sampled cells, so a diverging colour
-  ramp has a meaningful midpoint.
-- The residual is **orthogonal to the three fitted predictors**, so it measures
-  shortfall those predictors could not explain. It is not an absolute ecological
-  deficit, and a high-quality cell no longer scores a large gap merely for being
-  high quality.
+- It measures shortfall the fitted predictors could not explain. It is not an
+  absolute ecological deficit, and a high-quality cell no longer scores a large
+  gap merely for being high quality.
+
+**It is not centred on zero.** An earlier version of this fit was OLS, for which
+centring held by construction; the current fit uses a log link and minimises
+deviance rather than squared error, so the raw gap on the response scale is
+positive in **90.2%** of Porto's sampled cells (81.0% of patches). Two things
+depend on that and handle it explicitly rather than assuming symmetry:
+
+- `nature_gap_score` centres every term itself on the city median
+  (`score_scaling.R`, §8), so the score and its bands are unaffected.
+- `underperformance` is floored at the **sampled median residual**, not at zero
+  (§10). A zero floor would exclude almost nothing at 90% positive.
 
 **The residual is expected minus observed — a gap, not a surplus.** It is signed
 so that the headline metric and the residual point the same way: bigger means
@@ -805,7 +841,7 @@ Intervention ranking is computed in `pipeline/05_residuals/residuals.R`.
 Current implementation:
 
 ```text
-underperformance_i = max(0, ecological_residual_i)
+underperformance_i = max(0, ecological_residual_i - median(ecological_residual))
 
 intervention_score_i =
   (underperformance_i * 0.5) * (corridor_importance_i * 0.5)
@@ -815,9 +851,12 @@ Cells are ranked descending by `intervention_score`.
 
 Interpretation:
 
-- `underperformance` is the residual floored at zero, so a cell that already
-  over-performs contributes nothing rather than a negative score. Since the
-  residual is expected minus observed, underperformance is its positive side.
+- `underperformance` is the residual floored at the **sampled median**, so a cell
+  that is no worse than typical for its city contributes nothing rather than a
+  negative score. The floor moved off zero when the fit moved to a log link: the
+  raw gap is positive in ~90% of sampled cells (§7), so a zero floor excluded
+  almost nothing. At the median floor, 50.0% of Porto's sampled cells carry a
+  positive underperformance, which is what makes the ranking discriminate.
   This floor only became selective once the residual was centred (section 6.1):
   while the residual was positive in 99.99% of sampled cells, flooring at zero
   excluded nothing and the ranking reduced to habitat quality × corridor
@@ -933,9 +972,10 @@ Every pipeline run should record:
 - bbox
 - `CELL_SIZE`
 - the fitted expected-richness model at both scales, from
-  `expected_richness_model.json`: formula, response, terms, training row count,
-  coefficients, R², RMSE, and `fallback` / `fallbackReason` when the fit was
-  refused. Also carried in the export manifest under
+  `expected_richness_model.json`: family (`quasipoisson`), link (`log`), the
+  offset column, formula, response, terms, training row count, coefficients,
+  dispersion, explained deviance, and `fallback` / `fallbackReason` when the fit
+  was refused. Also carried in the export manifest under
   `metricDefinitions.expectedRichness.model`.
 - `SPECIES_AREA_Z` (the patch-scale area exponent; still an assumption).
   `SPECIES_AREA_C` is recorded for provenance only — it no longer affects any

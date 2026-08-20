@@ -125,10 +125,11 @@ expected_model <- fit_expected_model(
   train = grid |>
     st_drop_geometry() |>
     filter(!replace_na(is_unsampled, TRUE)),
-  response    = "effort_corrected_richness",
+  response    = "species_richness",
   terms       = EXPECTED_MODEL_TERMS,
   min_rows    = EXPECTED_MODEL_MIN_CELLS,
-  scale_label = "hex"
+  scale_label = "hex",
+  offset_col  = "survey_effort_units"
 )
 
 record_expected_model("hex", expected_model$record, reset = TRUE)
@@ -141,9 +142,21 @@ grid <- grid |>
       is_unsampled,
       NA_real_,
       expected_richness - effort_corrected_richness
-    ),
-    underperformance = pmax(0, ecological_residual)
+    )
   )
+
+# Underperformance is floored at the sampled median, not at zero. A log-link fit
+# minimises deviance rather than squared error, so the raw gap is not centred on
+# the response scale: it is positive in ~90% of sampled cells on Porto. A zero
+# floor would therefore exclude almost nothing and the intervention ranking would
+# lose the filter it depends on (docs/methodology.md §10).
+residual_median <- stats::median(
+  grid$ecological_residual[is.finite(grid$ecological_residual)]
+)
+if (!is.finite(residual_median)) residual_median <- 0
+
+grid <- grid |>
+  mutate(underperformance = pmax(0, ecological_residual - residual_median))
 
 finite_residuals <- grid$ecological_residual[is.finite(grid$ecological_residual)]
 city_residual_max <- if (length(finite_residuals) > 0L) max(abs(finite_residuals)) else NA_real_

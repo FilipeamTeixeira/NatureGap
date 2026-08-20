@@ -195,7 +195,7 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
         count:
       </p>
       <div className="bg-[#F7F8F5] rounded-xl p-4 font-mono text-[12px] text-[#1F2A1F] leading-relaxed">
-        expected = fitted(effort-corrected richness ~ habitat + corridor + access)
+        expected = exp(fit: species ~ habitat + corridor + access, effort as offset)
         <br />
         = {formatMetric(cell.expectedRichness, 2)} species per effort unit
       </div>
@@ -209,8 +209,9 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
           within-city benchmark and is not comparable between cities.
         </li>
         <li>
-          Because the fit is in-sample, the residual below is centred on zero by construction. It
-          measures shortfall the habitat model could not explain — not absolute ecological deficit.
+          The residual below measures shortfall the habitat model could not explain — not absolute
+          ecological deficit. It is not centred on zero: the model predicts a rate on a log scale,
+          so most cells sit slightly above their prediction.
         </li>
       </ul>
       <p className="text-[12px] text-[#667066] leading-relaxed">

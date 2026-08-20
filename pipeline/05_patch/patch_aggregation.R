@@ -319,10 +319,11 @@ patch_expected_model <- fit_expected_model(
   train = patch_metrics |>
     st_drop_geometry() |>
     filter(replace_na(sampled_cell_count, 0L) > 0L),
-  response    = "effort_corrected_richness",
+  response    = "pooled_species_richness",
   terms       = c("area_term", "quality_modifier"),
   min_rows    = EXPECTED_MODEL_MIN_PATCHES,
-  scale_label = "patch"
+  scale_label = "patch",
+  offset_col  = "pooled_effort_units"
 )
 
 record_expected_model("patch", patch_expected_model$record)

@@ -445,8 +445,18 @@ MAX_EXPECTED_RICHNESS <- 350L
 # ── Expected richness model ──────────────────────────────────────────────────
 # expected_richness is the *conditional expectation of the observed quantity*,
 # fitted per city, so that ecological_residual = expected - observed is a real
-# residual: same units on both sides, centred on zero, and orthogonal to the
-# predictors it was fitted on.
+# residual with the same units on both sides.
+#
+# The fit is a quasi-Poisson GLM with a log link and log(effort) as an offset —
+# the standard form for a count observed under varying effort. It replaced OLS on
+# the pre-divided ratio, which predicted a negative richness for 19.5% of Porto's
+# sampled cells (clamped to 0, making the residual there just -observed) and
+# understated the relationship badly: OLS R² 0.0148 against explained deviance
+# 0.1987 at hex scale, 0.0532 against 0.2771 at patch scale. Note that because a
+# log link minimises deviance rather than squared error, the raw gap is NOT
+# centred on the response scale — it is positive in ~90% of sampled cells, which
+# is why nature_gap_score centres each term itself (score_scaling.R) and why
+# underperformance is floored at the sampled median rather than at zero.
 #
 # It replaces a fixed weighted-index formula that multiplied a [0,1] quality
 # blend by an arbitrary constant. At hex scale that constant was
@@ -458,10 +468,10 @@ MAX_EXPECTED_RICHNESS <- 350L
 # for 0.1-0.3% of its variance, and it was positive in 99.99% of sampled cells.
 # See docs/methodology.md §6 and §7.
 #
-# Below these sample sizes the fit is refused and an intercept-only model is
-# used instead (expected = mean observed). That keeps both sides in the same
-# units and is recorded as a fallback in PROC_EXPECTED_MODEL rather than failing
-# silently.
+# Below these sample sizes the fit is refused and a constant rate is used
+# instead (sum(response) / sum(exposure), the constant-rate MLE). That keeps both
+# sides in the same units and is recorded as a fallback in PROC_EXPECTED_MODEL
+# rather than failing silently.
 EXPECTED_MODEL_MIN_CELLS   <- 30L   # sampled hexes required to fit at hex scale
 EXPECTED_MODEL_MIN_PATCHES <- 8L    # sampled patches required to fit at patch scale
 

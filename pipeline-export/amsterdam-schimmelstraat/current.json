@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "cityId": "amsterdam-schimmelstraat",
-  "datasetId": "20260819T231059Z",
-  "dataVersion": "20260819T231059Z",
-  "generatedAt": "2026-08-19T23:10:59Z",
-  "manifest": "20260819T231059Z/manifest.json",
+  "datasetId": "20260819T234830Z",
+  "dataVersion": "20260819T234830Z",
+  "generatedAt": "2026-08-19T23:48:30Z",
+  "manifest": "20260819T234830Z/manifest.json",
   "sourceLayer": "hexgrid",
-  "hexgrid": "20260819T231059Z/hexgrid.pmtiles"
+  "hexgrid": "20260819T234830Z/hexgrid.pmtiles"
 }

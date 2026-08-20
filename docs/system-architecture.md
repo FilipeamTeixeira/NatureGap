@@ -444,21 +444,24 @@ richness for residual inference.
 Source: `pipeline/05_residuals/residuals.R`
 
 ```text
-fitted( effort_corrected_richness ~ habitat_component
-                                  + connectivity_component
-                                  + accessibility_component )
+species_richness ~ quasipoisson(log),
+  habitat_component + connectivity_component + accessibility_component
+  + offset(log(survey_effort_units))
+
+expected_richness = exp(X . beta)
 ```
 
-Fitted per city by OLS on sampled cells only (`05_residuals/expected_model.R`),
-predicted for every cell and floored at 0, so expected richness is in the same
-units as the observation the residual subtracts it from. This replaces
+Fitted per city on sampled cells only (`05_residuals/expected_model.R`) and
+predicted for every cell. Strictly positive by construction — no clamp — and in
+the same units as the observation the residual subtracts it from. It replaced OLS
+on the pre-divided ratio, which clamped 19.5% of Porto's sampled cells to 0. This replaces
 `SPECIES_AREA_C * (CELL_SIZE^2)^SPECIES_AREA_Z * quality_blend`, whose area term
 was a constant `≈ 53.7` per hex and put expected richness on a scale ~400× the
 observation's — see docs/methodology.md §6.1 for the measured consequence.
 `SPECIES_AREA_*` now applies at patch scale only, where area actually varies, and
 its coefficient is fitted there too (`pipeline/05_patch/patch_aggregation.R`).
 `MAX_EXPECTED_RICHNESS` (350) is exported for transparency and scales nothing.
-Each run's coefficients, R², and RMSE are recorded in
+Each run's family, coefficients, dispersion, and explained deviance are recorded in
 `expected_richness_model.json` and in the export manifest.
 
 ### `ecological_residual`

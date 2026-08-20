@@ -217,14 +217,18 @@ Required properties include:
 Notes on specific fields:
 
 - `expected_richness` is the per-city fitted expectation of
-  `effort_corrected_richness` (`05_residuals/expected_model.R`), so it is in the
-  same units as `observed_richness` and has no fixed ceiling. It is a within-city
+  `effort_corrected_richness` — a quasi-Poisson GLM with a log link and
+  `log(effort)` as an offset (`05_residuals/expected_model.R`) — so it is in the
+  same units as `observed_richness`, is strictly positive, and has no fixed
+  ceiling. Exports before 2026-08-20 used OLS on the pre-divided ratio and clamped
+  19.5% of Porto's sampled cells to exactly 0. It is a within-city
   benchmark and **not comparable between cities**. `max_expected_richness` (350)
   is carried for transparency and scales nothing.
 - `ecological_residual` is `expected_richness - observed_richness`: positive
   means fewer species recorded than the model predicts. Because expected is a
-  fitted value, the residual is centred on zero across sampled cells; do not
-  apply absolute thresholds to it (see docs/methodology.md §7).
+  fitted value on a log scale, the residual is **not** centred on zero — it is
+  positive in ~90% of sampled cells — and it carries no fixed range. Do not apply
+  absolute thresholds to it (see docs/methodology.md §7).
 - `nature_gap_score` is **within-city relative**: each of its three terms is
   centred on this city's median and scaled by a percentile half-spread
   (`pipeline/score_scaling.R`). Zero means "typical cell for this city", positive
