@@ -153,7 +153,12 @@ nl_cir_fetch_tile <- function(tile_bbox, gsd = TARGET_GSD_M) {
   # world-file rounding. Orientation is already correct at this point.
   ext(r) <- ext(tile_bbox["xmin"], tile_bbox["xmax"], tile_bbox["ymin"], tile_bbox["ymax"])
   crs(r) <- WMS_CRS
-  r
+
+  # The SpatRaster reads lazily from tmp_jpg, so the caller needs the path to
+  # clean up once it has finished with the raster. Returned explicitly rather
+  # than recovered via sources(), which is not guaranteed after ext()/crs()
+  # have been reassigned.
+  list(raster = r, jpg = tmp_jpg)
 }
 
 download_nl_cir_ndvi <- function(bbox = BBOX_CITY, out_file = NL_CIR_NDVI_FILE) {
@@ -184,19 +189,69 @@ download_nl_cir_ndvi <- function(bbox = BBOX_CITY, out_file = NL_CIR_NDVI_FILE) 
     )
   }
 
-  tile_rasters <- vector("list", length(tiles))
+  # NDVI is computed per tile, before anything is mosaicked. It is a per-pixel
+  # function and every tile is snapped to its exact requested bbox at one GSD,
+  # so the tiles share a grid and mosaic(fun = "first") copies whole pixels --
+  # this is bit-identical to mosaicking the 3-band tiles and then doing the
+  # arithmetic (verified: 0 differing cells, NaNs from 0/0 agreeing).
+  #
+  # It matters because terra writes intermediates as UNCOMPRESSED, STRIPED,
+  # non-BigTIFF GeoTIFFs. Mosaicking first therefore materialises a full-size
+  # 3-band raster -- for Amsterdam's 4-relation AOI (30355 x 18248 px) that is
+  # 554 Mpx x 3 bands x 4 B = 6.6 GB, plus a further intermediate per arithmetic
+  # step, which overran an 18 GB disk. Combined with the VRT below, the peak
+  # intermediate is now the ~1 GB of compressed per-tile files.
+  #
+  # Band 3 (Green) is dropped here rather than carried through a full-size
+  # mosaic: NDVI reads only NIR and Red, so it never reached the output anyway.
+  tile_dir <- file.path(tempdir(), paste0("nl_cir_ndvi_tiles_", CITY_ID))
+  dir.create(tile_dir, recursive = TRUE, showWarnings = FALSE)
+  # Covers the error paths too, so a failed run does not leave the per-tile
+  # NDVI files behind.
+  on.exit(unlink(tile_dir, recursive = TRUE), add = TRUE)
+
+  tile_paths <- character(length(tiles))
   for (i in seq_along(tiles)) {
     message(sprintf("Fetching tile %d/%d...", i, length(tiles)))
-    tile_rasters[[i]] <- nl_cir_fetch_tile(tiles[[i]])
+    fetched <- nl_cir_fetch_tile(tiles[[i]])
+    tile <- fetched$raster
+
+    tile_ndvi <- (tile[[1]] - tile[[2]]) / (tile[[1]] + tile[[2]])
+    tile_paths[[i]] <- file.path(tile_dir, sprintf("ndvi_tile_%04d.tif", i))
+    writeRaster(
+      tile_ndvi, tile_paths[[i]], overwrite = TRUE, datatype = "FLT4S",
+      gdal = c("TILED=YES", "COMPRESS=DEFLATE")
+    )
+
+    # Only safe once the NDVI above has been written, because tile reads
+    # straight from the JPEG. Both the image and its world file go.
+    rm(tile_ndvi, tile)
+    unlink(c(fetched$jpg, sub("\\.jpg$", ".jgw", fetched$jpg)))
   }
 
-  mosaic <- if (length(tile_rasters) == 1L) {
-    tile_rasters[[1]]
+  # Combined through a GDAL VRT rather than terra::mosaic(). mosaic() has to
+  # materialise the whole mosaic in an intermediate before anything can be
+  # written, and at this size that intermediate exceeds the 4 GB ceiling of a
+  # classic (non-BigTIFF) GeoTIFF -- it fails with "Maximum TIFF file size
+  # exceeded" however much disk is free. A VRT is just an XML index over the
+  # tiles, so GDAL streams block by block straight into the compressed output:
+  # no intermediate, no ceiling, and it is faster (19 s vs mosaic()'s 50 s
+  # before it died).
+  #
+  # Equivalence checked against mosaic(fun = "first") on 24 real tiles: same
+  # extent, resolution and dimensions, 0 differing cells of 127,827,240. The
+  # tiles are contiguous and non-overlapping, so there is nothing for
+  # fun = "first" to resolve that the VRT does not.
+  message(sprintf("Combining %d NDVI tile(s) via VRT...", length(tile_paths)))
+  ndvi <- if (length(tile_paths) == 1L) {
+    rast(tile_paths[[1]])
   } else {
-    terra::mosaic(terra::sprc(tile_rasters), fun = "first")
+    terra::vrt(
+      tile_paths,
+      filename = file.path(tile_dir, "ndvi_mosaic.vrt"),
+      overwrite = TRUE
+    )
   }
-
-  ndvi <- (mosaic[[1]] - mosaic[[2]]) / (mosaic[[1]] + mosaic[[2]])
   names(ndvi) <- "nl_cir_ndvi_dn"
 
   writeRaster(

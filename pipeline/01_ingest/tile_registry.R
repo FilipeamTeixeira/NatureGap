@@ -24,7 +24,23 @@ if (length(missing_cfg) > 0L) {
   )
 }
 
-OSMIUM_MAX_EXTRACTS <- 500L
+# osmium extract's "complete_ways" strategy builds a node-id index per extract
+# and holds them all at once, so peak memory grows linearly with the number of
+# extracts in one invocation -- not with the size of the regional PBF. Measured
+# on noord-holland-latest.osm.pbf (188 MB) on a 16 GB machine:
+#
+#     8 extracts -> 23.6 GB footprint   ok
+#    12 extracts -> 35.5 GB footprint   ok
+#    16 extracts -> 46.4 GB footprint   ok
+#    24 extracts -> 69.6 GB footprint   ok (no headroom)
+#    31 extracts -> 76.8 GB footprint   KILLED, every output left 0 bytes
+#
+# The old 2-relation Amsterdam AOI produced 10 tiles (31.1 GB) and fit, which is
+# why the previous value of 500 -- effectively "never batch" -- looked fine. Keep
+# this low enough that each osmium run stays well inside the smallest machine
+# that has to build tiles; the cost is one extra pass over the PBF per batch
+# (~13 s each), which is far cheaper than a silent all-empty extract.
+OSMIUM_MAX_EXTRACTS <- 8L
 
 TILES_DIR <- file.path(PIPELINE_ROOT, "data", "tiles", city)
 HALOS_DIR <- file.path(TILES_DIR, "halos")
@@ -91,6 +107,33 @@ write_halo_geojsons <- function(halos_local, halos_dir, crs_local) {
   }, character(1L))
 }
 
+# Tile IDs come from the position of each cell in a grid laid over the AOI's
+# bounding box, so changing the AOI renumbers them: a tile_0006.osm.pbf from a
+# previous, differently-sized AOI describes different ground than tile_0006 does
+# now. connectivity_load.R globs every .osm.pbf in this directory rather than
+# reading the registry, so leftovers from an earlier AOI would be read as if
+# they belonged to the current grid. Remove the ones the current grid does not
+# claim. These are derived artefacts, rebuilt from the regional PBF on demand --
+# no source data is touched -- and every removal is logged.
+prune_stale_tile_files <- function(tile_ids, tiles_dir, halos_dir) {
+  pbfs <- list.files(tiles_dir, pattern = "^tile_[0-9]+\\.osm\\.pbf$", full.names = TRUE)
+  stale_pbfs <- pbfs[!sub("\\.osm\\.pbf$", "", basename(pbfs)) %in% tile_ids]
+
+  halos <- list.files(halos_dir, pattern = "^tile_[0-9]+_halo\\.geojson$", full.names = TRUE)
+  stale_halos <- halos[!sub("_halo\\.geojson$", "", basename(halos)) %in% tile_ids]
+
+  stale <- c(stale_pbfs, stale_halos)
+  if (length(stale) == 0L) return(invisible(character(0)))
+
+  message(sprintf(
+    "[tile_registry] Removing %d file(s) left by a previous AOI (%d tile extract(s), %d halo(s)): %s",
+    length(stale), length(stale_pbfs), length(stale_halos),
+    paste(basename(stale), collapse = ", ")
+  ))
+  unlink(stale)
+  invisible(stale)
+}
+
 make_extract_entries <- function(tile_ids) {
   lapply(tile_ids, function(tile_id) {
     list(
@@ -111,6 +154,17 @@ write_extract_configs <- function(extracts, tiles_dir, pipeline_root, max_per_ba
     gsub("\\\\", "/", tiles_dir)
   ))
   if (!endsWith(rel_directory, "/")) rel_directory <- paste0(rel_directory, "/")
+
+  # A previous run with a different tile count leaves its own configs behind --
+  # extracts.json from a single-batch run, or a longer extracts_batch_*.json
+  # series. They are not read (config_paths drives the run) but they misreport
+  # what was built, so clear the set before writing the current one.
+  existing <- list.files(
+    tiles_dir,
+    pattern = "^extracts(_batch_[0-9]+)?\\.json$",
+    full.names = TRUE
+  )
+  if (length(existing) > 0L) unlink(existing)
 
   config_paths <- character(length(batches))
   for (i in seq_along(batches)) {
@@ -133,6 +187,25 @@ write_extract_configs <- function(extracts, tiles_dir, pipeline_root, max_per_ba
   config_paths
 }
 
+extracts_in_config <- function(config_path) {
+  n <- tryCatch(length(jsonlite::fromJSON(config_path, simplifyVector = FALSE)$extracts),
+                error = function(e) NA_integer_)
+  if (is.null(n)) NA_integer_ else n
+}
+
+# osmium creates every output file up front and only fills them during the
+# passes, so a run killed mid-pass leaves behind a full set of 0-byte .osm.pbf
+# files. Exit status alone does not always catch that, and an empty tile is
+# indistinguishable downstream from a tile with genuinely no OSM data.
+empty_outputs <- function(config_path) {
+  cfg <- tryCatch(jsonlite::fromJSON(config_path, simplifyVector = FALSE),
+                  error = function(e) NULL)
+  if (is.null(cfg)) return(character(0))
+  outputs <- vapply(cfg$extracts, function(e) e$output, character(1L))
+  paths <- file.path(dirname(config_path), outputs)
+  outputs[file.exists(paths) & file.info(paths)$size == 0L]
+}
+
 run_osmium_extracts <- function(config_paths, regional_pbf) {
   if (!nzchar(Sys.which("osmium"))) {
     stop("osmium tool not found on PATH — install osmium-tool first.", call. = FALSE)
@@ -141,14 +214,24 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
     stop("regional_pbf not found: ", regional_pbf, call. = FALSE)
   }
 
-  status_codes <- vapply(config_paths, function(config_path) {
-    message("[tile_registry] osmium extract -c ", config_path)
+  status_codes <- vapply(seq_along(config_paths), function(i) {
+    config_path <- config_paths[[i]]
+    message(sprintf(
+      "[tile_registry] osmium extract batch %d/%d (%d extract(s)) -c %s",
+      i, length(config_paths), extracts_in_config(config_path), config_path
+    ))
 
     # Run system2 inside PIPELINE_ROOT using withr
     result <- withr::with_dir(PIPELINE_ROOT, {
       system2(
         "osmium",
-        c("extract", "-v", "-O", "-c", config_path, "-S", "smart", regional_pbf),
+        # -s is --strategy; -S is --option (a strategy *option*). This was
+        # "-S smart", which osmium warns about and ignores, so the effective
+        # strategy has always been the default complete_ways. Stated explicitly
+        # rather than switched to smart: smart costs slightly more memory
+        # (25.2 vs 23.6 GB over 8 extracts) and completes relations too, which
+        # would change what downstream stages read.
+        c("extract", "-v", "-O", "-s", "complete_ways", "-c", config_path, regional_pbf),
         stdout = TRUE,
         stderr = TRUE
       )
@@ -157,6 +240,18 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
     # Return exit status (0 for success, non-zero attribute for error)
     status <- attr(result, "status")
     status <- if (is.null(status)) 0L else status
+
+    # A batch that exits 0 but leaves 0-byte outputs has still failed.
+    blank <- empty_outputs(config_path)
+    if (status == 0L && length(blank) > 0L) {
+      message(sprintf(
+        "[tile_registry] osmium extract left %d of %d output(s) empty in %s: %s",
+        length(blank), extracts_in_config(config_path), basename(config_path),
+        paste(blank, collapse = ", ")
+      ))
+      status <- 1L
+    }
+
     if (status != 0L) {
       message(
         "[tile_registry] osmium extract FAILED for ", config_path,
@@ -168,10 +263,13 @@ run_osmium_extracts <- function(config_paths, regional_pbf) {
 
   failed <- config_paths[status_codes != 0L]
   if (length(failed) > 0L) {
+    failed_tiles <- sum(vapply(failed, extracts_in_config, integer(1L)), na.rm = TRUE)
+    total_tiles <- sum(vapply(config_paths, extracts_in_config, integer(1L)), na.rm = TRUE)
     stop(
       sprintf(
-        "osmium extract failed for %d of %d tile(s): %s\nSee messages above for each tile's actual osmium error. Fix the underlying cause and re-run — a silent failure here means the affected tiles have no local .osm.pbf, and downstream steps (e.g. connectivity) will silently fall back to slower/less-consistent Overpass-sourced data instead of failing loudly.",
-        length(failed), length(config_paths), paste(basename(failed), collapse = ", ")
+        "osmium extract failed for %d of %d batch(es), covering %d of %d tile(s): %s\nSee messages above for each batch's actual osmium error. Fix the underlying cause and re-run — a silent failure here means the affected tiles have no local .osm.pbf, and downstream steps (e.g. connectivity) will silently fall back to slower/less-consistent Overpass-sourced data instead of failing loudly.\nIf osmium was killed (exit 137) or left every output at 0 bytes, it ran out of memory: lower OSMIUM_MAX_EXTRACTS (currently %d) and re-run.",
+        length(failed), length(config_paths), failed_tiles, total_tiles,
+        paste(basename(failed), collapse = ", "), OSMIUM_MAX_EXTRACTS
       ),
       call. = FALSE
     )
@@ -189,6 +287,8 @@ message(sprintf("[tile_registry] Buffered cores by %d m halo", halo_m))
 
 halo_paths <- write_halo_geojsons(halo_tiles, HALOS_DIR, CRS_LOCAL)
 message(sprintf("[tile_registry] Wrote %d halo GeoJSONs to %s", length(halo_paths), HALOS_DIR))
+
+prune_stale_tile_files(halo_tiles$tile_id, TILES_DIR, HALOS_DIR)
 
 registry_path <- file.path(TILES_DIR, "tile_registry.gpkg")
 st_write(

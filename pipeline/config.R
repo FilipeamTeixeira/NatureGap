@@ -194,7 +194,8 @@ aoi <- load_city_aoi(
   aoi_mode = aoi_mode,
   boundaries_dir = BOUNDARIES_DIR,
   relation_id = if (aoi_mode == "relation" && exists("relation_id")) relation_id else NULL,
-  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL
+  bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL,
+  regional_pbf = regional_pbf
 )
 
 if (!file.exists(regional_pbf)) {
