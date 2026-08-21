@@ -29,7 +29,7 @@ export interface CityMeta {
 }
 
 export const CITIES: Record<string, CityMeta> = {
-  'yokohama-honmoku': {
+  'yokohama': {
     name:   'Yokohama',
     nameJa: '横浜市',
     badge:  'Yokohama · Beta',

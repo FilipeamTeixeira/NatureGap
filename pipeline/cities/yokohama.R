@@ -21,7 +21,15 @@ REGIONAL_PBF <- "kanto-latest.osm.pbf"    # under data/raw/regional/
 
 aoi_mode    <- "relation"                 # "relation" or "bbox"
 relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokohama
+
+#Naka-ku: 2689447
+#Isogo-ku: 2689464
+#Nishi-ku: 2689468
+#Minami-ku: 2689452
+
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
+
+
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 RASTER_DOWNLOADERS_EXTRA <- c(
