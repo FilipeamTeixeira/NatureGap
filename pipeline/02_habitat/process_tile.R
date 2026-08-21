@@ -1003,6 +1003,58 @@ load_obs_for_tiling <- function(crs_local) {
     mutate(observation_weight = replace_na(observation_weight, 1))
 }
 
+# Is the pre-projected canopy cache still usable for this AOI?
+#
+# Returns NULL when the cache can be reused, or a short reason string when it
+# must be rebuilt. This check exists because reuse used to be keyed on nothing
+# but file.exists(): widening a city's AOI re-downloads the source raster but
+# left the older, smaller projection in place, so every tile outside it read NA
+# canopy and rendered at the bottom of the tree-cover ramp.
+canopy_cache_stale_reason <- function(cache_path, source_path, core_tiles,
+                                      halo_m, crs_local) {
+  if (!file.exists(cache_path)) return("no cache yet")
+  if (file.mtime(cache_path) < file.mtime(source_path)) {
+    return(sprintf("%s is newer than the cache", basename(source_path)))
+  }
+
+  cached <- try(rast(cache_path), silent = TRUE)
+  if (inherits(cached, "try-error")) return("cache is unreadable")
+
+  src <- try(rast(source_path), silent = TRUE)
+  if (inherits(src, "try-error")) return(NULL)  # nothing to compare against
+
+  # What the tiles ask for: the core-tile bbox plus the halo, clipped to what
+  # the source raster covers at all (it is cropped to BBOX_CITY, which can be
+  # narrower than the tile domain for a sub-area run).
+  bb <- st_bbox(core_tiles)
+  needed <- ext(
+    bb[["xmin"]] - halo_m, bb[["xmax"]] + halo_m,
+    bb[["ymin"]] - halo_m, bb[["ymax"]] + halo_m
+  )
+  src_local <- try(
+    ext(project(as.polygons(ext(src), crs = crs(src)), crs_local)),
+    silent = TRUE
+  )
+  if (inherits(src_local, "try-error")) return(NULL)
+  needed <- try(terra::intersect(needed, src_local), silent = TRUE)
+  if (inherits(needed, "try-error") || is.null(needed)) return(NULL)
+
+  # Ten pixels (~7 m at 0.73 m) absorbs the corner rotation and edge bulge of
+  # reprojecting a lat/lon rectangle into a metre CRS; the failure this guards
+  # against is short by kilometres, not metres.
+  tol <- max(res(cached)) * 10
+  have <- ext(cached)
+  if (xmin(have) > xmin(needed) + tol || xmax(have) < xmax(needed) - tol ||
+      ymin(have) > ymin(needed) + tol || ymax(have) < ymax(needed) - tol) {
+    return(sprintf(
+      "cache covers %.0f-%.0f x %.0f-%.0f, tiles need %.0f-%.0f x %.0f-%.0f",
+      xmin(have), xmax(have), ymin(have), ymax(have),
+      xmin(needed), xmax(needed), ymin(needed), ymax(needed)
+    ))
+  }
+  NULL
+}
+
 .tiled_cache <- new.env(parent = emptyenv())
 
 run_tiled_processing <- function(force = FALSE) {
@@ -1059,15 +1111,22 @@ run_tiled_processing <- function(force = FALSE) {
     cfg$CANOPY_LOCAL_PATH <- canopy_local_path
     message("[tile_processing] Pre-projecting canopy height once for all tiles…")
     t0 <- proc.time()
-    if (!file.exists(canopy_local_path)) {
+    stale_reason <- canopy_cache_stale_reason(
+      canopy_local_path, canopy_path, core_tiles, halo_m, CRS_LOCAL
+    )
+    if (is.null(stale_reason)) {
+      message("[tile_processing] Reusing cached ", basename(canopy_local_path))
+    } else {
+      message(
+        "[tile_processing] Rebuilding ", basename(canopy_local_path),
+        " — ", stale_reason
+      )
       writeRaster(
         project(rast(canopy_path), CRS_LOCAL, method = "bilinear"),
         canopy_local_path,
         overwrite = TRUE,
         gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
       )
-    } else {
-      message("[tile_processing] Reusing cached ", basename(canopy_local_path))
     }
     message(sprintf(
       "[tile_processing] Canopy ready in %.1f s",
