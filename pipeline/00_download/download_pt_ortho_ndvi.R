@@ -164,8 +164,10 @@ download_pt_ortho_ndvi <- function(bbox = BBOX_CITY, out_file = PT_ORTHO_NDVI_FI
     ndvi_tile <- (irg[[1]] - irg[[2]]) / (irg[[1]] + irg[[2]])
 
     # Write to a scratch name and rename, so an interrupted write cannot leave
-    # a truncated tile that the resume path above would happily reuse.
-    partial <- paste0(tile_files[i], ".part")
+    # a truncated tile that the resume path above would happily reuse. The
+    # scratch name has to keep the .tif extension — terra guesses the driver
+    # from it and refuses anything it cannot recognise.
+    partial <- sub("\\.tif$", "_part.tif", tile_files[i])
     writeRaster(
       ndvi_tile, partial, overwrite = TRUE, datatype = "FLT4S",
       gdal = c("TILED=YES", "COMPRESS=DEFLATE")
