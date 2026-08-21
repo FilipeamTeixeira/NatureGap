@@ -21,28 +21,35 @@ CRS_LOCAL <- "EPSG:31370"
 city         <- "gent"                       # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "belgium-latest.osm.pbf"     # under data/raw/regional/
 
-aoi_mode    <- "relation"                    # "relation" or "bbox"
-relation_id <- 897671L                       # Gent (municipality, admin_level 8)
+aoi_mode    <- "bbox"                    # "relation" or "bbox"
+#relation_id <- 897671L                       # Gent (municipality, admin_level 8)
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
 
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.
 #
-# Set here deliberately. The Gent municipality relation spans roughly 19 x 23 km
-# (it reaches out to the Kanaalzone and the rural deelgemeenten), which at the
-# CIR downloader's 0.5 m/px works out to ~300 tiles and several GB of imagery —
-# over that script's MAX_TILES guard. This box is the contiguous urban core plus
-# its immediate green belt: Bourgoyen-Ossemeersen in the west, Gentbrugse
-# Meersen in the south-east, the Blaarmeersen, and the inner city.
+# Left commented out deliberately: the analysis domain is the whole Gent
+# municipality relation (roughly 19 x 23 km — it reaches out to the Kanaalzone
+# and the rural deelgemeenten), which is what the hex grid and the observation
+# fetch are built against.
 #
-# To analyse the whole municipality instead, comment this out and raise
-# MAX_TILES / TARGET_GSD_M in 00_download/download_be_flanders_cir_ndvi.R.
-#BBOX_CITY <- c(
-#  xmin = 3.660,
-#  ymin = 51.010,
-#  xmax = 3.780,
-#  ymax = 51.090
-#)
+# The box below is the alternative: the contiguous urban core plus its immediate
+# green belt — Bourgoyen-Ossemeersen in the west, Gentbrugse Meersen in the
+# south-east, the Blaarmeersen, and the inner city. Uncommenting it shrinks
+# BBOX_CITY, and with it BBOX_FETCH and the hex grid, so the observations and
+# hexagons already built for the full municipality would need regenerating.
+#
+# What the full municipality costs: at the CIR downloader's 0.5 m/px the bbox is
+# 304 tiles, of which 176 touch the municipality or its halo and are actually
+# fetched (~3.3 GB of requests, ~4 GB peak disk). That is why MAX_TILES in
+# 00_download/download_be_flanders_cir_ndvi.R is 320 rather than the 200 the NL
+# downloader uses. Read the disk note in that file before a cold run.
+BBOX_CITY <- c(
+  xmin = 3.654156,
+  ymin = 51.025849,
+  xmax = 3.838863,
+  ymax = 51.070850
+)
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 # The Digitaal Vlaanderen CIR downloader is added automatically by config.R,

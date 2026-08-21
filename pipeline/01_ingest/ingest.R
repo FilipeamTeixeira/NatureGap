@@ -373,6 +373,28 @@ crop_to_city <- function(r) {
     )
   }
 
+  # The crop is what materialises a full copy of the raster, and terra writes
+  # that copy as a classic (non-BigTIFF) GeoTIFF, which fails outright past
+  # 4 GB however much disk is free — see the mosaic note in
+  # 00_download/download_nl_cir_ndvi.R. Gent's 0.5 m CIR NDVI is 7.2 GB as
+  # FLT4S, so it crosses that ceiling; Amsterdam (2.2 GB) and Porto (1.0 GB) do
+  # not.
+  #
+  # Skip the crop when the city extent already covers the raster to within one
+  # cell on every side. crop() snaps to cell boundaries, so in that case it can
+  # shave at most a single row or column — nothing the hex extracts notice —
+  # and the copy buys nothing. This is the normal case for the CIR rasters,
+  # whose grid is snapped outward from BBOX_CITY by the downloaders. Rasters
+  # that genuinely extend past the city (WorldCover, Sentinel-2, Landsat) are
+  # unaffected and still crop.
+  cell <- res(r)
+  if (crop_ext["xmin"] <= raster_ext["xmin"] + cell[1] &&
+      crop_ext["ymin"] <= raster_ext["ymin"] + cell[2] &&
+      crop_ext["xmax"] >= raster_ext["xmax"] - cell[1] &&
+      crop_ext["ymax"] >= raster_ext["ymax"] - cell[2]) {
+    return(r)
+  }
+
   crop(r, city_ext)
 }
 
@@ -1181,18 +1203,33 @@ if (config_path_exists(CIR_NDVI_FILE)) {
   cat(sprintf("Processing CIR orthophoto NDVI: %s\n", CIR_NDVI_FILE))
   cir <- crop_to_city(rast(CIR_NDVI_FILE))
   if (nlyr(cir) > 1L) cir <- cir[[1]]
-  cir[!is.finite(cir)] <- NA
-  names(cir) <- "cir_ndvi_dn"
-  writeRaster(
-    cir, RAW_CIR_NDVI, overwrite = TRUE, datatype = "FLT4S",
-    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+
+  # Each of these goes straight to its output file instead of building an
+  # unnamed intermediate first. `cir[!is.finite(cir)] <- NA` followed by
+  # writeRaster() materialises the whole raster twice, once into terra's own
+  # temp GeoTIFF — which is not BigTIFF and so cannot hold a raster over 4 GB
+  # at all (Gent's 0.5 m CIR NDVI is 7.2 GB as FLT4S). ifel(filename=) writes
+  # the result directly, block by block, with BIGTIFF=IF_SAFER on the output.
+  #
+  # Same values as before: is.finite() is FALSE for NA as well as NaN and Inf,
+  # so those cells come out NA, and the veg mask below reads NA where the NDVI
+  # is NA because the comparison is NA there.
+  cir_gdal <- c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256",
+                "COMPRESS=DEFLATE", "BIGTIFF=IF_SAFER")
+  ifel(
+    is.finite(cir), cir, NA,
+    filename = RAW_CIR_NDVI, overwrite = TRUE,
+    wopt = list(names = "cir_ndvi_dn", datatype = "FLT4S", gdal = cir_gdal)
   )
 
-  veg <- ifel(cir >= CIR_VEG_NDVI_THRESHOLD, 1, 0)
-  names(veg) <- "veg_fraction"
-  writeRaster(
-    veg, RAW_VEG_FRACTION, overwrite = TRUE, datatype = "INT1U",
-    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+  # Read back rather than reusing `cir`: the mask must be derived from the
+  # NA-cleaned raster that was just written, and re-reading it costs one pass
+  # instead of a second in-memory copy.
+  cir <- rast(RAW_CIR_NDVI)
+  ifel(
+    cir >= CIR_VEG_NDVI_THRESHOLD, 1, 0,
+    filename = RAW_VEG_FRACTION, overwrite = TRUE,
+    wopt = list(names = "veg_fraction", datatype = "INT1U", gdal = cir_gdal)
   )
   cat(sprintf(
     "  → CIR NDVI written; veg mask threshold %.2f\n",
