@@ -998,12 +998,21 @@ if (!use_osm_cache(RAW_OSM_AMENITIES, 0L, "OSM amenities")) {
       osmdata_sf()
   }, "OSM amenities")
 
+  # Project before taking centroids: st_centroid on lon/lat dispatches to s2,
+  # which rejects some OSM multipolygons that GEOS st_make_valid accepts
+  # ("Loop 0 edge 0 crosses loop 2 edge 1", seen in Yokohama). In CRS_LOCAL
+  # the centroid is computed by GEOS on planar coordinates instead.
+  amenity_polygons <- combine_osm_polygons(osm_amenities)
   amenity_points <- bind_rows(
-    if (!is.null(osm_amenities$osm_points)) osm_amenities$osm_points else NULL,
-    if (!is.null(combine_osm_polygons(osm_amenities))) st_centroid(combine_osm_polygons(osm_amenities)) else NULL
+    if (!is.null(osm_amenities$osm_points) && nrow(osm_amenities$osm_points) > 0L) {
+      st_transform(osm_amenities$osm_points, CRS_LOCAL)
+    } else NULL,
+    if (!is.null(amenity_polygons)) {
+      suppressWarnings(st_centroid(st_transform(amenity_polygons, CRS_LOCAL)))
+    } else NULL
   )
   amenity_points <- if (!is.null(amenity_points) && nrow(amenity_points) > 0L) {
-    amenity_points |> st_transform(CRS_LOCAL)
+    amenity_points
   } else {
     warning("No OSM amenities returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
