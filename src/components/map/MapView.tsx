@@ -8,8 +8,6 @@ import { hexDatasetsForMapView, listHexPmtilesDatasets } from '@/lib/pmtiles-sto
 import type { RenderCellProperties } from '@/lib/cell-detail';
 import type { MapLayer } from '@/lib/types';
 import {
-  biodiversityCellLayout,
-  biodiversityCellPaint,
   CORRIDOR_LINES_LAYER_ID,
   NETWORK_NODE_MAJOR_LAYER_ID,
   NETWORK_NODE_SECONDARY_LAYER_ID,
@@ -33,17 +31,12 @@ import {
   INTERVENTION_RANK_LABELS_LAYER_ID,
   LAYER_DRAW_ORDER,
   LAYER_STYLE_SPECS,
-  overviewPointPaint,
   PATCH_FILL_LAYER_IDS,
   PATCH_FILL_LAYER_ORDER,
   patchFillColorExpressionForCities,
   patchFillOpacityExpression,
   PATCH_OUTLINE_LAYER_ID,
-  POINT_LAYER_IDS,
-  POINT_LAYER_ORDER,
-  pointLayerFilter,
 } from '@/lib/layer-styles';
-import { registerPointIcons } from '@/lib/map-icons';
 import {
   emptyFeatureCollection,
   fetchConnectivityNetworkEdges,
@@ -66,7 +59,6 @@ import {
   hexInteractiveLayerIds,
   hexOutlineLayerId,
   hexSelectedLayerId,
-  pointLayerIdForDataset,
   refreshHexLayers,
   cityIdForViewport,
   cityIdFromHexLayerId,
@@ -233,27 +225,6 @@ export default function MapView({
         });
       }
 
-      registerPointIcons(map);
-
-      // Overview representation for the point layers. The hex source has no
-      // tiles below DETAIL_ZOOM, so below that a point layer falls back to one
-      // point per green space rather than to a fill. No aggregation happens
-      // here — these are the park-level values the pipeline already exported.
-      for (const layerId of POINT_LAYER_ORDER) {
-        map.addLayer({
-          id: POINT_LAYER_IDS[layerId].overview,
-          type: 'circle',
-          source: 'park-centroids',
-          // Below z10 a dot per green space across every loaded city is noise
-          // rather than information, so the layer simply drops out.
-          minzoom: 10,
-          maxzoom: DETAIL_ZOOM,
-          filter: pointLayerFilter(),
-          layout: { visibility: 'none' },
-          paint: overviewPointPaint(layerId, initialCityIds, initialCityStats),
-        });
-      }
-
       map.addLayer({
         id: 'park-area',
         type: 'fill',
@@ -318,23 +289,6 @@ export default function MapView({
               },
             });
           }
-
-          // Biodiversity's point representation over the same hex source. A
-          // `circle` layer on polygon geometry would draw one circle per hexagon
-          // vertex; a `symbol` layer places exactly one icon at the polygon's
-          // pole of inaccessibility, which for a regular hexagon is its centre.
-          // Each icon therefore stands on its own 20 m analytical cell and
-          // carries that cell's cellId.
-          map.addLayer({
-            id: pointLayerIdForDataset(dataset.sourceId, 'biodiversity'),
-            type: 'symbol',
-            source: dataset.sourceId,
-            'source-layer': dataset.sourceLayer,
-            minzoom: DETAIL_ZOOM,
-            filter: pointLayerFilter(),
-            layout: biodiversityCellLayout(),
-            paint: biodiversityCellPaint(),
-          });
 
           // Optional inspection aid, off by default (MAP_LAYERS 'cell-grid').
           // Starts hidden so it can never flash a full-city honeycomb in the

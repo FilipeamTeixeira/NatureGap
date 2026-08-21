@@ -25,13 +25,9 @@ import {
   hexFillOutlineColor,
   hexOutlineOverlayPaint,
   LAYER_DRAW_ORDER,
-  overviewPointPaint,
   PATCH_FILL_LAYER_IDS,
   PATCH_FILL_LAYER_ORDER,
   patchFillColorExpressionForCities,
-  type PointLayerId,
-  POINT_LAYER_IDS,
-  POINT_LAYER_ORDER,
   THEMATIC_LAYER_IDS,
 } from '@/lib/layer-styles';
 
@@ -58,15 +54,6 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
       const layer = PATCH_FILL_LAYER_IDS[layerId];
       if (!map.getLayer(layer)) continue;
       map.setPaintProperty(layer, 'fill-color', patchFillColorExpressionForCities(layerId, cityIds, allCityStats));
-    }
-
-    for (const layerId of POINT_LAYER_ORDER) {
-      const layer = POINT_LAYER_IDS[layerId].overview;
-      if (!map.getLayer(layer)) continue;
-      const paint = overviewPointPaint(layerId, cityIds, allCityStats);
-      map.setPaintProperty(layer, 'circle-color', paint?.['circle-color']);
-      // Vegetation radius rides the same per-city canopy stretch as the colour.
-      map.setPaintProperty(layer, 'circle-radius', paint?.['circle-radius']);
     }
 
     for (const dataset of getHexDatasets(map)) {
@@ -96,13 +83,6 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
     setMapLayerVisibility(map, PATCH_FILL_LAYER_IDS[layerId], HAS_PATCH_OVERVIEW);
   }
 
-  for (const layerId of POINT_LAYER_ORDER) {
-    // Same reasoning as the patch fills: one circle per green space is a
-    // park-level mark, not a 20 m cell, and the hex source now reaches zoom 11
-    // so the cell-level symbols cover every zoom this layer is shown at.
-    setMapLayerVisibility(map, POINT_LAYER_IDS[layerId].overview, false);
-  }
-
   setMapLayerVisibility(map, INTERVENTION_RANK_BADGES_LAYER_ID, activeLayerId === 'intervention');
   setMapLayerVisibility(map, INTERVENTION_RANK_LABELS_LAYER_ID, activeLayerId === 'intervention');
   // The derived ecological network — corridor centrelines plus tiered nodes.
@@ -126,14 +106,6 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
           map.setPaintProperty(mlId, 'fill-opacity', hexFillOpacityForLayer(layerId));
         }
       } catch { /* layer not ready */ }
-    }
-
-    for (const layerId of POINT_LAYER_ORDER) {
-      setMapLayerVisibility(
-        map,
-        pointLayerIdForDataset(dataset.sourceId, layerId),
-        activeLayerId === layerId,
-      );
     }
 
     try {
@@ -161,10 +133,6 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
 
 export function hexFillLayerIdForDataset(sourceId: string, layerId: HexLayerId): string {
   return `${hexFillLayerId(layerId)}-${sourceId}`;
-}
-
-export function pointLayerIdForDataset(sourceId: string, layerId: PointLayerId): string {
-  return `${POINT_LAYER_IDS[layerId].detail}-${sourceId}`;
 }
 
 export function hexOutlineLayerId(sourceId: string): string {

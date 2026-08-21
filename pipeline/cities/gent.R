@@ -37,12 +37,12 @@ relation_id <- 897671L                       # Gent (municipality, admin_level 8
 #
 # To analyse the whole municipality instead, comment this out and raise
 # MAX_TILES / TARGET_GSD_M in 00_download/download_be_flanders_cir_ndvi.R.
-BBOX_CITY <- c(
-  xmin = 3.660,
-  ymin = 51.010,
-  xmax = 3.780,
-  ymax = 51.090
-)
+#BBOX_CITY <- c(
+#  xmin = 3.660,
+#  ymin = 51.010,
+#  xmax = 3.780,
+#  ymax = 51.090
+#)
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 # The Digitaal Vlaanderen CIR downloader is added automatically by config.R,

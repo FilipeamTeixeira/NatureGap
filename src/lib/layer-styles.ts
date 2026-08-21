@@ -1,11 +1,7 @@
 import type {
-  CircleLayerSpecification,
   ExpressionSpecification,
-  FilterSpecification,
   LineLayerSpecification,
-  SymbolLayerSpecification,
 } from 'maplibre-gl';
-import { POINT_ICON_ID } from './map-icons';
 import type { CityLayerStats } from './data';
 import type { LayerId } from './types';
 
@@ -258,58 +254,6 @@ export const PATCH_FILL_LAYER_ORDER = LAYER_DRAW_ORDER.filter(
 );
 
 /**
- * How each thematic layer is drawn.
- *
- * A value that is fundamentally attached to the 20 m analytical cell stays on
- * the grid — including land use, whose classes come from WorldCover raster
- * fractions per cell rather than from any native polygon dataset, and canopy
- * height, which is a *mean over the cell's ~348 m²*. A mean over an area has no
- * location inside that area to put a mark on: the cell's value can come
- * entirely from trees along one edge while its centre sits in open water, so a
- * point there asserts a position the data never had. A continuous fill also
- * needs no presence threshold, and canopy height has no natural one — the
- * exported means are sub-metre nearly everywhere (87% of Amsterdam's cells
- * exceed 0 m, 54% exceed 1 m), so any cut-off for "draw a dot here" would be
- * arbitrary. Shading states the value instead of thresholding it.
- *
- * Only a discrete, countable per-cell quantity is drawn as points: nObs is a
- * record count, so a graduated symbol claims something the data supports and
- * `> 0` is a real threshold rather than an invented one. Connectivity is left
- * exactly as it was this iteration.
- */
-export type LayerRepresentation = 'surface' | 'point';
-
-export const LAYER_REPRESENTATION: Record<HexLayerId, LayerRepresentation> = {
-  impact: 'surface',
-  expected: 'surface',
-  residual: 'surface',
-  intervention: 'surface',
-  habitat: 'surface',
-  heat: 'surface',
-  landuse: 'surface',
-  connectivity: 'surface',
-  treecover: 'surface',
-  vegetation: 'surface',
-  biodiversity: 'point',
-};
-
-export type PointLayerId = 'biodiversity';
-
-export function isPointLayer(layerId: HexLayerId): layerId is PointLayerId {
-  return LAYER_REPRESENTATION[layerId] === 'point';
-}
-
-/** Detail-zoom symbol layers over the hex source; overview circles over park centroids. */
-export const POINT_LAYER_IDS: Record<PointLayerId, { detail: string; overview: string }> = {
-  biodiversity: {
-    detail: 'biodiversity-cell-points',
-    overview: 'biodiversity-cell-points-overview',
-  },
-};
-
-export const POINT_LAYER_ORDER = LAYER_DRAW_ORDER.filter(isPointLayer);
-
-/**
  * Cartographic zoom regimes for the 20 m hex source.
  *
  * These are *drawing* thresholds only. Every cell keeps its exported value at
@@ -436,71 +380,6 @@ export function hexOutlineOverlayPaint(): LineLayerSpecification['paint'] {
  */
 export const HAS_PATCH_OVERVIEW = false;
 
-const OBS_VALUE: ExpressionSpecification = ['coalesce', ['get', 'nObs'], 0];
-
-/** Cells with no records at all are not markers — biodiversity is the only point layer. */
-export function pointLayerFilter(): FilterSpecification {
-  return ['>', OBS_VALUE, 0] as FilterSpecification;
-}
-
-/**
- * A biodiversity mark is a *cell count*, not an occurrence.
- *
- * nObs is the number of records the pipeline attributed to the 20 m cell, so
- * the mark sits at the cell centre and is deliberately large and translucent —
- * it reads as an area carrying N records. The Supabase survey and structured
- * survey layers stay small, opaque and hard-edged, because those are real
- * coordinates. The two must never look like the same kind of thing.
- */
-export function biodiversityCellLayout(): SymbolLayerSpecification['layout'] {
-  return {
-    visibility: 'none',
-    'icon-image': POINT_ICON_ID,
-    'icon-allow-overlap': ['step', ['zoom'], false, 16, true],
-    'icon-ignore-placement': ['step', ['zoom'], false, 16, true],
-    'icon-padding': ['interpolate', ['linear'], ['zoom'], 14, 4, 17, 1],
-    // Busiest cells place first, so thinning never drops the richest cells.
-    'symbol-sort-key': ['-', 0, OBS_VALUE],
-    // Deliberately does NOT track the grid the way vegetation does: these are
-    // discrete counts, so they must stay separable markers rather than merge
-    // into a surface. Spacing is ~24px at z16 and ~45px at z17.
-    'icon-size': [
-      'interpolate', ['linear'], ['zoom'],
-      14, ['interpolate', ['linear'], OBS_VALUE, 0, 0.55, 50, 1.15],
-      17, ['interpolate', ['linear'], OBS_VALUE, 0, 0.80, 50, 1.80],
-      19, ['interpolate', ['linear'], OBS_VALUE, 0, 1.00, 50, 2.20],
-    ],
-  } as SymbolLayerSpecification['layout'];
-}
-
-export function biodiversityCellPaint(): SymbolLayerSpecification['paint'] {
-  return {
-    'icon-color': buildBiodiversityObsExpression(),
-    // Translucent throughout — an aggregate marker, never a sharp record.
-    'icon-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0.55, 18, 0.42],
-  } as SymbolLayerSpecification['paint'];
-}
-
-/** Overview zoom (below the hex source's minzoom): one point per green space. */
-export function overviewPointPaint(
-  layerId: PointLayerId,
-  cityIds: string[],
-  allCityStats: CityLayerStats[],
-): CircleLayerSpecification['paint'] {
-  const color = patchFillColorExpressionForCities(layerId, cityIds, allCityStats);
-
-  return {
-    'circle-color': color,
-    'circle-radius': ['interpolate', ['linear'], ['zoom'],
-      10, ['interpolate', ['linear'], OBS_VALUE, 0, 3, 50, 9],
-      13, ['interpolate', ['linear'], OBS_VALUE, 0, 5, 50, 16],
-    ],
-    'circle-opacity': 0.5,
-    'circle-stroke-color': '#ffffff',
-    'circle-stroke-width': 0.8,
-  } as CircleLayerSpecification['paint'];
-}
-
 export function hasHexOverlay(layerId: HexLayerId): boolean {
   return Boolean(HEX_FILL_LAYER_IDS[layerId]);
 }
@@ -608,10 +487,15 @@ function buildHeatExpression(cityStats: CityLayerStats[] = []): ExpressionSpecif
 /** Observation-count heatmap — darker blue = more iNaturalist/GBIF records in the hex. */
 export function buildBiodiversityObsExpression(): ExpressionSpecification {
   return [
-    'interpolate',
-    ['linear'],
-    ['coalesce', ['get', 'nObs'], 0],
-    ...LAYER_RAMPS.biodiversity.flatMap(([value, color]) => [value, color]),
+    'case',
+    ['<=', ['coalesce', ['get', 'nObs'], 0], 0],
+    UNSAMPLED_FILL_COLOR,
+    [
+      'interpolate',
+      ['linear'],
+      ['get', 'nObs'],
+      ...LAYER_RAMPS.biodiversity.flatMap(([value, color]) => [value, color]),
+    ],
   ] as ExpressionSpecification;
 }
 
@@ -920,10 +804,6 @@ function hexOpacityRamp(base: number): ExpressionSpecification {
 }
 
 export function hexFillOpacityForLayer(layerId: HexLayerId): number | ExpressionSpecification {
-  // Point layers keep their hex fill in the style at zero opacity: nothing is
-  // drawn, but queryRenderedFeatures still returns the cell, so clicking
-  // anywhere inside the grid still opens that cell's analytical detail.
-  if (isPointLayer(layerId)) return 0;
   if (layerId === 'connectivity') {
     // Connectivity is the one layer with a second, derived representation. The
     // cells stay invisible until the network hands over, so the overview scale
@@ -942,9 +822,6 @@ export function hexFillOpacityForLayer(layerId: HexLayerId): number | Expression
 }
 
 export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | ExpressionSpecification {
-  // Point layers draw their overview representation on park centroids instead;
-  // the patch fill is hidden outright and 'park-area' keeps park clicks working.
-  if (isPointLayer(layerId)) return 0;
   if (layerId === 'connectivity') {
     // The derived network is the overview representation now. This patch fill
     // was the second semi-transparent purple layer that made the grid read as a
@@ -1046,13 +923,14 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     title: 'Observed biodiversity',
     property: 'nObs',
     rawMetric: 'n_obs',
-    note: 'Each mark is a 20 m cell containing N records, drawn at the cell centre — not an individual observation. Survey points and structured surveys are real coordinates.',
+    note: 'Record count per 20 m cell. Cells with no records are grey — not treated as zero richness. Survey points and structured surveys are real coordinates.',
     legend: [
       { color: '#002171', label: '50+ records' },
       { color: '#0d47a1', label: '30+ records' },
       { color: '#1565c0', label: '15+ records' },
       { color: '#1e88e5', label: '5+ records' },
       { color: '#42a5f5', label: '1–4 records' },
+      { color: '#C9CDC5', label: 'No records' },
     ],
   },
   connectivity: {
