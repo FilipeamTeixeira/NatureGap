@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Leaf, LogOut, User } from 'lucide-react';
-import { cityMeta } from '@/lib/config';
+import { CITY, cityMeta, isRegisteredCityId, listCities } from '@/lib/config';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 const NAV_LINKS = [
@@ -12,23 +12,34 @@ const NAV_LINKS = [
   { label: 'About',   href: '/about' },
 ];
 
+const AVAILABLE_CITIES = listCities();
+
 interface NavbarProps {
   activePath: string;
   /** cityId of whatever's currently selected/displayed — drives the badge label. */
   cityId?: string;
+  /** When set, city picks stay on this page (map). Otherwise they open Explore. */
+  onCitySelect?: (cityId: string) => void;
 }
 
-export default function Navbar({ activePath, cityId }: NavbarProps) {
+export default function Navbar({ activePath, cityId, onCitySelect }: NavbarProps) {
   const { profile, user, loading, signOut } = useAuth();
   const city = cityMeta(cityId);
+  const selectedCityId = isRegisteredCityId(cityId) ? cityId : CITY.id;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cityMenuOpen, setCityMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cityMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setMenuOpen(false);
+      }
+      if (cityMenuRef.current && !cityMenuRef.current.contains(target)) {
+        setCityMenuOpen(false);
       }
     }
     document.addEventListener('pointerdown', handlePointerDown);
@@ -39,6 +50,15 @@ export default function Navbar({ activePath, cityId }: NavbarProps) {
     await signOut();
     setMenuOpen(false);
     router.push('/');
+  }
+
+  function handleCitySelect(nextCityId: string) {
+    setCityMenuOpen(false);
+    if (onCitySelect) {
+      onCitySelect(nextCityId);
+      return;
+    }
+    router.push(`/?city=${encodeURIComponent(nextCityId)}`);
   }
 
   return (
@@ -59,7 +79,7 @@ export default function Navbar({ activePath, cityId }: NavbarProps) {
             key={href}
             href={href}
             className={
-              activePath === href
+              activePath === href || (href !== '/' && activePath.startsWith(href))
                 ? 'text-[13px] font-medium text-[#1F2A1F] bg-[#F7F8F5] px-3 py-1.5 rounded-lg transition-colors'
                 : 'text-[13px] text-[#667066] hover:text-[#1F2A1F] hover:bg-[#F7F8F5] px-3 py-1.5 rounded-lg transition-colors'
             }
@@ -70,9 +90,50 @@ export default function Navbar({ activePath, cityId }: NavbarProps) {
       </nav>
 
       <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="text-[11px] font-medium text-[#2E6F40] bg-[#DDEAD8] px-2.5 py-1 rounded-full">
-          {city.badge}
-        </span>
+        <div className="relative" ref={cityMenuRef}>
+          <button
+            type="button"
+            onClick={() => setCityMenuOpen((open) => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={cityMenuOpen}
+            aria-label="Select city"
+            className="h-7 flex items-center gap-1 text-[11px] font-medium text-[#2E6F40] bg-[#DDEAD8] pl-2.5 pr-1.5 rounded-full hover:bg-[#CDE3C8]"
+          >
+            {city.badge}
+            <ChevronDown size={12} strokeWidth={2} className="text-[#2E6F40]" />
+          </button>
+
+          {cityMenuOpen ? (
+            <div
+              role="listbox"
+              aria-label="Available cities"
+              className="absolute right-0 top-full mt-1.5 w-52 rounded-lg border border-[#E4E7E1] bg-white py-1.5 shadow-lg z-50"
+            >
+              {AVAILABLE_CITIES.map((option) => {
+                const isCurrent = option.id === selectedCityId;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isCurrent}
+                    onClick={() => handleCitySelect(option.id)}
+                    className={
+                      isCurrent
+                        ? 'w-full flex flex-col items-start px-3 py-2 text-left bg-[#F7F8F5]'
+                        : 'w-full flex flex-col items-start px-3 py-2 text-left hover:bg-[#F7F8F5]'
+                    }
+                  >
+                    <span className="text-[13px] font-medium text-[#1F2A1F]">{option.name}</span>
+                    <span className="text-[11px] text-[#667066]">
+                      {option.nameJa !== option.name ? `${option.nameJa} · ${option.country}` : option.country}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
         {!loading && !user ? (
           <Link
             href="/login"

@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import RightSidebar from '@/components/layout/RightSidebar';
 import LayerControls from '@/components/map/LayerControls';
@@ -18,7 +19,7 @@ import {
   type RenderCellProperties,
 } from '@/lib/cell-detail';
 import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
-import { CITY } from '@/lib/config';
+import { CITY, isRegisteredCityId } from '@/lib/config';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -35,12 +36,22 @@ import {
 
 const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false });
 
+type FlyToTarget =
+  | { center: [number, number]; zoom: number }
+  | { cityId: string };
+
+function cityIdFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('city');
+  return isRegisteredCityId(value) ? value : null;
+}
+
 export default function Page() {
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
   const [selectedWard, setSelectedWard] = useState<WardFeature | null>(null);
   const [selectedSurveyPoint, setSelectedSurveyPoint] = useState<SurveyPointFeature | null>(null);
   const [layers, setLayers] = useState<MapLayer[]>(MAP_LAYERS);
-  const [flyToTarget, setFlyToTarget] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
   const [dataRevision, setDataRevision] = useState(0);
   const [role, setRole] = useState<AppRole | null>(null);
   const [species, setSpecies] = useState<SpeciesReferenceOption[]>([]);
@@ -61,9 +72,28 @@ export default function Page() {
   // Selection wins; otherwise follow the map, so panning to another city
   // relabels the badge and sidebar instead of leaving them on the default.
   const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? viewCityId ?? CITY.id;
+  const router = useRouter();
 
   const handleViewCityChange = useCallback((cityId: string | undefined) => {
     setViewCityId(cityId ?? null);
+  }, []);
+
+  const handleCitySelect = useCallback((cityId: string) => {
+    cellClickGenerationRef.current += 1;
+    setCellDetailLoading(false);
+    setSelectedCell(null);
+    setSelectedWard(null);
+    setSelectedSurveyPoint(null);
+    setViewCityId(cityId);
+    setFlyToTarget({ cityId });
+    router.replace(`/?city=${encodeURIComponent(cityId)}`, { scroll: false });
+  }, [router]);
+
+  useLayoutEffect(() => {
+    const cityId = cityIdFromLocation();
+    if (!cityId) return;
+    setViewCityId(cityId);
+    setFlyToTarget({ cityId });
   }, []);
 
   useEffect(() => {
@@ -186,7 +216,7 @@ export default function Page() {
 
   return (
     <div className="h-full flex flex-col">
-      <Navbar activePath="/" cityId={currentCityId} />
+      <Navbar activePath="/" cityId={currentCityId} onCitySelect={handleCitySelect} />
 
       <div className="flex flex-1 min-h-0">
         <LayerControls

@@ -86,7 +86,7 @@ interface MapViewProps {
     coordinates: [number, number],
   ) => void;
   onParkClick?: (parkId: string, coordinates: [number, number]) => void;
-  flyToTarget?: { center: [number, number]; zoom: number } | null;
+  flyToTarget?: { center: [number, number]; zoom: number } | { cityId: string } | null;
   dataRevision?: number;
   structuredSurveysGeoJSON?: GeoJSON.FeatureCollection;
   surveyPointsGeoJSON?: GeoJSON.FeatureCollection;
@@ -130,6 +130,7 @@ export default function MapView({
   const displayCityIdRef = useRef(displayCityId ?? CITY.id);
   const onViewCityChangeRef = useRef(onViewCityChange);
   const viewCityIdRef = useRef<string | undefined>(undefined);
+  const pendingCityFocusRef = useRef<string | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
   const enabledLayerIds = getEnabledLayerIds(layers);
   const activeThematic = activeThematicLayerId(layers);
@@ -367,7 +368,9 @@ export default function MapView({
         // Yokohama together produces a near-world view, which no maxZoom can
         // pull back into the hex regime because fitBounds has to zoom *out* to
         // contain them. One city's AOI fits comfortably inside MAP_CONFIG.zoom.
-        await fitMapToPmtilesDatasets(map, activeHexDatasets, displayCityIdRef.current);
+        const focusCityId = pendingCityFocusRef.current ?? displayCityIdRef.current;
+        await fitMapToPmtilesDatasets(map, activeHexDatasets, focusCityId);
+        pendingCityFocusRef.current = undefined;
         if (mapRef.current !== map) return;
         refreshHexLayers(map, layersRef.current);
         // Datasets only become known here, so the initial view has to be
@@ -752,7 +755,20 @@ export default function MapView({
 
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;
-    mapRef.current.flyTo({ center: flyToTarget.center, zoom: flyToTarget.zoom, duration: 900 });
+    const map = mapRef.current;
+    if ('cityId' in flyToTarget) {
+      pendingCityFocusRef.current = flyToTarget.cityId;
+      const datasets = getHexDatasets(map);
+      if (datasets.length === 0) return;
+      void fitMapToPmtilesDatasets(map, datasets, flyToTarget.cityId, {
+        duration: 900,
+        requirePreferred: true,
+      });
+      pendingCityFocusRef.current = undefined;
+      return;
+    }
+    pendingCityFocusRef.current = undefined;
+    map.flyTo({ center: flyToTarget.center, zoom: flyToTarget.zoom, duration: 900 });
   }, [flyToTarget]);
 
   return (

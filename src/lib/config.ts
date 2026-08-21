@@ -54,6 +54,17 @@ export function cityMeta(cityId: string | null | undefined): CityMeta {
   return (cityId && CITIES[cityId]) || CITIES[CITY.id];
 }
 
+export function isRegisteredCityId(cityId: string | null | undefined): cityId is string {
+  return Boolean(cityId && CITIES[cityId]);
+}
+
+/** Cities shown in the navbar switcher, sorted by display name. */
+export function listCities(): Array<{ id: string } & CityMeta> {
+  return Object.entries(CITIES)
+    .map(([id, meta]) => ({ id, ...meta }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // ── Map defaults ─────────────────────────────────────────────────────────────
 
 export const MAP_CONFIG = {

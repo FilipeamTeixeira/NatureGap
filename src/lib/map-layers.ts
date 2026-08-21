@@ -255,11 +255,16 @@ export async function fitMapToPmtilesDatasets(
   map: maplibregl.Map,
   datasets: HexPmtilesDataset[],
   preferredCityId?: string,
+  options?: { duration?: number; requirePreferred?: boolean },
 ) {
   const primary = preferredCityId
     ? datasets.filter((dataset) => dataset.cityId === preferredCityId)
     : [];
-  const toFit = primary.length > 0 ? primary : datasets;
+  const toFit = primary.length > 0
+    ? primary
+    : options?.requirePreferred
+      ? []
+      : datasets;
   if (toFit.length === 0) return;
 
   const bounds = new maplibregl.LngLatBounds();
@@ -274,7 +279,7 @@ export async function fitMapToPmtilesDatasets(
   map.fitBounds(bounds, {
     padding: 80,
     maxZoom: MAP_CONFIG.zoom,
-    duration: 0,
+    duration: options?.duration ?? 0,
   });
 }
 
