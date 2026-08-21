@@ -41,30 +41,36 @@ WMS_MAX_PIXELS <- 3500L         # safety margin under the server's stated MaxWid
 TARGET_GSD_M   <- 0.5           # metres/pixel — matches native DGT ortho resolution; raise if tiles are too large/slow
 
 pt_ortho_tile_bboxes <- function(bbox_3763, max_pixels = WMS_MAX_PIXELS, gsd = TARGET_GSD_M) {
-  width_m  <- bbox_3763["xmax"] - bbox_3763["xmin"]
-  height_m <- bbox_3763["ymax"] - bbox_3763["ymin"]
+  # Snap the AOI outward onto the gsd grid, then cut it into tiles of exactly
+  # `max_pixels` pixels (the last column/row may be shorter). Every tile then
+  # has exactly `gsd` resolution and sits on one shared pixel grid, which is
+  # what the VRT stitch below needs. Splitting the AOI into tiles of equal
+  # *metric* width instead leaves them on an off-grid resolution derived from
+  # the AOI width, where rounding to whole pixels can open sub-pixel seams.
+  x_min <- floor(unname(bbox_3763["xmin"]) / gsd) * gsd
+  y_min <- floor(unname(bbox_3763["ymin"]) / gsd) * gsd
+  n_px_x <- as.integer(ceiling((unname(bbox_3763["xmax"]) - x_min) / gsd))
+  n_px_y <- as.integer(ceiling((unname(bbox_3763["ymax"]) - y_min) / gsd))
 
-  tile_span_m <- max_pixels * gsd
-  n_cols <- max(1L, ceiling(width_m / tile_span_m))
-  n_rows <- max(1L, ceiling(height_m / tile_span_m))
-
-  x_breaks <- seq(bbox_3763["xmin"], bbox_3763["xmax"], length.out = n_cols + 1L)
-  y_breaks <- seq(bbox_3763["ymin"], bbox_3763["ymax"], length.out = n_rows + 1L)
+  x_offsets <- seq(0L, n_px_x - 1L, by = max_pixels)
+  y_offsets <- seq(0L, n_px_y - 1L, by = max_pixels)
 
   tiles <- list()
   k <- 1L
-  for (i in seq_len(n_cols)) {
-    for (j in seq_len(n_rows)) {
+  for (ox in x_offsets) {
+    for (oy in y_offsets) {
+      w <- min(max_pixels, n_px_x - ox)
+      h <- min(max_pixels, n_px_y - oy)
       tiles[[k]] <- c(
-        xmin = unname(x_breaks[i]), xmax = unname(x_breaks[i + 1L]),
-        ymin = unname(y_breaks[j]), ymax = unname(y_breaks[j + 1L])
+        xmin = x_min + ox * gsd, xmax = x_min + (ox + w) * gsd,
+        ymin = y_min + oy * gsd, ymax = y_min + (oy + h) * gsd
       )
       k <- k + 1L
     }
   }
   message(sprintf(
     "Split into %d tile(s) (%d x %d) at %.2f m/px, each <= %d px",
-    length(tiles), n_cols, n_rows, gsd, max_pixels
+    length(tiles), length(x_offsets), length(y_offsets), gsd, max_pixels
   ))
   tiles
 }
@@ -123,26 +129,59 @@ download_pt_ortho_ndvi <- function(bbox = BBOX_CITY, out_file = PT_ORTHO_NDVI_FI
   bbox_3763 <- st_bbox(bbox, crs = 4326) |> st_as_sfc() |> st_transform(WMS_CRS) |> st_bbox()
 
   tiles <- pt_ortho_tile_bboxes(bbox_3763)
-  tile_rasters <- vector("list", length(tiles))
 
+  # NDVI is reduced to one band per tile *before* anything is stitched. The
+  # obvious alternative — mosaic the 3-band IRG tiles, then compute NDVI on the
+  # mosaic — materialises a ~3.8 GB FLT4S intermediate for a city the size of
+  # Porto, which overruns the 4 GB ceiling of the plain GeoTIFF terra writes
+  # its temp files as ("cannot write values (err: 3)") and needs disk this
+  # machine does not reliably have. One band and a VRT stitch keeps peak use to
+  # a single tile in memory and ~1.3 GB on disk.
+  tile_dir <- paste0(tools::file_path_sans_ext(out_file), "_tiles")
+  grid_stamp <- paste(
+    c(round(unname(bbox_3763), 3), TARGET_GSD_M, WMS_MAX_PIXELS, WMS_LAYER),
+    collapse = "|"
+  )
+  stamp_file <- file.path(tile_dir, "grid.txt")
+  if (dir.exists(tile_dir) &&
+      !identical(tryCatch(readLines(stamp_file, warn = FALSE)[1], error = function(e) NA_character_),
+                 grid_stamp)) {
+    # Scratch tiles left by an interrupted run for a *different* grid must not
+    # be reused — they would stitch into a silently wrong raster.
+    unlink(tile_dir, recursive = TRUE)
+  }
+  dir.create(tile_dir, recursive = TRUE, showWarnings = FALSE)
+  writeLines(grid_stamp, stamp_file)
+
+  tile_files <- file.path(tile_dir, sprintf("ndvi_tile_%03d.tif", seq_along(tiles)))
   for (i in seq_along(tiles)) {
+    if (file.exists(tile_files[i])) {
+      message(sprintf("Tile %d/%d already fetched.", i, length(tiles)))
+      next
+    }
     message(sprintf("Fetching tile %d/%d...", i, length(tiles)))
-    tile_rasters[[i]] <- pt_ortho_fetch_tile(tiles[[i]])
+    irg <- pt_ortho_fetch_tile(tiles[[i]])
+    ndvi_tile <- (irg[[1]] - irg[[2]]) / (irg[[1]] + irg[[2]])
+
+    # Write to a scratch name and rename, so an interrupted write cannot leave
+    # a truncated tile that the resume path above would happily reuse.
+    partial <- paste0(tile_files[i], ".part")
+    writeRaster(
+      ndvi_tile, partial, overwrite = TRUE, datatype = "FLT4S",
+      gdal = c("TILED=YES", "COMPRESS=DEFLATE")
+    )
+    file.rename(partial, tile_files[i])
   }
 
-  mosaic <- if (length(tile_rasters) == 1L) {
-    tile_rasters[[1]]
-  } else {
-    terra::mosaic(terra::sprc(tile_rasters), fun = "first")
-  }
-
-  ndvi <- (mosaic[[1]] - mosaic[[2]]) / (mosaic[[1]] + mosaic[[2]])
+  ndvi <- if (length(tile_files) == 1L) rast(tile_files) else terra::vrt(tile_files, overwrite = TRUE)
   names(ndvi) <- "pt_ortho_ndvi_dn"
 
   writeRaster(
     ndvi, out_file, overwrite = TRUE, datatype = "FLT4S",
-    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256",
+             "COMPRESS=DEFLATE", "BIGTIFF=IF_SAFER")
   )
+  unlink(tile_dir, recursive = TRUE)
 
   message(sprintf(
     "Written: %s (%d x %d px at %.2fm, CRS %s)",
