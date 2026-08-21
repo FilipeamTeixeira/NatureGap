@@ -782,6 +782,37 @@ safe_st_union <- function(x, snap_precision_m = 0.001) {
   )
 }
 
+# ── Raster write options ───────────────────────────────────────────────────────
+# GeoTIFF allows a tile larger than the image, and GDAL/terra read such a file
+# without complaint — but Apple's ImageIO hangs on one, so a small output (a
+# 30 m LST composite over a compact AOI is ~180 rows) becomes impossible to
+# preview in Finder/QuickLook. Clamp each block dimension to the largest
+# power-of-two tile that fits the raster; TIFF requires multiples of 16, so 16
+# is the floor.
+tiled_gdal_opts <- function(x, max_block = 256L, compress = "DEFLATE") {
+  nr <- terra::nrow(x)
+  nc <- terra::ncol(x)
+
+  # Below 16 rows/cols no legal tile fits, so tiling can't be made safe —
+  # write those striped instead.
+  if (nr < 16L || nc < 16L) {
+    return(c("TILED=NO", paste0("COMPRESS=", compress)))
+  }
+
+  fit_block <- function(n) {
+    candidates <- c(256L, 128L, 64L, 32L, 16L)
+    candidates <- candidates[candidates <= max_block]
+    ok <- candidates[candidates <= n]
+    if (length(ok) > 0L) ok[1L] else 16L
+  }
+  c(
+    "TILED=YES",
+    sprintf("BLOCKXSIZE=%d", fit_block(nc)),
+    sprintf("BLOCKYSIZE=%d", fit_block(nr)),
+    paste0("COMPRESS=", compress)
+  )
+}
+
 # ── Mark config as loaded ─────────────────────────────────────────────────────
 # Each pipeline script checks for this flag before re-sourcing config.
 CONFIG_LOADED <- TRUE

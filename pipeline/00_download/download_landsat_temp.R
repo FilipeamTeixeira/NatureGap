@@ -171,7 +171,7 @@ download_landsat_temp <- function(bbox = BBOX_CITY,
 
   writeRaster(
     composite, out_file, overwrite = TRUE,
-    gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256", "COMPRESS=DEFLATE")
+    gdal = tiled_gdal_opts(composite)
   )
   message(sprintf(
     "[LST] Written: %s (median of %d per-scene spatial anomalies)",
