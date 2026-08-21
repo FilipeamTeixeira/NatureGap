@@ -8,7 +8,7 @@
 
 export const CITY = {
   /** Pipeline city slug — must match pipeline-export/<id>/ and city_layer_stats.city_id. */
-  id:     'porto-center',
+  id:     'porto',
   name:   'Porto',
   nameJa: 'Porto',
   badge:  'Porto · Beta',
@@ -35,13 +35,13 @@ export const CITIES: Record<string, CityMeta> = {
     badge:  'Yokohama · Beta',
     country: 'Japan',
   },
-  'amsterdam-schimmelstraat': {
+  'amsterdam': {
     name:   'Amsterdam',
     nameJa: 'Amsterdam',
     badge:  'Amsterdam · Beta',
     country: 'Netherlands',
   },
-  'porto-center': {
+  'porto': {
     name:   'Porto',
     nameJa: 'Porto',
     badge:  'Porto · Beta',
@@ -134,7 +134,7 @@ export const SCORE_COLORS = {
 export const STORAGE = {
   PIPELINE_BUCKET: 'pipeline-export',
   /** Cities to try without relying on Supabase Storage list permissions. */
-  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'porto-center')
+  PIPELINE_CITY_IDS: (process.env.NEXT_PUBLIC_PIPELINE_CITY_IDS ?? 'porto')
     .split(',')
     .map((city) => city.trim())
     .filter(Boolean),
