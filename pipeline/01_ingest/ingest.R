@@ -217,6 +217,62 @@ osm_cache_ok <- function(path, min_features = 1L) {
   }, error = function(e) FALSE)
 }
 
+# The AOI a cached OSM fetch was actually made for, recorded beside the .gpkg.
+#
+# Feature count alone cannot detect a cache fetched for a *smaller* BBOX_CITY:
+# the cache is complete for the box it was fetched for, so it looks healthy.
+# On Amsterdam the green-space and ground-vegetation caches survived the AOI
+# widening east and stopped at X=124,482 / 124,371 RD against an AOI reaching
+# X=131,290 — IJburg ended up with zero named green spaces and the eastern
+# third of the city fell back to the raster presence bars alone. Same class of
+# staleness canopy_cache_stale_reason() guards against in 02_habitat.
+#
+# A cache with no sidecar is treated as stale. It predates this stamp, so its
+# fetch AOI is unknowable and one refetch is the only safe answer.
+osm_cache_aoi_path <- function(path) paste0(path, ".aoi.json")
+
+write_osm_cache <- function(value, path) {
+  st_write(value, path, delete_dsn = TRUE)
+  write_json(
+    list(
+      xmin = unname(BBOX_CITY[["xmin"]]), ymin = unname(BBOX_CITY[["ymin"]]),
+      xmax = unname(BBOX_CITY[["xmax"]]), ymax = unname(BBOX_CITY[["ymax"]])
+    ),
+    osm_cache_aoi_path(path),
+    auto_unbox = TRUE, digits = 10
+  )
+  invisible(path)
+}
+
+# NULL when the cache covers the current AOI, otherwise the reason it does not.
+osm_cache_stale_reason <- function(resolved_path) {
+  aoi_path <- osm_cache_aoi_path(resolved_path)
+  if (!file.exists(aoi_path)) return("was fetched before the AOI was recorded")
+
+  cached <- tryCatch(
+    unlist(read_json(aoi_path, simplifyVector = TRUE)),
+    error = function(e) NULL
+  )
+  if (!is.numeric(cached) || !all(c("xmin", "ymin", "xmax", "ymax") %in% names(cached))) {
+    return("has an unreadable fetch AOI")
+  }
+
+  # Degrees. The tolerance only absorbs JSON round-tripping — the failure this
+  # guards against is short by kilometres, not by a millionth of a degree.
+  tol <- 1e-6
+  if (cached[["xmin"]] > BBOX_CITY[["xmin"]] + tol ||
+      cached[["ymin"]] > BBOX_CITY[["ymin"]] + tol ||
+      cached[["xmax"]] < BBOX_CITY[["xmax"]] - tol ||
+      cached[["ymax"]] < BBOX_CITY[["ymax"]] - tol) {
+    return(sprintf(
+      "covers %.4f,%.4f-%.4f,%.4f but the AOI is now %.4f,%.4f-%.4f,%.4f",
+      cached[["xmin"]], cached[["ymin"]], cached[["xmax"]], cached[["ymax"]],
+      BBOX_CITY[["xmin"]], BBOX_CITY[["ymin"]], BBOX_CITY[["xmax"]], BBOX_CITY[["ymax"]]
+    ))
+  }
+  NULL
+}
+
 .overpass_queries_this_run <- 0L
 
 overpass_pause_before_query <- function() {
@@ -263,7 +319,15 @@ combine_osm_polygons <- function(osm_result) {
 use_osm_cache <- function(path, min_features, label) {
   skip <- exists("OSM_SKIP_IF_EXISTS") && isTRUE(OSM_SKIP_IF_EXISTS)
   if (!skip || !osm_cache_ok(path, min_features)) return(FALSE)
-  cat(sprintf("  → Using cached %s (%s)\n", label, osm_cache_resolved_path(path)))
+
+  resolved <- osm_cache_resolved_path(path)
+  stale <- osm_cache_stale_reason(resolved)
+  if (!is.null(stale)) {
+    cat(sprintf("  → Refetching %s — cached copy %s\n", label, stale))
+    return(FALSE)
+  }
+
+  cat(sprintf("  → Using cached %s (%s)\n", label, resolved))
   TRUE
 }
 
@@ -793,7 +857,7 @@ if (!use_osm_cache(RAW_OSM_GREEN, 1L, "OSM green spaces")) {
     warning("No OSM green space polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(green_polygons, RAW_OSM_GREEN, delete_dsn = TRUE)
+  write_osm_cache(green_polygons, RAW_OSM_GREEN)
   cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
 }
 
@@ -811,7 +875,7 @@ if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
     warning("No OSM ground vegetation polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(ground_veg_polygons, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
+  write_osm_cache(ground_veg_polygons, RAW_OSM_GROUND_VEG)
   cat(sprintf("  → %d ground vegetation polygons written\n", nrow(ground_veg_polygons)))
 
   overpass_pause_before_query()
@@ -827,7 +891,7 @@ if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
   ground_veg_polygons_all <- bind_rows(ground_veg_polygons, ground_veg_polygons2)
-  st_write(ground_veg_polygons_all, RAW_OSM_GROUND_VEG, delete_dsn = TRUE)
+  write_osm_cache(ground_veg_polygons_all, RAW_OSM_GROUND_VEG)
   cat(sprintf("  → %d ground vegetation polygons written (combined)\n", nrow(ground_veg_polygons_all)))
 }
 
@@ -846,7 +910,7 @@ if (!use_osm_cache(RAW_OSM_PATHS, 0L, "OSM paths")) {
     warning("No OSM path lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(path_lines, RAW_OSM_PATHS, delete_dsn = TRUE)
+  write_osm_cache(path_lines, RAW_OSM_PATHS)
   cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
 }
 
@@ -867,7 +931,7 @@ if (!use_osm_cache(RAW_OSM_ROADS, 0L, "OSM roads")) {
     warning("No OSM road lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(road_lines, RAW_OSM_ROADS, delete_dsn = TRUE)
+  write_osm_cache(road_lines, RAW_OSM_ROADS)
   cat(sprintf("  → %d road lines written\n", nrow(road_lines)))
 }
 
@@ -886,7 +950,7 @@ if (!use_osm_cache(RAW_OSM_RAIL, 0L, "OSM rail")) {
     warning("No OSM rail lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(rail_lines, RAW_OSM_RAIL, delete_dsn = TRUE)
+  write_osm_cache(rail_lines, RAW_OSM_RAIL)
   cat(sprintf("  → %d rail lines written\n", nrow(rail_lines)))
 }
 
@@ -904,7 +968,7 @@ if (!use_osm_cache(RAW_OSM_LAMPS, 0L, "OSM street lamps")) {
     warning("No OSM street lamps returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(lamp_points, RAW_OSM_LAMPS, delete_dsn = TRUE)
+  write_osm_cache(lamp_points, RAW_OSM_LAMPS)
   cat(sprintf("  → %d street lamp points written\n", nrow(lamp_points)))
 }
 
@@ -922,7 +986,7 @@ if (!use_osm_cache(RAW_OSM_LIT_ROADS, 0L, "OSM lit roads")) {
     warning("No OSM lit road lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(lit_lines, RAW_OSM_LIT_ROADS, delete_dsn = TRUE)
+  write_osm_cache(lit_lines, RAW_OSM_LIT_ROADS)
   cat(sprintf("  → %d lit road lines written\n", nrow(lit_lines)))
 }
 
@@ -944,7 +1008,7 @@ if (!use_osm_cache(RAW_OSM_AMENITIES, 0L, "OSM amenities")) {
     warning("No OSM amenities returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(amenity_points, RAW_OSM_AMENITIES, delete_dsn = TRUE)
+  write_osm_cache(amenity_points, RAW_OSM_AMENITIES)
   cat(sprintf("  → %d amenity points written\n", nrow(amenity_points)))
 }
 
@@ -962,7 +1026,7 @@ if (!use_osm_cache(RAW_OSM_WATER_POLY, 0L, "OSM water bodies")) {
     warning("No OSM water polygons returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(water_polygons, RAW_OSM_WATER_POLY, delete_dsn = TRUE)
+  write_osm_cache(water_polygons, RAW_OSM_WATER_POLY)
   cat(sprintf("  → %d water polygons written\n", nrow(water_polygons)))
 }
 
@@ -981,7 +1045,7 @@ if (!use_osm_cache(RAW_OSM_WATER, 0L, "OSM waterways")) {
     warning("No OSM waterway lines returned — writing empty layer")
     st_sf(geometry = st_sfc(crs = CRS_LOCAL))
   }
-  st_write(water_lines, RAW_OSM_WATER, delete_dsn = TRUE)
+  write_osm_cache(water_lines, RAW_OSM_WATER)
   cat(sprintf("  → %d waterway lines written\n", nrow(water_lines)))
 }
 

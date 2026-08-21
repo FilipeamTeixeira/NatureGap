@@ -310,7 +310,15 @@ top_cells <- top_cells |>
       corridor_importance > 0.7 ~ "Create or restore habitat corridor",
       fragmentation_index > 0.8 ~ "Reduce isolation — connect to nearest patch",
 
-      coalesce(tree_fraction, green_fraction_wc, 0) < 0.10 ~
+      # pmax(), not coalesce(): process_tile.R replace_na()s tree_fraction and
+      # green_fraction_wc to 0 together, so tree_fraction is never NA when
+      # green_fraction_wc is populated and coalesce() always returned the tree
+      # term alone. A cell that is pure grassland with no trees was told to
+      # "increase canopy and green cover" it already has. The impervious test
+      # below keeps coalesce() on purpose — impervious_fraction is NA for the
+      # whole grid when its raster is absent, so falling back to the WorldCover
+      # built fraction is the intended behaviour there.
+      coalesce(pmax(tree_fraction, green_fraction_wc, na.rm = TRUE), 0) < 0.10 ~
         "Increase canopy and green cover",
 
       coalesce(impervious_fraction, built_fraction_wc, 0) > 0.70 ~

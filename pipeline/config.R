@@ -636,6 +636,12 @@ CIR_NDVI_FILE <- file.path(
 # This is a DN threshold on an 8-bit visual product, not a reflectance NDVI cut.
 CIR_VEG_NDVI_THRESHOLD <- 0.2
 
+# Share of a cell's 0.5 m CIR pixels that must be vegetated for an otherwise
+# unmapped hex to enter hexgrid.pmtiles at all. Distinct from the per-pixel
+# threshold above: this is the per-cell coverage bar. See the justification at
+# the hexgrid_render filter in 06_export/export.R before changing it.
+CIR_VEG_RENDER_THRESHOLD <- 0.15
+
 S2_SAFE_DIR <- file.path(DATA_IMPORT, "sentinel2")
 S2_RED_BAND_PATTERN <- "B04_10m\\.jp2$"
 S2_NIR_BAND_PATTERN <- "B08_10m\\.jp2$"

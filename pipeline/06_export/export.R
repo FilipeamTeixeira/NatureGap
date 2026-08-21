@@ -1595,15 +1595,35 @@ park_intervention_lookup <- setNames(park_interventions$interventions, park_inte
 # excluded from the tileset entirely rather than merely uncoloured. Admit them
 # on the sub-metre CIR measurement where a city has one.
 #
-# 0.30, not the WorldCover bar's 0.10: veg_fraction is DN-based NDVI on a lossy
-# JPEG product, so a low cut admits dark roofs and wet asphalt as vegetation.
-# Lower it only after inspecting what a run at 0.30 actually surfaces.
+# pmax(), not coalesce(), across the WorldCover fractions. process_tile.R
+# replace_na()s all six to 0 together whenever the landcover raster reads, so
+# tree_fraction is never NA when the others are populated and coalesce()
+# returned it every time — shrub, grass and green_fraction_wc were dead
+# arguments and this was a tree bar wearing a green bar's name. A 20 m hex of
+# pure WorldCover grassland (grass_fraction 1.0, tree_fraction 0) failed it.
+# Citywide that wrongly excluded 12,287 Amsterdam land cells (~4.3 km2).
+# pmax(na.rm = TRUE) still yields NA when every fraction is NA, so the
+# coalesce(..., 0) around it keeps cities without a landcover raster unchanged.
+#
+# 0.15, not 0.30: the old bar assumed a low cut would admit dark roofs and wet
+# asphalt. Sentinel-2 NDVI — an independent 10 m reflectance measurement — says
+# otherwise. Mean S2 NDVI by CIR veg_fraction band on Amsterdam land cells:
+# <0.05 -> 0.204, 0.05-0.10 -> 0.327, 0.10-0.15 -> 0.358, 0.15-0.20 -> 0.390,
+# 0.20-0.25 -> 0.413, 0.25-0.30 -> 0.438, >=0.30 -> 0.651. Pure WorldCover
+# built-up cells average 0.234. Everything from 0.15 up is well clear of the
+# built baseline and rises monotonically, so the 0.15-0.30 band is real mixed
+# green (verges, courtyard lawns, rooftop planting), not JPEG noise. Below
+# 0.05 the S2 signal converges on the built baseline — that is where the noise
+# floor actually is. 0.10 would also be defensible; 0.15 keeps a margin.
+# 30% of a 346 m2 hex is ~104 m2, so the old bar rejected any 3 m verge
+# crossing a cell (~60 m2 -> 0.17) — exactly the green this arm exists to catch.
 # coalesce(veg_fraction, 0) leaves cities without CIR unchanged.
 hexgrid_render <- grid |>
   filter(
     (!is.na(park_id) & park_id != "city-green") |
-      coalesce(tree_fraction, shrub_fraction, grass_fraction, green_fraction_wc, 0) >= 0.10 |
-      coalesce(veg_fraction, 0) >= 0.30
+      coalesce(pmax(tree_fraction, shrub_fraction, grass_fraction,
+                    green_fraction_wc, na.rm = TRUE), 0) >= 0.10 |
+      coalesce(veg_fraction, 0) >= CIR_VEG_RENDER_THRESHOLD
   )
 
 if (!is.null(green)) {

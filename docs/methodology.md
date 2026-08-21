@@ -895,6 +895,24 @@ Limitations:
 PMTiles do not define methodology. They carry lightweight, precomputed values
 from R for viewport-based rendering.
 
+### Which cells enter the tileset
+
+A cell is written to `hexgrid.pmtiles` if it meets any one of three tests
+(`hexgrid_render` in `pipeline/06_export/export.R`):
+
+1. it falls inside a named green space (OSM `leisure=park|nature_reserve|garden`);
+2. its highest WorldCover vegetation fraction — tree, shrub, grass or the
+   combined green class — is at least 0.10;
+3. at least `CIR_VEG_RENDER_THRESHOLD` (0.15) of its 0.5 m colour-infrared
+   pixels are vegetated, where a national CIR orthophoto exists.
+
+Tests 2 and 3 are not decoration. OSM does not map rooftop gardens, courtyard
+lawns, planted verges or wildflower strips, and a 10 m WorldCover pixel cannot
+resolve them either, so without the CIR test those cells are absent from the
+map entirely rather than merely uncoloured. A cell that fails all three is not
+drawn on any layer, so this filter governs the vegetation layer as much as it
+governs the park layers.
+
 `hexgrid.pmtiles` carries the fields listed in `PMTILES_REQUIRED_FIELDS`
 (`pipeline/06_export/export.R`), which is the authoritative list and is enforced
 at export time. As of the current export that is:
