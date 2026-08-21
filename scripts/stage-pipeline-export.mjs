@@ -30,7 +30,7 @@ const REQUIRED_RENDER_FIELDS = [
 
 function usage() {
   console.error(`Usage:
-  npm run stage:pipeline-export -- --city yokohama-honmoku --version 20260627T120000Z
+  npm run stage:pipeline-export -- --city yokohama --version 20260627T120000Z
 
 Options:
   --city <id>       City folder under pipeline/data/<city>/export
@@ -51,7 +51,7 @@ function parseArgs(argv) {
     i += 1;
   }
   return {
-    city: args.get('city') ?? 'yokohama-honmoku',
+    city: args.get('city') ?? 'yokohama',
     version: args.get('version'),
     source: args.get('source'),
   };

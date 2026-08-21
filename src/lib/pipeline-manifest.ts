@@ -1,4 +1,4 @@
-import { STORAGE } from './config';
+import { isRegisteredCityId, STORAGE } from './config';
 import { supabase } from './supabase';
 
 export type ActivePipelineDataset = {
@@ -176,7 +176,11 @@ async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
     const dataVersion = asString(row.dataset_id);
     const storagePrefix = asString(row.storage_prefix);
     const manifestPath = asString(row.manifest_path);
-    if (!cityId || !dataVersion || !storagePrefix || !manifestPath) return null;
+    // Retired slugs stay is_active until deactivated in SQL; skip them here
+    // so we never fetch yokohama-honmoku / porto-center / etc. archives.
+    if (!cityId || !isRegisteredCityId(cityId) || !dataVersion || !storagePrefix || !manifestPath) {
+      return null;
+    }
 
     const basePath = storageObjectPath(storagePrefix);
     const normalizedManifestPath = storageObjectPath(manifestPath);
@@ -233,7 +237,8 @@ async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
     listStoragePointerDatasets(),
   ]);
 
-  return mergeDatasets([...databaseDatasets, ...storageDatasets]);
+  return mergeDatasets([...databaseDatasets, ...storageDatasets])
+    .filter((dataset) => isRegisteredCityId(dataset.cityId));
 }
 
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {

@@ -7,7 +7,7 @@
  *
  * Usage:
  *   npm run sync:pipeline-from-storage
- *   npm run sync:pipeline-from-storage -- --city yokohama-honmoku
+ *   npm run sync:pipeline-from-storage -- --city yokohama
  *   npm run sync:pipeline-from-storage -- --with-cell-attributes
  *   npm run sync:pipeline-from-storage -- --dry-run
  */
@@ -24,9 +24,9 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 
 const CITY_CONFIG = {
-  'yokohama-honmoku': 'config_yokohama.R',
-  'amsterdam-schimmelstraat': 'config_amsterdam.R',
-  'porto-center': 'config_porto.R',
+  yokohama: 'cities/yokohama.R',
+  amsterdam: 'cities/amsterdam.R',
+  porto: 'cities/porto.R',
 };
 
 const IMPORT_FILES = [
@@ -218,14 +218,14 @@ async function stageCityExport(supabaseUrl, city, datasetId, current, withCellAt
 }
 
 async function importCityToPostgres(city, withCellAttributes) {
-  const configFile = CITY_CONFIG[city];
-  if (!configFile) {
+  if (!CITY_CONFIG[city]) {
     throw new Error(`No R config mapping for city "${city}". Add it to CITY_CONFIG in sync-pipeline-from-storage.mjs`);
   }
 
   const pipelineDir = join(REPO_ROOT, 'pipeline');
   const rScript = `
-    source("${configFile}")
+    CITY <- "${city}"
+    source("config.R")
     Sys.setenv(POSTGRES_IMPORT_ENABLED = "1")
     source("07_import/import_to_postgres.R")
   `.trim();

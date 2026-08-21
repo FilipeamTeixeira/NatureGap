@@ -133,7 +133,7 @@ DATA_IMPORT <- file.path(PIPELINE_ROOT, "data", "raw")
 # file name (without .R) under pipeline/cities/ and matches CITY_ID.
 
 CITIES_DIR   <- file.path(PIPELINE_ROOT, "cities")
-DEFAULT_CITY <- "yokohama-honmoku"
+DEFAULT_CITY <- "yokohama"
 
 CITY <- local({
   if (exists("CITY", envir = globalenv(), inherits = FALSE)) {
@@ -531,9 +531,16 @@ if (!exists("RASTER_DOWNLOADERS_EXTRA")) RASTER_DOWNLOADERS_EXTRA <- character(0
 # National CIR orthophoto coverage is a property of the country, not of the
 # city, so a city file should not have to remember it. Keyed on a normalised
 # CITY_COUNTRY; every entry must be a real script carrying that country's own
-# WMS endpoint, layer name and band order — there is no generic "fetch CIR"
-# path. Belgium is absent deliberately: its orthophotos are regional (Flanders
-# and Wallonia are separate agencies), so it needs its own script(s) first.
+# endpoint, layer/coverage name and band order — there is no generic "fetch
+# CIR" path.
+#
+# Belgium is keyed here as one country but is covered only for Flanders: its
+# orthophotos are regional (Digitaal Vlaanderen and SPW Wallonia are separate
+# agencies) and this map has no room for a sub-national key. A Walloon city
+# would therefore be routed to the Flemish downloader, which refuses AOIs
+# outside its coverage envelope rather than fetching nodata. Brussels-Capital
+# sits inside that envelope but is a hole in the Flemish mosaic; the downloader
+# warns when an AOI comes back mostly nodata. Wallonia needs its own script.
 #
 # Countries absent here simply get no CIR. veg_fraction and ndvi_texture stay
 # NA and connectivity falls back to the WorldCover tree/shrub/grass fractions —
@@ -546,15 +553,17 @@ if (!exists("RASTER_DOWNLOADERS_EXTRA")) RASTER_DOWNLOADERS_EXTRA <- character(0
 # an explicit, per-city opt-in.
 CIR_DOWNLOADER_BY_COUNTRY <- c(
   "netherlands" = "00_download/download_nl_cir_ndvi.R",
-  "portugal"    = "00_download/download_pt_ortho_ndvi.R"
+  "portugal"    = "00_download/download_pt_ortho_ndvi.R",
+  "belgium"     = "00_download/download_be_flanders_cir_ndvi.R"
 )
 
-# Each CIR script hardcodes WMS_CRS and assigns ext()/crs() from the requested
+# Each CIR script hardcodes its service CRS and assigns ext()/crs() from the requested
 # bbox with no reprojection, so a CRS_LOCAL mismatch misplaces the raster
 # silently instead of erroring. Assert the pairing up front.
 CIR_EXPECTED_CRS <- c(
   "netherlands" = "EPSG:28992",
-  "portugal"    = "EPSG:3763"
+  "portugal"    = "EPSG:3763",
+  "belgium"     = "EPSG:31370"
 )
 
 # Trim and lowercase before stripping the article: doing it the other way
