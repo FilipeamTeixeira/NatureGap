@@ -34,6 +34,15 @@ relation_id <- c(11960504L, 15419236L, 15419239L, 15419240L)           # Amsterd
 # Zuid - 15419239
 # Oost - 15419240
 
+# ── Tileset sharding ──────────────────────────────────────────────────────────
+# "yes" publishes the hex tileset as several PMTiles archives instead of one,
+# for a city whose single archive cannot fit the Storage upload cap even at the
+# zoom floor. Analysis is unaffected — one AOI, one hex lattice, one
+# connectivity graph, one set of legend percentiles; only the published tiles
+# are split, by cell centroid, into equal-count contiguous blocks.
+SHARD_TILES   <- "no"
+# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+
 # ── Optional raster sources ───────────────────────────────────────────────────
 # The PDOK CIR downloader is added automatically by config.R, from
 # CIR_DOWNLOADER_BY_COUNTRY — CITY_COUNTRY is "The Netherlands".

@@ -157,7 +157,8 @@ if (!file.exists(CITY_FILE)) {
 # cities in one R session cannot inherit the previous city's settings.
 local({
   optional <- c("relation_id", "bbox", "aoi_file", "aoi_layer", "BBOX_CITY",
-                "halo_m", "tile_size_m", "RASTER_DOWNLOADERS_EXTRA")
+                "halo_m", "tile_size_m", "RASTER_DOWNLOADERS_EXTRA",
+                "SHARD_TILES", "SHARD_TILES_N")
   stale <- intersect(optional, ls(envir = globalenv()))
   if (length(stale)) rm(list = stale, envir = globalenv())
 })

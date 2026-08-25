@@ -382,6 +382,114 @@ tile_hexgrid <- function(tippecanoe, source_path, output_path, max_zoom) {
   file.info(output_path)$size
 }
 
+# ── Optional tileset sharding ────────────────────────────────────────────────
+# A city file may set SHARD_TILES <- "yes" to publish the hex tileset as several
+# PMTiles archives instead of one. It exists for cities whose single archive
+# cannot be brought under MAX_UPLOAD_BYTES by the zoom ladder alone: Gent's
+# 120 km2 AOI renders 229k cells and lands at 73 MB even at the zoom floor,
+# and PMTiles cannot be byte-split — it is read by HTTP range request, so a
+# reader needs the whole file addressable.
+#
+# This is a *publishing* step and nothing else. Every statistic above is already
+# computed city-wide — one hex lattice, one connectivity graph, one residual
+# mean/sd, one set of city_layer_stats percentiles — so sharding cannot change a
+# value, only which archive carries it. Running two city configs instead would
+# split all of that: each config gets its own AOI, its own percentiles (so the
+# legend would disagree across the seam) and its own CITY_ID, which is a
+# primary-key prefix in Supabase.
+#
+# Cells are assigned to exactly one shard, so none is duplicated or lost. The
+# frontend registers one MapLibre source per shard, each with its own bounds
+# (src/lib/pmtiles-storage.ts), which is the same mechanism that already keeps
+# several cities on one map.
+shard_tiles_enabled <- function() {
+  if (!exists("SHARD_TILES")) return(FALSE)
+  value <- SHARD_TILES
+  if (is.logical(value)) return(isTRUE(value))
+  isTRUE(tolower(trimws(as.character(value)[1L])) %in% c("yes", "y", "true", "on"))
+}
+
+shard_tile_count <- function() {
+  if (!exists("SHARD_TILES_N")) return(2L)
+  n <- suppressWarnings(as.integer(SHARD_TILES_N))
+  if (is.na(n) || n < 2L) {
+    warning("SHARD_TILES_N must be 2 or more — using 2.", call. = FALSE)
+    return(2L)
+  }
+  n
+}
+
+shard_file_name <- function(index) sprintf("hexgrid-shard-%02d.pmtiles", index)
+
+# Cut along the longer axis at centroid quantiles, not at equal width: equal
+# width would split Gent into a dense urban strip and a sparse rural one, and
+# the archives would come out as lopsided as the cells are. Quantiles give every
+# shard the same cell count, hence roughly equal bytes. The cut is a straight
+# line across the extent, so each shard stays one contiguous block with a clean
+# bbox for its source's `bounds`.
+tile_shard_index <- function(value, n) {
+  centroids <- suppressWarnings(
+    sf::st_coordinates(sf::st_point_on_surface(sf::st_geometry(value)))
+  )
+  bb <- sf::st_bbox(value)
+  axis <- if ((bb[["xmax"]] - bb[["xmin"]]) >= (bb[["ymax"]] - bb[["ymin"]])) "X" else "Y"
+  coord <- centroids[, axis]
+  breaks <- stats::quantile(coord, probs = seq(0, 1, length.out = n + 1L), names = FALSE)
+  breaks <- unique(breaks)
+  if (length(breaks) < 2L) {
+    return(list(axis = axis, index = rep(1L, nrow(value)), shards = 1L))
+  }
+  breaks[[1L]] <- -Inf
+  breaks[[length(breaks)]] <- Inf
+  index <- as.integer(cut(coord, breaks = breaks, labels = FALSE, include.lowest = TRUE))
+  list(axis = axis, index = index, shards = length(breaks) - 1L)
+}
+
+# One entry point for both modes, so the call site and the manifest do not have
+# to know which one ran. Stale archives from a previous mode are removed first:
+# a hexgrid.pmtiles left behind by an unsharded run would otherwise be staged
+# and uploaded alongside the shards, and the frontend would read a whole extra
+# copy of the city.
+write_hexgrid_tilesets <- function(value, export_dir) {
+  unlink(c(
+    file.path(export_dir, "hexgrid.pmtiles"),
+    list.files(export_dir, pattern = "^hexgrid-shard-[0-9]+\\.pmtiles$", full.names = TRUE)
+  ))
+
+  if (!shard_tiles_enabled()) {
+    path <- file.path(export_dir, "hexgrid.pmtiles")
+    validation <- write_hexgrid_pmtiles(value, path)
+    return(list(sharded = FALSE, files = "hexgrid.pmtiles", validations = list(validation)))
+  }
+
+  split <- tile_shard_index(value, shard_tile_count())
+  cat(sprintf(
+    "  → SHARD_TILES is on: splitting %d render cells into %d archive(s) along %s\n",
+    nrow(value), split$shards, if (split$axis == "X") "easting" else "northing"
+  ))
+
+  files <- character(0)
+  validations <- list()
+  for (i in seq_len(split$shards)) {
+    part <- value[split$index == i, , drop = FALSE]
+    if (nrow(part) == 0L) {
+      warning(sprintf("Tile shard %d holds no cells — skipped.", i), call. = FALSE)
+      next
+    }
+    file_name <- shard_file_name(i)
+    cat(sprintf("  → shard %d/%d: %d cells\n", i, split$shards, nrow(part)))
+    validations[[length(validations) + 1L]] <- write_hexgrid_pmtiles(
+      part, file.path(export_dir, file_name)
+    )
+    files <- c(files, file_name)
+  }
+
+  if (length(files) == 0L) {
+    stop("SHARD_TILES is on but no shard produced an archive.", call. = FALSE)
+  }
+  list(sharded = TRUE, files = files, validations = validations)
+}
+
 write_hexgrid_pmtiles <- function(value, output_path) {
   tippecanoe <- Sys.which("tippecanoe")
   if (tippecanoe == "") {
@@ -408,7 +516,7 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   max_zoom <- PMTILES_MAX_ZOOM
   repeat {
     size <- tile_hexgrid(tippecanoe, tmp, tmp_pmtiles, max_zoom)
-    cat(sprintf("  → hexgrid.pmtiles zoom 11-%d: %.1f MB\n", max_zoom, size / 1024^2))
+    cat(sprintf("  → %s zoom 11-%d: %.1f MB\n", basename(output_path), max_zoom, size / 1024^2))
     if (size <= MAX_UPLOAD_BYTES || max_zoom <= PMTILES_MIN_MAX_ZOOM) break
     max_zoom <- max_zoom - 1L
     cat(sprintf(
@@ -484,6 +592,7 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
   )
   files <- c(
     "hexgrid.pmtiles",
+    list.files(export_dir, pattern = "^hexgrid-shard-[0-9]+\\.pmtiles$"),
     compressible, gz_path(compressible),
     "park-stats.json",
     "cell_attributes.manifest.json", "cell-details.manifest.json",
@@ -504,7 +613,21 @@ export_upload_files <- function(export_dir = DATA_EXPORT) {
   unique(files[sapply(file.path(export_dir, files), file.exists)])
 }
 
-stage_versioned_exports <- function(validation, cell_count, park_count) {
+stage_versioned_exports <- function(validation, cell_count, park_count, tilesets = NULL) {
+  sharded <- isTRUE(tilesets$sharded)
+  tileset_files <- if (is.null(tilesets)) "hexgrid.pmtiles" else tilesets$files
+  # One entry per archive, each with the bounds its own source needs.
+  tileset_entries <- lapply(seq_along(tileset_files), function(i) {
+    v <- tilesets$validations[[i]]
+    list(
+      path = tileset_files[[i]],
+      sourceLayer = PMTILES_SOURCE_LAYER,
+      minZoom = v$minZoom,
+      maxZoom = v$maxZoom,
+      bounds = as.list(v$bounds)
+    )
+  })
+
   dir.create(VERSIONED_EXPORT_DIR, recursive = TRUE, showWarnings = FALSE)
 
   files <- export_upload_files(DATA_EXPORT)
@@ -622,12 +745,16 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
       renderCells = as.integer(cell_count),
       parks = as.integer(park_count)
     ),
+    # path stays NULL when sharded rather than naming one shard: a consumer that
+    # predates sharding would otherwise load a single archive and render part of
+    # the city as if it were all of it. Missing is loud; half is silent.
     pmtiles = list(
-      path = "hexgrid.pmtiles",
+      path = if (sharded) NULL else "hexgrid.pmtiles",
       sourceLayer = PMTILES_SOURCE_LAYER,
       minZoom = validation$minZoom,
       maxZoom = validation$maxZoom,
-      bounds = as.list(validation$bounds)
+      bounds = as.list(validation$bounds),
+      shards = if (sharded) tileset_entries else NULL
     ),
     files = file_entries
   )
@@ -650,8 +777,19 @@ stage_versioned_exports <- function(validation, cell_count, park_count) {
     generatedAt = manifest$generatedAt,
     manifest = paste0(DATA_VERSION, "/manifest.json"),
     sourceLayer = PMTILES_SOURCE_LAYER,
-    hexgrid = paste0(DATA_VERSION, "/hexgrid.pmtiles")
+    hexgrid = if (sharded) NULL else paste0(DATA_VERSION, "/hexgrid.pmtiles"),
+    hexgridShards = if (sharded) {
+      as.list(paste0(DATA_VERSION, "/", tileset_files))
+    } else {
+      NULL
+    }
   )
+
+  # Drop the unused key outright instead of writing it as {} — write_json()
+  # renders a NULL element as an empty object here, and the frontend reads
+  # current.json with asString(), which would then see a value that is neither
+  # a path nor absent.
+  current <- Filter(Negate(is.null), current)
 
   dir.create(dirname(CURRENT_POINTER_PATH), recursive = TRUE, showWarnings = FALSE)
   jsonlite::write_json(
@@ -1722,9 +1860,12 @@ hexgrid_tiles <- hexgrid_render |>
     interventionRankNorm = if_else(is_unsampled, 0L, unit_index(intervention_rank_norm))
   )
 
-hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")
-pmtiles_validation <- write_hexgrid_pmtiles(hexgrid_tiles, hexgrid_pmtiles_path)
-cat(sprintf("Written: %s (source-layer: %s)\n", hexgrid_pmtiles_path, PMTILES_SOURCE_LAYER))
+hexgrid_tilesets <- write_hexgrid_tilesets(hexgrid_tiles, DATA_EXPORT)
+pmtiles_validation <- hexgrid_tilesets$validations[[1L]]
+for (tileset_file in hexgrid_tilesets$files) {
+  cat(sprintf("Written: %s (source-layer: %s)\n",
+              file.path(DATA_EXPORT, tileset_file), PMTILES_SOURCE_LAYER))
+}
 
 # Derived ecological network (04_connectivity/network_derive.R): habitat-core
 # nodes and the least-cost corridors between them. A corridor is emitted as one
@@ -1909,7 +2050,8 @@ cat("Written: top_interventions.json\n")
 staged <- stage_versioned_exports(
   pmtiles_validation,
   cell_count = nrow(hexgrid_tiles),
-  park_count = length(park_stats_out)
+  park_count = length(park_stats_out),
+  tilesets = hexgrid_tilesets
 )
 
 storage_folder <- paste0("pipeline-export/", CITY_ID, "/", DATA_VERSION, "/")

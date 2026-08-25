@@ -8,6 +8,8 @@ export type ActivePipelineDataset = {
   basePath: string;
   manifestPath: string;
   hexgridPath: string;
+  /** Set when the city publishes its tileset as several archives (SHARD_TILES). */
+  hexgridShardPaths: string[];
   files: Record<string, string>;
 };
 
@@ -17,6 +19,7 @@ type CurrentPointer = {
   dataVersion?: unknown;
   manifest?: unknown;
   hexgrid?: unknown;
+  hexgridShards?: unknown;
   sourceLayer?: unknown;
 };
 
@@ -28,6 +31,7 @@ type DatasetManifest = {
   pmtiles?: {
     path?: unknown;
     sourceLayer?: unknown;
+    shards?: unknown;
   };
   files?: unknown;
 };
@@ -123,6 +127,43 @@ function mergeDatasets(datasets: ActivePipelineDataset[]): ActivePipelineDataset
   return Array.from(byCity.values());
 }
 
+/**
+ * Archive paths for a sharded tileset, or [] when the city publishes one file.
+ *
+ * A sharded export writes no `pmtiles.path` / `hexgrid` at all — see the note in
+ * export.R — so a reader that ignores shards fails loudly instead of rendering
+ * one shard as if it were the whole city. Both publish routes are covered: the
+ * manifest lists shards under `pmtiles.shards` (relative to the dataset folder)
+ * and current.json under `hexgridShards` (relative to the city folder).
+ */
+function shardPathsFromPointers(
+  cityFolder: string,
+  basePath: string,
+  current: CurrentPointer | null,
+  manifest: DatasetManifest | null,
+): string[] {
+  const fromManifest = Array.isArray(manifest?.pmtiles?.shards)
+    ? (manifest.pmtiles.shards as unknown[])
+        .map((shard) => asString(asObject(shard)?.path))
+        .filter((path): path is string => Boolean(path))
+        .map((path) => joinPath(basePath, path))
+    : [];
+  if (fromManifest.length > 0) return fromManifest;
+
+  return Array.isArray(current?.hexgridShards)
+    ? (current.hexgridShards as unknown[])
+        .map((shard) => asString(shard))
+        .filter((path): path is string => Boolean(path))
+        .map((path) => (path.includes('/') ? joinPath(cityFolder, path) : joinPath(basePath, path)))
+    : [];
+}
+
+/** Every hexgrid archive for a dataset — one entry unless the city shards. */
+export function resolveHexgridPaths(dataset: ActivePipelineDataset): string[] {
+  if (dataset.hexgridShardPaths.length > 0) return dataset.hexgridShardPaths;
+  return [resolveHexgridPath(dataset)];
+}
+
 function datasetFromPointers(
   cityFolder: string,
   current: CurrentPointer,
@@ -156,6 +197,7 @@ function datasetFromPointers(
     basePath,
     manifestPath: joinPath(cityFolder, currentManifestPath),
     hexgridPath,
+    hexgridShardPaths: shardPathsFromPointers(cityFolder, basePath, current, manifest),
     files,
   };
 }
@@ -199,6 +241,7 @@ async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
       basePath,
       manifestPath: normalizedManifestPath,
       hexgridPath: joinPath(basePath, manifestPmtilesPath ?? STORAGE.HEXGRID_PMTILES_KEY),
+      hexgridShardPaths: shardPathsFromPointers(basePath, basePath, null, manifest),
       files,
     };
   }));

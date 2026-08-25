@@ -27,6 +27,15 @@ relation_id <- 3372453L                      # Porto
 #                                              # path relative to pipeline/, must have a CRS
 # aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 
+# ── Tileset sharding ──────────────────────────────────────────────────────────
+# "yes" publishes the hex tileset as several PMTiles archives instead of one,
+# for a city whose single archive cannot fit the Storage upload cap even at the
+# zoom floor. Analysis is unaffected — one AOI, one hex lattice, one
+# connectivity graph, one set of legend percentiles; only the published tiles
+# are split, by cell centroid, into equal-count contiguous blocks.
+SHARD_TILES   <- "no"
+# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.
 # Porto analyses the city centre, not the full municipality relation.

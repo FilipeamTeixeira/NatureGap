@@ -86,6 +86,27 @@ Required vector tile source-layer:
 hexgrid
 ```
 
+### Sharded tilesets
+
+A city file may set `SHARD_TILES <- "yes"` (see `pipeline/cities/*.R`) when its
+tileset cannot be brought under the Storage upload cap by the zoom ladder alone.
+The export then writes `hexgrid-shard-01.pmtiles`, `hexgrid-shard-02.pmtiles`, …
+instead of `hexgrid.pmtiles`, and the frontend registers one MapLibre source per
+shard, each with its own bounds.
+
+Sharding is a publishing step only. Every statistic is computed city-wide before
+it runs — one AOI, one hex lattice, one connectivity graph, one set of
+`city_layer_stats` percentiles — and cells are partitioned by centroid, so no
+cell is duplicated or dropped. Splitting a city into two city configs would not
+be equivalent: each config carries its own AOI, its own percentiles (so legends
+would disagree across the seam) and its own `CITY_ID`, which is a primary-key
+prefix in Supabase.
+
+A sharded export writes no `pmtiles.path` in `manifest.json` and no `hexgrid`
+key in `current.json` — only `pmtiles.shards[]` and `hexgridShards[]`. A reader
+that does not understand shards therefore fails loudly rather than rendering one
+shard as if it were the whole city.
+
 Required feature properties are declared in `PMTILES_REQUIRED_FIELDS`
 (`pipeline/06_export/export.R`) and validated before the tiles are written.
 That list is authoritative; it currently holds 32 fields. Shape:
@@ -490,6 +511,9 @@ Each city publishes immutable versioned products and a stable active pointer:
   }
 }
 ```
+
+A city with `SHARD_TILES` enabled publishes `hexgridShards` — an array of
+archive paths — in place of the single `hexgrid` key.
 
 The frontend discovers active datasets by listing city folders, reading
 `current.json`, then resolving products through the versioned `manifest.json`.

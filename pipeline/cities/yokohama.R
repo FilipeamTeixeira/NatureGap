@@ -35,6 +35,15 @@ relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokoha
 
 
 
+# ── Tileset sharding ──────────────────────────────────────────────────────────
+# "yes" publishes the hex tileset as several PMTiles archives instead of one,
+# for a city whose single archive cannot fit the Storage upload cap even at the
+# zoom floor. Analysis is unaffected — one AOI, one hex lattice, one
+# connectivity graph, one set of legend percentiles; only the published tiles
+# are split, by cell centroid, into equal-count contiguous blocks.
+SHARD_TILES   <- "no"
+# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+
 # ── Optional raster sources ───────────────────────────────────────────────────
 RASTER_DOWNLOADERS_EXTRA <- c(
   "00_download/download_canopy_height.R"
