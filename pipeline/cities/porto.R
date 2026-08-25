@@ -22,8 +22,8 @@ REGIONAL_PBF <- "portugal-latest.osm.pbf"    # under data/raw/regional/
 aoi_mode    <- "relation"                    # "relation", "bbox", or "file"
 relation_id <- 3372453L                      # Porto
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
-# aoi_file  <- "data/boundaries/custom/porto.shp"   # set aoi_mode <- "file" to use
-#                                              # any GDAL format (.shp/.gpkg/.geojson),
+# aoi_file  <- "data/boundaries/custom/porto.geojson"   # set aoi_mode <- "file" to use
+#                                              # GeoJSON preferred (.shp/.gpkg also read),
 #                                              # path relative to pipeline/, must have a CRS
 # aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 

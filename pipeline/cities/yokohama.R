@@ -28,8 +28,8 @@ relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokoha
 #Minami-ku: 2689452
 
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
-# aoi_file  <- "data/boundaries/custom/yokohama.shp"   # set aoi_mode <- "file" to use
-#                                              # any GDAL format (.shp/.gpkg/.geojson),
+# aoi_file  <- "data/boundaries/custom/yokohama.geojson"   # set aoi_mode <- "file" to use
+#                                              # GeoJSON preferred (.shp/.gpkg also read),
 #                                              # path relative to pipeline/, must have a CRS
 # aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 

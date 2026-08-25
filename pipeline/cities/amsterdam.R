@@ -24,8 +24,8 @@ relation_id <- c(11960504L, 15419236L, 15419239L, 15419240L)           # Amsterd
                                                  # here (e.g. Amstelveen, Diemen) — all
                                                  # IDs are unioned into one AOI polygon.
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
-# aoi_file  <- "data/boundaries/custom/amsterdam.shp"   # set aoi_mode <- "file" to use
-#                                              # any GDAL format (.shp/.gpkg/.geojson),
+# aoi_file  <- "data/boundaries/custom/amsterdam.geojson"   # set aoi_mode <- "file" to use
+#                                              # GeoJSON preferred (.shp/.gpkg also read),
 #                                              # path relative to pipeline/, must have a CRS
 # aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 

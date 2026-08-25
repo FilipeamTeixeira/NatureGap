@@ -251,8 +251,9 @@ bbox_to_aoi <- function(bbox, city) {
     sf::st_sf(city = city)
 }
 
-# AOI read from a file the user supplies — a shapefile, GeoPackage, GeoJSON, or
-# anything else GDAL can open. Use this when the OSM relation is a poor study
+# AOI read from a file the user supplies — GeoJSON for preference (one file, CRS
+# always present, diffable), though any format GDAL can open works, shapefiles
+# and GeoPackages included. Use this when the OSM relation is a poor study
 # area (Gent's municipality reaches far out into the Kanaalzone and the rural
 # deelgemeenten) and a bbox is too crude. Nothing is cached: the file on disk is
 # the source of truth, so editing it and rerunning picks the new shape up.
@@ -298,8 +299,9 @@ file_to_aoi <- function(aoi_file, city, layer = NULL, pipeline_root = NULL) {
 
   if (is.na(sf::st_crs(polygons))) {
     stop(sprintf(paste0("aoi_file has no CRS: %s\n",
-                        "  Give the file a .prj (or write it out from GIS with a CRS set) -- ",
-                        "coordinates cannot be reprojected without one."), path),
+                        "  Export it from GIS with a CRS set (GeoJSON is EPSG:4326 by ",
+                        "definition; a shapefile needs its .prj) -- coordinates cannot be ",
+                        "reprojected without one."), path),
          call. = FALSE)
   }
 
