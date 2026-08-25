@@ -4,7 +4,7 @@
 # Sources:
 #   - iNaturalist  (REST API — research + needs_id / “Verifiable”)
 #   - GBIF         (rgbif — occ_download when credentialed, else occ_search)
-#   - OpenStreetMap (osmdata)
+#   - OpenStreetMap (local tile PBFs via GDAL; osmdata/Overpass as fallback)
 #   - ESA WorldCover 10m landcover classification (from data/raw/)
 #   - EMC-BUILT impervious surface fraction       (from data/raw/)
 #
@@ -857,227 +857,207 @@ st_write(gbif_sf, RAW_GBIF, delete_dsn = TRUE)
 cat(sprintf("  → %d GBIF records written\n", nrow(gbif_sf)))
 
 # ── 3. OpenStreetMap: green spaces + path network ─────────────────────────────
+#
+# Read from the per-tile .osm.pbf extracts that 01_ingest/tile_registry.R cuts
+# out of the regional PBF: GDAL's OSM driver serves the same ways and relations
+# Overpass does, off local disk, with no rate limit, no 20 s inter-query pause
+# and no five-retries-across-four-endpoints failure mode. Overpass survives only
+# as the fallback for a city with no local extract, or whose tiles do not span
+# BBOX_CITY — hence the osmdata helpers above are still here.
+#
+# Only two layers are written. RAW_OSM_GREEN is read by 02_spatial/spatial_base.R
+# and 06_export/export.R; RAW_OSM_PATHS is the fallback path network for
+# 04_connectivity, which prefers the tile PBFs itself. The layers this step used
+# to fetch as well — roads, rail, street lamps, lit roads, amenities, ground
+# vegetation, water bodies, waterways — were written and never read by anything:
+# 02_habitat/process_tile.R derives all of those from the tile PBFs directly.
 
-cat("Fetching OpenStreetMap features...\n")
+GREEN_LEISURE_VALUES <- c("park", "nature_reserve", "garden")
+PATH_HIGHWAY_VALUES  <- c("path", "footway", "pedestrian", "steps", "track")
+
+OSM_TILES_DIR <- file.path(PIPELINE_ROOT, "data", "tiles", city)
+
+# GDAL's OSM driver promotes only the keys listed in its osmconf.ini to columns;
+# everything else lands in the other_tags hstore. Same backfill as
+# 02_habitat/process_tile.R and 04_connectivity/connectivity_load.R.
+osm_tag_from_other <- function(other_tags, key) {
+  if (is.na(other_tags) || !nzchar(other_tags)) return(NA_character_)
+  pattern <- paste0("\"", key, "\"=>\"([^\"]*)\"")
+  match <- regexpr(pattern, other_tags, perl = TRUE)
+  if (match[1L] == -1L) return(NA_character_)
+  substr(other_tags, match[1L] + nchar(key) + 4L, match[1L] + attr(match, "match.length") - 2L)
+}
+
+osm_tile_pbfs <- function(tiles_dir = OSM_TILES_DIR) {
+  sort(list.files(tiles_dir, pattern = "\\.osm\\.pbf$", full.names = TRUE))
+}
+
+# Tiles are cut from the AOI plus its halo, so they span BBOX_CITY — unless a
+# city file pins BBOX_CITY wider than its own AOI. Check rather than assume: a
+# tile set that stops short would truncate the layer silently, which is exactly
+# the failure osm_cache_stale_reason() exists to catch.
+osm_tiles_cover_city <- function(tiles_dir = OSM_TILES_DIR) {
+  core <- file.path(tiles_dir, "core_tiles.gpkg")
+  if (!file.exists(core)) return(FALSE)
+  bb <- tryCatch(
+    st_bbox(st_transform(st_read(core, quiet = TRUE), 4326)),
+    error = function(e) NULL
+  )
+  if (is.null(bb)) return(FALSE)
+  tol <- 1e-6
+  bb[["xmin"]] <= BBOX_CITY[["xmin"]] + tol &&
+    bb[["ymin"]] <= BBOX_CITY[["ymin"]] + tol &&
+    bb[["xmax"]] >= BBOX_CITY[["xmax"]] - tol &&
+    bb[["ymax"]] >= BBOX_CITY[["ymax"]] - tol
+}
+
+# One feature straddling a tile boundary is present in every halo that covers
+# it, so the same osm_id comes back several times. Keys are namespaced by
+# origin: in the multipolygons layer a relation-built area carries osm_id and a
+# way-built one carries osm_way_id, and the two ID spaces overlap.
+osm_dedupe_key <- function(x) {
+  id <- if ("osm_id" %in% names(x)) as.character(x$osm_id) else rep(NA_character_, nrow(x))
+  way <- if ("osm_way_id" %in% names(x)) as.character(x$osm_way_id) else rep(NA_character_, nrow(x))
+  has_id <- !is.na(id) & nzchar(id)
+  ifelse(has_id, paste0("r", id), paste0("w", way))
+}
+
+read_local_osm <- function(layers, tag_cols, pbfs, wkt_filter) {
+  parts <- unlist(
+    lapply(pbfs, function(pbf) {
+      lapply(layers, function(layer) {
+        out <- tryCatch(
+          st_read(pbf, layer = layer, wkt_filter = wkt_filter, quiet = TRUE,
+                  int64_as_string = TRUE),
+          error = function(e) NULL
+        )
+        if (is.null(out) || nrow(out) == 0L) NULL else out
+      })
+    }),
+    recursive = FALSE
+  )
+  parts <- Filter(Negate(is.null), parts)
+  if (length(parts) == 0L) return(st_sf(geometry = st_sfc(crs = 4326)))
+
+  out <- bind_rows(parts)
+  for (col in tag_cols) {
+    if (!col %in% names(out)) out[[col]] <- NA_character_
+    if ("other_tags" %in% names(out)) {
+      missing <- is.na(out[[col]]) | !nzchar(out[[col]])
+      if (any(missing)) {
+        out[[col]][missing] <- vapply(out$other_tags[missing], osm_tag_from_other,
+                                      character(1L), key = col)
+      }
+    }
+  }
+  out[!duplicated(osm_dedupe_key(out)), , drop = FALSE]
+}
+
+# NULL when the tiles yield nothing usable, so the caller can fall back to
+# Overpass instead of writing an empty layer over a real one.
+read_local_green_spaces <- function(pbfs, wkt_filter) {
+  polys <- read_local_osm("multipolygons", "leisure", pbfs, wkt_filter)
+  polys <- polys[!is.na(polys$leisure) & polys$leisure %in% GREEN_LEISURE_VALUES, , drop = FALSE]
+  if (nrow(polys) == 0L) return(NULL)
+  polys |>
+    st_make_valid() |>
+    st_cast("MULTIPOLYGON") |>
+    st_transform(CRS_LOCAL)
+}
+
+read_local_paths <- function(pbfs, wkt_filter) {
+  lines <- read_local_osm(c("lines", "multilinestrings"), "highway", pbfs, wkt_filter)
+  lines <- lines[!is.na(lines$highway) & lines$highway %in% PATH_HIGHWAY_VALUES, , drop = FALSE]
+  if (nrow(lines) == 0L) return(NULL)
+  st_transform(lines, CRS_LOCAL)
+}
+
+cat("Loading OpenStreetMap features...\n")
 
 # Use BBOX_CITY (analysis domain) — smaller than BBOX_FETCH when they differ.
 osm_bbox <- c(BBOX_CITY["xmin"], BBOX_CITY["ymin"],
               BBOX_CITY["xmax"], BBOX_CITY["ymax"])
+osm_wkt_filter <- st_as_text(
+  st_as_sfc(st_bbox(c(xmin = unname(osm_bbox[[1L]]), ymin = unname(osm_bbox[[2L]]),
+                      xmax = unname(osm_bbox[[3L]]), ymax = unname(osm_bbox[[4L]])),
+                    crs = 4326)),
+  trim = TRUE
+)
+
+osm_local_pbfs <- osm_tile_pbfs()
+osm_use_local <- length(osm_local_pbfs) > 0L && osm_tiles_cover_city()
+
+if (osm_use_local) {
+  cat(sprintf("  → reading from %d local tile PBF(s) in %s — no Overpass\n",
+              length(osm_local_pbfs), OSM_TILES_DIR))
+} else if (length(osm_local_pbfs) > 0L) {
+  cat(paste0("  → local tile PBFs stop short of BBOX_CITY (they were cut for an ",
+             "earlier AOI) — using Overpass.\n",
+             "    Re-run 01_ingest/tile_registry.R to rebuild them for the current ",
+             "AOI and this step goes fully local.\n"))
+} else {
+  cat(sprintf("  → no tile PBFs in %s (run 01_ingest/tile_registry.R) — using Overpass\n",
+              OSM_TILES_DIR))
+}
 
 if (!use_osm_cache(RAW_OSM_GREEN, 1L, "OSM green spaces")) {
-  overpass_pause_before_query()
-  osm_green <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "leisure",
-                      value = c("park", "nature_reserve", "garden")) |>
-      osmdata_sf()
-  }, "OSM green spaces")
-
-  green_polygons <- if (!is.null(combine_osm_polygons(osm_green))) {
-    combine_osm_polygons(osm_green) |> st_transform(CRS_LOCAL)
+  green_polygons <- if (osm_use_local) {
+    read_local_green_spaces(osm_local_pbfs, osm_wkt_filter)
   } else {
-    warning("No OSM green space polygons returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+    NULL
   }
+
+  if (is.null(green_polygons)) {
+    if (osm_use_local) {
+      cat("  → no green space polygons in the tile PBFs — falling back to Overpass\n")
+    }
+    overpass_pause_before_query()
+    osm_green <- fetch_osm_sf(function() {
+      opq(bbox = osm_bbox, timeout = 180) |>
+        add_osm_feature(key = "leisure", value = GREEN_LEISURE_VALUES) |>
+        osmdata_sf()
+    }, "OSM green spaces")
+
+    green_polygons <- if (!is.null(combine_osm_polygons(osm_green))) {
+      combine_osm_polygons(osm_green) |> st_transform(CRS_LOCAL)
+    } else {
+      warning("No OSM green space polygons returned — writing empty layer")
+      st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+    }
+  }
+
   write_osm_cache(green_polygons, RAW_OSM_GREEN)
   cat(sprintf("  → %d green space polygons written\n", nrow(green_polygons)))
 }
 
-if (!use_osm_cache(RAW_OSM_GROUND_VEG, 0L, "OSM ground vegetation")) {
-  overpass_pause_before_query()
-  osm_ground_veg <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "natural", value = c("grassland", "scrub")) |>
-      osmdata_sf()
-  }, "OSM ground vegetation")
-
-  ground_veg_polygons <- if (!is.null(combine_osm_polygons(osm_ground_veg))) {
-    combine_osm_polygons(osm_ground_veg) |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM ground vegetation polygons returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(ground_veg_polygons, RAW_OSM_GROUND_VEG)
-  cat(sprintf("  → %d ground vegetation polygons written\n", nrow(ground_veg_polygons)))
-
-  overpass_pause_before_query()
-  osm_ground_veg2 <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "landuse", value = c("grass", "meadow", "allotments")) |>
-      osmdata_sf()
-  }, "OSM ground vegetation (landuse)")
-
-  ground_veg_polygons2 <- if (!is.null(combine_osm_polygons(osm_ground_veg2))) {
-    combine_osm_polygons(osm_ground_veg2) |> st_transform(CRS_LOCAL)
-  } else {
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  ground_veg_polygons_all <- bind_rows(ground_veg_polygons, ground_veg_polygons2)
-  write_osm_cache(ground_veg_polygons_all, RAW_OSM_GROUND_VEG)
-  cat(sprintf("  → %d ground vegetation polygons written (combined)\n", nrow(ground_veg_polygons_all)))
-}
-
 if (!use_osm_cache(RAW_OSM_PATHS, 0L, "OSM paths")) {
-  overpass_pause_before_query()
-  osm_paths <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "highway",
-                      value = c("path", "footway", "pedestrian", "steps", "track")) |>
-      osmdata_sf()
-  }, "OSM paths")
-
-  path_lines <- if (!is.null(osm_paths$osm_lines)) {
-    osm_paths$osm_lines |> st_transform(CRS_LOCAL)
+  path_lines <- if (osm_use_local) {
+    read_local_paths(osm_local_pbfs, osm_wkt_filter)
   } else {
-    warning("No OSM path lines returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+    NULL
   }
+
+  if (is.null(path_lines)) {
+    if (osm_use_local) {
+      cat("  → no path lines in the tile PBFs — falling back to Overpass\n")
+    }
+    overpass_pause_before_query()
+    osm_paths <- fetch_osm_sf(function() {
+      opq(bbox = osm_bbox, timeout = 180) |>
+        add_osm_feature(key = "highway", value = PATH_HIGHWAY_VALUES) |>
+        osmdata_sf()
+    }, "OSM paths")
+
+    path_lines <- if (!is.null(osm_paths$osm_lines)) {
+      osm_paths$osm_lines |> st_transform(CRS_LOCAL)
+    } else {
+      warning("No OSM path lines returned — writing empty layer")
+      st_sf(geometry = st_sfc(crs = CRS_LOCAL))
+    }
+  }
+
   write_osm_cache(path_lines, RAW_OSM_PATHS)
   cat(sprintf("  → %d path lines written\n", nrow(path_lines)))
-}
-
-if (!use_osm_cache(RAW_OSM_ROADS, 0L, "OSM roads")) {
-  overpass_pause_before_query()
-  osm_roads <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "highway",
-                      value = c("motorway", "trunk", "primary", "secondary",
-                                "tertiary", "residential", "service",
-                                "unclassified", "living_street")) |>
-      osmdata_sf()
-  }, "OSM roads")
-
-  road_lines <- if (!is.null(osm_roads$osm_lines)) {
-    osm_roads$osm_lines |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM road lines returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(road_lines, RAW_OSM_ROADS)
-  cat(sprintf("  → %d road lines written\n", nrow(road_lines)))
-}
-
-if (!use_osm_cache(RAW_OSM_RAIL, 0L, "OSM rail")) {
-  overpass_pause_before_query()
-  osm_rail <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "railway",
-                      value = c("rail", "light_rail", "subway", "tram")) |>
-      osmdata_sf()
-  }, "OSM rail")
-
-  rail_lines <- if (!is.null(osm_rail$osm_lines)) {
-    osm_rail$osm_lines |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM rail lines returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(rail_lines, RAW_OSM_RAIL)
-  cat(sprintf("  → %d rail lines written\n", nrow(rail_lines)))
-}
-
-if (!use_osm_cache(RAW_OSM_LAMPS, 0L, "OSM street lamps")) {
-  overpass_pause_before_query()
-  osm_lamps <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "highway", value = "street_lamp") |>
-      osmdata_sf()
-  }, "OSM street lamps")
-
-  lamp_points <- if (!is.null(osm_lamps$osm_points)) {
-    osm_lamps$osm_points |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM street lamps returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(lamp_points, RAW_OSM_LAMPS)
-  cat(sprintf("  → %d street lamp points written\n", nrow(lamp_points)))
-}
-
-if (!use_osm_cache(RAW_OSM_LIT_ROADS, 0L, "OSM lit roads")) {
-  overpass_pause_before_query()
-  osm_lit_roads <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "lit", value = "yes") |>
-      osmdata_sf()
-  }, "OSM lit roads")
-
-  lit_lines <- if (!is.null(osm_lit_roads$osm_lines)) {
-    osm_lit_roads$osm_lines |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM lit road lines returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(lit_lines, RAW_OSM_LIT_ROADS)
-  cat(sprintf("  → %d lit road lines written\n", nrow(lit_lines)))
-}
-
-if (!use_osm_cache(RAW_OSM_AMENITIES, 0L, "OSM amenities")) {
-  overpass_pause_before_query()
-  osm_amenities <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "amenity") |>
-      osmdata_sf()
-  }, "OSM amenities")
-
-  # Project before taking centroids: st_centroid on lon/lat dispatches to s2,
-  # which rejects some OSM multipolygons that GEOS st_make_valid accepts
-  # ("Loop 0 edge 0 crosses loop 2 edge 1", seen in Yokohama). In CRS_LOCAL
-  # the centroid is computed by GEOS on planar coordinates instead.
-  amenity_polygons <- combine_osm_polygons(osm_amenities)
-  amenity_points <- bind_rows(
-    if (!is.null(osm_amenities$osm_points) && nrow(osm_amenities$osm_points) > 0L) {
-      st_transform(osm_amenities$osm_points, CRS_LOCAL)
-    } else NULL,
-    if (!is.null(amenity_polygons)) {
-      suppressWarnings(st_centroid(st_transform(amenity_polygons, CRS_LOCAL)))
-    } else NULL
-  )
-  amenity_points <- if (!is.null(amenity_points) && nrow(amenity_points) > 0L) {
-    amenity_points
-  } else {
-    warning("No OSM amenities returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(amenity_points, RAW_OSM_AMENITIES)
-  cat(sprintf("  → %d amenity points written\n", nrow(amenity_points)))
-}
-
-if (!use_osm_cache(RAW_OSM_WATER_POLY, 0L, "OSM water bodies")) {
-  overpass_pause_before_query()
-  osm_water_bodies <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "natural", value = "water") |>
-      osmdata_sf()
-  }, "OSM water bodies")
-
-  water_polygons <- if (!is.null(combine_osm_polygons(osm_water_bodies))) {
-    combine_osm_polygons(osm_water_bodies) |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM water polygons returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(water_polygons, RAW_OSM_WATER_POLY)
-  cat(sprintf("  → %d water polygons written\n", nrow(water_polygons)))
-}
-
-if (!use_osm_cache(RAW_OSM_WATER, 0L, "OSM waterways")) {
-  overpass_pause_before_query()
-  osm_waterways <- fetch_osm_sf(function() {
-    opq(bbox = osm_bbox, timeout = 180) |>
-      add_osm_feature(key = "waterway",
-                      value = c("river", "stream", "ditch", "drain", "canal")) |>
-      osmdata_sf()
-  }, "OSM waterways")
-
-  water_lines <- if (!is.null(osm_waterways$osm_lines)) {
-    osm_waterways$osm_lines |> st_transform(CRS_LOCAL)
-  } else {
-    warning("No OSM waterway lines returned — writing empty layer")
-    st_sf(geometry = st_sfc(crs = CRS_LOCAL))
-  }
-  write_osm_cache(water_lines, RAW_OSM_WATER)
-  cat(sprintf("  → %d waterway lines written\n", nrow(water_lines)))
 }
 
 # ── 4. ESA WorldCover 10m landcover classification ───────────────────────────

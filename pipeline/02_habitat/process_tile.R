@@ -419,6 +419,16 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   tile_id <- sub("\\.osm\\.pbf$", "", basename(halo_pbf_path))
   message(sprintf("[tile %s] start %s", tile_id, format(Sys.time(), "%H:%M:%S")))
 
+  # build_core_tiles() clips tiles to the AOI, so an edge tile can be a sliver
+  # too small or too oddly shaped to hold a single hex centroid. Everything
+  # below assumes at least one core cell — terra::extract(fun = mean) over an
+  # empty SpatVector fails outright ("arguments imply differing number of rows:
+  # 2, 0") — and such a tile contributes no rows to the combined grid anyway.
+  if (nrow(core_grid) == 0L) {
+    message(sprintf("[tile %s] no hex centroid inside the core polygon — skipped", tile_id))
+    return(grid_valid[0L, , drop = FALSE] |> mutate(tile_id = tile_id))
+  }
+
   # ── Rasters (crop to halo bbox) ───────────────────────────────────────────
   # Halo must be in crs_local when cropping an already-projected raster.
   halo_vect <- terra::vect(st_as_sf(halo_extent))
