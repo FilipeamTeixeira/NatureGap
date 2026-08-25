@@ -156,8 +156,8 @@ if (!file.exists(CITY_FILE)) {
 # Drop optional values left behind by a previously loaded city, so switching
 # cities in one R session cannot inherit the previous city's settings.
 local({
-  optional <- c("relation_id", "bbox", "BBOX_CITY", "halo_m", "tile_size_m",
-                "RASTER_DOWNLOADERS_EXTRA")
+  optional <- c("relation_id", "bbox", "aoi_file", "aoi_layer", "BBOX_CITY",
+                "halo_m", "tile_size_m", "RASTER_DOWNLOADERS_EXTRA")
   stale <- intersect(optional, ls(envir = globalenv()))
   if (length(stale)) rm(list = stale, envir = globalenv())
 })
@@ -195,7 +195,10 @@ aoi <- load_city_aoi(
   boundaries_dir = BOUNDARIES_DIR,
   relation_id = if (aoi_mode == "relation" && exists("relation_id")) relation_id else NULL,
   bbox = if (aoi_mode == "bbox" && exists("bbox")) bbox else NULL,
-  regional_pbf = regional_pbf
+  aoi_file = if (aoi_mode == "file" && exists("aoi_file")) aoi_file else NULL,
+  aoi_layer = if (aoi_mode == "file" && exists("aoi_layer")) aoi_layer else NULL,
+  regional_pbf = regional_pbf,
+  pipeline_root = PIPELINE_ROOT
 )
 
 if (!file.exists(regional_pbf)) {

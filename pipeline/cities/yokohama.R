@@ -19,7 +19,7 @@ CRS_LOCAL <- "EPSG:6674"
 city         <- "yokohama"        # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "kanto-latest.osm.pbf"    # under data/raw/regional/
 
-aoi_mode    <- "relation"                 # "relation" or "bbox"
+aoi_mode    <- "relation"                 # "relation", "bbox", or "file"
 relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokohama
 
 #Naka-ku: 2689447
@@ -28,6 +28,10 @@ relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokoha
 #Minami-ku: 2689452
 
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
+# aoi_file  <- "data/boundaries/custom/yokohama.shp"   # set aoi_mode <- "file" to use
+#                                              # any GDAL format (.shp/.gpkg/.geojson),
+#                                              # path relative to pipeline/, must have a CRS
+# aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 
 
 

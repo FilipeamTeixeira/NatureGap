@@ -19,11 +19,15 @@ CRS_LOCAL <- "EPSG:28992"
 city         <- "noord-holland"                  # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "noord-holland-latest.osm.pbf"   # under data/raw/regional/
 
-aoi_mode    <- "relation"                        # "relation" or "bbox"
+aoi_mode    <- "relation"                        # "relation", "bbox", or "file"
 relation_id <- c(11960504L, 15419236L, 15419239L, 15419240L)           # Amsterdam. Add adjacent relation IDs
                                                  # here (e.g. Amstelveen, Diemen) — all
                                                  # IDs are unioned into one AOI polygon.
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
+# aoi_file  <- "data/boundaries/custom/amsterdam.shp"   # set aoi_mode <- "file" to use
+#                                              # any GDAL format (.shp/.gpkg/.geojson),
+#                                              # path relative to pipeline/, must have a CRS
+# aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 
 # West - 15419236
 # Centrum - 11960504

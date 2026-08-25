@@ -19,9 +19,13 @@ CRS_LOCAL <- "EPSG:3763"
 city         <- "porto"                      # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "portugal-latest.osm.pbf"    # under data/raw/regional/
 
-aoi_mode    <- "relation"                    # "relation" or "bbox"
+aoi_mode    <- "relation"                    # "relation", "bbox", or "file"
 relation_id <- 3372453L                      # Porto
 # bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
+# aoi_file  <- "data/boundaries/custom/porto.shp"   # set aoi_mode <- "file" to use
+#                                              # any GDAL format (.shp/.gpkg/.geojson),
+#                                              # path relative to pipeline/, must have a CRS
+# aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.

@@ -21,9 +21,13 @@ CRS_LOCAL <- "EPSG:31370"
 city         <- "gent"                       # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "belgium-latest.osm.pbf"     # under data/raw/regional/
 
-aoi_mode    <- "bbox"                    # "relation" or "bbox"
+aoi_mode    <- "bbox"                    # "relation", "bbox", or "file"
 #relation_id <- 897671L                       # Gent (municipality, admin_level 8)
-# bbox <- c(xmin = ..., ymin = ..., xmax = ..., ymax = ...)  # set aoi_mode <- "bbox" to use
+bbox <- c(xmin = 3.654156, ymin = 51.025849, xmax = 3.838863, ymax = 51.070850)  # set aoi_mode <- "bbox" to use
+# aoi_file  <- "data/boundaries/custom/gent.shp"   # set aoi_mode <- "file" to use
+#                                              # any GDAL format (.shp/.gpkg/.geojson),
+#                                              # path relative to pipeline/, must have a CRS
+# aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg
 
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.
@@ -44,12 +48,12 @@ aoi_mode    <- "bbox"                    # "relation" or "bbox"
 # fetched (~3.3 GB of requests, ~4 GB peak disk). That is why MAX_TILES in
 # 00_download/download_be_flanders_cir_ndvi.R is 320 rather than the 200 the NL
 # downloader uses. Read the disk note in that file before a cold run.
-BBOX_CITY <- c(
-  xmin = 3.654156,
-  ymin = 51.025849,
-  xmax = 3.838863,
-  ymax = 51.070850
-)
+#BBOX_CITY <- c(
+#  xmin = 3.654156,
+#  ymin = 51.025849,
+#  xmax = 3.838863,
+#  ymax = 51.070850
+#)
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 # The Digitaal Vlaanderen CIR downloader is added automatically by config.R,

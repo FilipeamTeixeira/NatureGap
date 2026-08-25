@@ -47,6 +47,12 @@ export const CITIES: Record<string, CityMeta> = {
     badge:  'Porto · Beta',
     country: 'Portugal',
   },
+  'gent': {
+    name:   'Gent',
+    nameJa: 'Gent',
+    badge:  'Gent · Beta',
+    country: 'Belgium',
+  },
 };
 
 /** Looks up display metadata for a cityId, falling back to the default CITY. */

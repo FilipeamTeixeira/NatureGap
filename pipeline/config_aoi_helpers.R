@@ -9,18 +9,25 @@ relation_ids_key <- function(relation_id) {
   paste(ids, collapse = ",")
 }
 
-log_aoi_extent <- function(aoi_sf, relation_id) {
+log_aoi_source <- function(aoi_sf, source_desc) {
   area_km2 <- tryCatch(
     sum(as.numeric(sf::st_area(sf::st_geometry(aoi_sf)))) / 1e6,
     error = function(e) NA_real_
   )
   bb <- sf::st_bbox(sf::st_transform(aoi_sf, 4326))
   message(sprintf(
-    "[config] AOI from %d relation(s) [%s] | area %.1f km2 | bbox %.4f %.4f %.4f %.4f",
-    length(unique(relation_id)), paste(relation_id, collapse = ", "), area_km2,
+    "[config] AOI from %s | area %.1f km2 | bbox %.4f %.4f %.4f %.4f",
+    source_desc, area_km2,
     bb[["xmin"]], bb[["ymin"]], bb[["xmax"]], bb[["ymax"]]
   ))
   invisible(aoi_sf)
+}
+
+log_aoi_extent <- function(aoi_sf, relation_id) {
+  log_aoi_source(aoi_sf, sprintf(
+    "%d relation(s) [%s]",
+    length(unique(relation_id)), paste(relation_id, collapse = ", ")
+  ))
 }
 
 ring_to_geojson_coords <- function(ring) {
@@ -244,9 +251,82 @@ bbox_to_aoi <- function(bbox, city) {
     sf::st_sf(city = city)
 }
 
+# AOI read from a file the user supplies — a shapefile, GeoPackage, GeoJSON, or
+# anything else GDAL can open. Use this when the OSM relation is a poor study
+# area (Gent's municipality reaches far out into the Kanaalzone and the rural
+# deelgemeenten) and a bbox is too crude. Nothing is cached: the file on disk is
+# the source of truth, so editing it and rerunning picks the new shape up.
+file_to_aoi <- function(aoi_file, city, layer = NULL, pipeline_root = NULL) {
+  path <- path.expand(aoi_file)
+  if (!is.null(pipeline_root) && !startsWith(path, "/")) {
+    path <- file.path(pipeline_root, aoi_file)
+  }
+  if (!file.exists(path)) {
+    stop(sprintf("aoi_file not found: %s", path), call. = FALSE)
+  }
+  # A .shp alone is not readable — the sidecars carry the attributes, the index
+  # and, critically, the CRS. Say which one is missing rather than letting GDAL
+  # fail with a less obvious message.
+  if (grepl("\\.shp$", path, ignore.case = TRUE)) {
+    sidecars <- paste0(sub("\\.shp$", "", path, ignore.case = TRUE), c(".dbf", ".shx"))
+    missing <- sidecars[!file.exists(sidecars)]
+    if (length(missing)) {
+      stop(sprintf("Shapefile %s is missing its sidecar file(s): %s",
+                   path, paste(basename(missing), collapse = ", ")), call. = FALSE)
+    }
+  }
+
+  shape <- if (is.null(layer)) {
+    sf::st_read(path, quiet = TRUE)
+  } else {
+    sf::st_read(path, layer = layer, quiet = TRUE)
+  }
+  if (nrow(shape) == 0L) {
+    stop("aoi_file contains no features: ", path, call. = FALSE)
+  }
+
+  polygons <- shape[sf::st_geometry_type(shape) %in% c("POLYGON", "MULTIPOLYGON"), ]
+  if (nrow(polygons) == 0L) {
+    stop(sprintf("aoi_file holds no polygons (found %s): %s",
+                 paste(unique(as.character(sf::st_geometry_type(shape))), collapse = ", "),
+                 path), call. = FALSE)
+  }
+  if (nrow(polygons) < nrow(shape)) {
+    message(sprintf("[config] aoi_file: ignoring %d non-polygon feature(s).",
+                    nrow(shape) - nrow(polygons)))
+  }
+
+  if (is.na(sf::st_crs(polygons))) {
+    stop(sprintf(paste0("aoi_file has no CRS: %s\n",
+                        "  Give the file a .prj (or write it out from GIS with a CRS set) -- ",
+                        "coordinates cannot be reprojected without one."), path),
+         call. = FALSE)
+  }
+
+  # Several features are unioned into the single study-area polygon the rest of
+  # the pipeline expects, exactly as multiple relations are.
+  geom <- sf::st_union(sf::st_make_valid(sf::st_geometry(polygons)))
+  aoi_sf <- sf::st_sf(city = city, geometry = sf::st_transform(geom, 4326))
+
+  # A file carrying a CRS that is only nominally defined (GDAL substitutes an
+  # engineering CRS for some formats) reprojects without complaint but lands
+  # nowhere real. Catch that here rather than three pipeline steps later.
+  bb <- sf::st_bbox(aoi_sf)
+  if (bb[["xmin"]] < -180 || bb[["xmax"]] > 180 || bb[["ymin"]] < -90 || bb[["ymax"]] > 90) {
+    stop(sprintf(paste0("aoi_file reprojects to coordinates outside the valid lon/lat range: %s\n",
+                        "  Its CRS (%s) is probably wrong -- reproject the file in GIS and try again."),
+                 path, sf::st_crs(polygons)$input), call. = FALSE)
+  }
+
+  log_aoi_source(aoi_sf, sprintf("file %s (%d polygon(s)%s)",
+                                 basename(path), nrow(polygons),
+                                 if (is.null(layer)) "" else paste0(", layer ", layer)))
+}
+
 load_city_aoi <- function(city, aoi_mode, boundaries_dir, relation_id = NULL, bbox = NULL,
-                          regional_pbf = NULL) {
-  mode <- match.arg(aoi_mode, c("relation", "bbox"))
+                          aoi_file = NULL, aoi_layer = NULL, regional_pbf = NULL,
+                          pipeline_root = NULL) {
+  mode <- match.arg(aoi_mode, c("relation", "bbox", "file"))
   cache_path <- file.path(boundaries_dir, paste0(city, ".geojson"))
 
   if (mode == "relation") {
@@ -257,6 +337,11 @@ load_city_aoi <- function(city, aoi_mode, boundaries_dir, relation_id = NULL, bb
       fetch_relation_boundary(relation_id, cache_path, city, regional_pbf = regional_pbf),
       relation_id
     )
+  } else if (mode == "file") {
+    if (is.null(aoi_file)) {
+      stop("aoi_file must be set when aoi_mode == 'file'", call. = FALSE)
+    }
+    file_to_aoi(aoi_file, city, layer = aoi_layer, pipeline_root = pipeline_root)
   } else {
     if (is.null(bbox)) {
       stop("bbox must be set when aoi_mode == 'bbox'", call. = FALSE)
