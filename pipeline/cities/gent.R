@@ -21,10 +21,10 @@ CRS_LOCAL <- "EPSG:31370"
 city         <- "gent"                       # boundary cache + data/tiles/<city>/
 REGIONAL_PBF <- "belgium-latest.osm.pbf"     # under data/raw/regional/
 
-aoi_mode    <- "bbox"                    # "relation", "bbox", or "file"
+aoi_mode    <- "file"                    # "relation", "bbox", or "file"
 #relation_id <- 897671L                       # Gent (municipality, admin_level 8)
 bbox <- c(xmin = 3.654156, ymin = 51.025849, xmax = 3.838863, ymax = 51.070850)  # set aoi_mode <- "bbox" to use
-# aoi_file  <- "data/boundaries/custom/gent.geojson"   # set aoi_mode <- "file" to use
+aoi_file  <- "data/boundaries/custom/gent.geojson"   # set aoi_mode <- "file" to use
 #                                              # GeoJSON preferred (.shp/.gpkg also read),
 #                                              # path relative to pipeline/, must have a CRS
 # aoi_layer <- "layer_name"                    # optional, only for multi-layer .gpkg

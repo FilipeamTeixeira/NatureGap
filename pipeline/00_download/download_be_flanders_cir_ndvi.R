@@ -267,6 +267,38 @@ be_flanders_fetch_tile <- function(tile_bbox, gsd = TARGET_GSD_M) {
   r
 }
 
+# Vegetated / nodata shares of the finished mosaic, read in row blocks.
+#
+# NOT global(x, function(v) ...): terra::global() dispatches an R function by
+# pulling every cell into a single R vector, so a whole-municipality AOI (Gent's
+# geojson boundary is ~1e9 cells) needs ~8 GB as doubles before the comparison
+# allocates its own copy, and R hits mem.maxVSize() *after* the raster has
+# already been written fine. Builtin names ("mean", "isNA") would chunk in C++,
+# but veg_share needs a threshold, so one block-wise pass computes both shares
+# at once with memory bounded by block_cells.
+#
+# veg_share's denominator is the non-NA count, matching mean(na.rm = TRUE).
+STATS_BLOCK_CELLS <- 2e7  # ~160 MB per block as doubles
+
+be_flanders_ndvi_shares <- function(r, threshold, block_cells = STATS_BLOCK_CELLS) {
+  rows_per_block <- max(1L, min(nrow(r), as.integer(block_cells %/% ncol(r))))
+  n_total <- 0; n_na <- 0; n_veg <- 0
+  readStart(r)
+  on.exit(readStop(r), add = TRUE)
+  for (row0 in seq(1L, nrow(r), by = rows_per_block)) {
+    n_rows <- min(rows_per_block, nrow(r) - row0 + 1L)
+    v <- readValues(r, row = row0, nrows = n_rows, col = 1L, ncols = ncol(r))
+    na <- is.na(v)
+    n_total <- n_total + length(v)
+    n_na    <- n_na + sum(na)
+    n_veg   <- n_veg + sum(v[!na] >= threshold)
+  }
+  c(
+    veg = if (n_total > n_na) n_veg / (n_total - n_na) else NA_real_,
+    na  = if (n_total > 0) n_na / n_total else NA_real_
+  )
+}
+
 download_be_flanders_cir_ndvi <- function(bbox = BBOX_CITY,
                                           out_file = BE_FLANDERS_CIR_NDVI_FILE) {
   if (exists("CRS_LOCAL") && !identical(CRS_LOCAL, WCS_CRS)) {
@@ -367,8 +399,9 @@ download_be_flanders_cir_ndvi <- function(bbox = BBOX_CITY,
   unlink(tile_dir, recursive = TRUE)
 
   written <- rast(out_file)
-  veg_share <- global(written, function(x) mean(x >= CIR_VEG_NDVI_THRESHOLD, na.rm = TRUE))[1, 1]
-  na_share  <- global(written, function(x) mean(is.na(x)))[1, 1]
+  shares    <- be_flanders_ndvi_shares(written, CIR_VEG_NDVI_THRESHOLD)
+  veg_share <- unname(shares["veg"])
+  na_share  <- unname(shares["na"])
 
   message(sprintf(
     "Written: %s (%d x %d px at %.2fm, CRS %s)",
