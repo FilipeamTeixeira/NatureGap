@@ -26,6 +26,10 @@ const CSP = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  // A stray package-lock.json in the parent directory makes Next infer the wrong
+  // workspace root, which breaks resolution of node_modules imports (e.g. the
+  // MapLibre stylesheet). Pin the root to this project.
+  turbopack: { root: __dirname },
   async headers() {
     return [
       {
