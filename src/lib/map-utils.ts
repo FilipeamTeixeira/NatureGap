@@ -188,6 +188,24 @@ export function scoreColor(score: number | undefined) {
   return '#2E6F40';
 }
 
+/**
+ * Normalized tile attributes as 0–1 (or −1–1) numbers.
+ *
+ * export.R packs them as 0–100 / −100–100 integers to keep hexgrid.pmtiles
+ * under the Storage upload cap; archives published before that change carry
+ * 0–1 floats. Magnitude decides, exactly as normUnit() does in layer-styles.ts
+ * — |v| > 1 can only be an integer, and the pipeline never emits ±1.
+ *
+ * Only the click preview reads these: page.tsx replaces it with the
+ * full-precision Storage record as soon as fetchCellDetail() resolves.
+ */
+function unitNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.abs(n) > 1 ? n / 100 : n;
+}
+
 export function renderCellProperties(properties: maplibregl.GeoJSONFeature['properties']): RenderCellProperties | null {
   if (!properties) return null;
   const cellId = String(properties.cellId ?? '');
@@ -208,8 +226,8 @@ export function renderCellProperties(properties: maplibregl.GeoJSONFeature['prop
     corridorImportance: properties.corridorImportance == null ? null : Number(properties.corridorImportance),
     betweennessCentrality: properties.betweennessCentrality == null ? null : Number(properties.betweennessCentrality),
     treeCover: properties.treeCover == null ? null : Number(properties.treeCover),
-    treeCoverNorm: properties.treeCoverNorm == null ? null : Number(properties.treeCoverNorm),
-    canopyHeightIdx: properties.canopyHeightIdx == null ? null : Number(properties.canopyHeightIdx),
+    treeCoverNorm: unitNumber(properties.treeCoverNorm),
+    canopyHeightIdx: unitNumber(properties.canopyHeightIdx),
     heatExposure: properties.heatExposure == null ? null : Number(properties.heatExposure),
     meanLst: properties.meanLst == null ? null : Number(properties.meanLst),
     lstIdx: properties.lstIdx == null ? null : Number(properties.lstIdx),
@@ -217,16 +235,16 @@ export function renderCellProperties(properties: maplibregl.GeoJSONFeature['prop
     landUseClass: typeof properties.landUseClass === 'string'
       ? properties.landUseClass as RenderCellProperties['landUseClass']
       : undefined,
-    ndviNorm: properties.ndviNorm == null ? null : Number(properties.ndviNorm),
-    lstNorm: properties.lstNorm == null ? null : Number(properties.lstNorm),
-    disturbanceNorm: properties.disturbanceNorm == null ? null : Number(properties.disturbanceNorm),
-    betweennessNorm: properties.betweennessNorm == null ? null : Number(properties.betweennessNorm),
-    expectedNorm: properties.expectedNorm == null ? null : Number(properties.expectedNorm),
-    habitatQualityNorm: properties.habitatQualityNorm == null ? null : Number(properties.habitatQualityNorm),
-    residualNorm: properties.residualNorm == null ? null : Number(properties.residualNorm),
-    natureGapScoreNorm: properties.natureGapScoreNorm == null ? null : Number(properties.natureGapScoreNorm),
+    ndviNorm: unitNumber(properties.ndviNorm),
+    lstNorm: unitNumber(properties.lstNorm),
+    disturbanceNorm: unitNumber(properties.disturbanceNorm),
+    betweennessNorm: unitNumber(properties.betweennessNorm),
+    expectedNorm: unitNumber(properties.expectedNorm),
+    habitatQualityNorm: unitNumber(properties.habitatQualityNorm),
+    residualNorm: unitNumber(properties.residualNorm),
+    natureGapScoreNorm: unitNumber(properties.natureGapScoreNorm),
     interventionRank: properties.interventionRank == null ? null : Number(properties.interventionRank),
-    interventionRankNorm: properties.interventionRankNorm == null ? null : Number(properties.interventionRankNorm),
+    interventionRankNorm: unitNumber(properties.interventionRankNorm),
     nObs: properties.nObs == null ? undefined : Number(properties.nObs),
     isUnsampled: properties.isUnsampled == null ? undefined : properties.isUnsampled === true,
   };

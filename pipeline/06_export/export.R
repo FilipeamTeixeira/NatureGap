@@ -858,6 +858,35 @@ pct_index <- function(value) {
   as.integer(round(pmin(100, pmax(0, replace_na(value, 0) * 100))))
 }
 
+# Unit-interval render attributes are packed into the tiles as 0-100 integers
+# rather than 4-dp floats. A 4-dp float carries ~10,000 distinct values per
+# tile, each an 8-byte double in tippecanoe's value pool; a 0-100 integer has
+# 101 and packs as a varint. On Gent (229k rendered cells) that is 76.2 MB ->
+# 54.0 MB of hexgrid.pmtiles for a quantization step of 1%, against colour
+# ramps whose five stops span the whole 0-1 interval — well below one 8-bit
+# channel of fill colour. Full precision is untouched everywhere else: the
+# .gpkg, the chunked cell_attributes GeoJSON, the cell-details shards and the
+# PostGIS import all keep the original doubles.
+#
+# +/-1 is nudged to 0 deliberately. src/lib/layer-styles.ts tells a quantized
+# integer from a legacy 0-1 float by magnitude (|v| > 1), so +/-1 is the single
+# ambiguous value — and at the foot of a ramp 0.01 and 0.00 are the same pixel,
+# where reading 1 as 1.0 would paint a bottom-of-scale cell at full intensity.
+unit_index <- function(value) {
+  out <- as.integer(round(pmin(100, pmax(0, replace_na(value, 0) * 100))))
+  out[out == 1L] <- 0L
+  out
+}
+
+# Signed twin for the diverging scales: norm_diverging() (robust_centre) returns
+# [-1, 1], so clamping at 0 the way unit_index() does would erase the whole
+# below-median arm of the ramp.
+signed_unit_index <- function(value) {
+  out <- as.integer(round(pmin(100, pmax(-100, replace_na(value, 0) * 100))))
+  out[abs(out) == 1L] <- 0L
+  out
+}
+
 index_or_pct <- function(value) {
   value <- replace_na(value, 0)
   scaled <- ifelse(abs(value) <= 1, value * 100, value)
@@ -1650,16 +1679,18 @@ hexgrid_tiles <- hexgrid_render |>
     natureGapScore     = if_else(is_unsampled, 0, round(replace_na(nature_gap_score, 0), 1)),
     expectedRichness   = round(replace_na(expected_richness, 0), 1),
     ecologicalResidual = if_else(is_unsampled, 0, round(replace_na(ecological_residual, 0), 1)),
-    ecologicalResidualNormalized = if_else(is_unsampled, 0, round(replace_na(ecological_residual_normalized, 0), 4)),
+    # A z-score against the city mean, not a 0-1 index — it stays a float, at
+    # 0.01 SD. Quantizing it to 0-100 would clamp Gent's -65..0.3 range to zero.
+    ecologicalResidualNormalized = if_else(is_unsampled, 0, round(replace_na(ecological_residual_normalized, 0), 2)),
     habitatQuality     = pct_index(habitat_quality),
     observedRichness   = if_else(is_unsampled, 0, round(replace_na(observed_richness, 0), 1)),
     nObs               = as.integer(replace_na(n_obs, 0L)),
     corridorImportance = pct_index(corridor_importance),
     betweennessCentrality = pct_index(betweenness_centrality),
     treeCover          = pct_index(tree_fraction),
-    canopyHeightIdx    = round(replace_na(canopy_height_idx, 0), 4),
-    vegFraction        = round(veg_fraction, 4),
-    ndviTexture        = round(ndvi_texture, 4),
+    canopyHeightIdx    = unit_index(canopy_height_idx),
+    vegFraction        = unit_index(veg_fraction),
+    ndviTexture        = unit_index(ndvi_texture),
     heatExposure       = pct_index(lst_rank),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
@@ -1671,24 +1702,24 @@ hexgrid_tiles <- hexgrid_render |>
     interventionRank   = as.integer(replace_na(intervention_rank, 50L)),
     # Remote-sensing / structural layers are valid regardless of pedestrian
     # survey effort, so they are not masked by is_unsampled.
-    ndviNorm           = round(replace_na(ndvi_norm, 0), 4),
-    treeCoverNorm      = round(replace_na(tree_cover_norm, 0), 4),
-    lstNorm            = round(replace_na(lst_norm, 0), 4),
-    disturbanceNorm    = round(replace_na(disturbance_norm, 0), 4),
-    betweennessNorm    = round(replace_na(betweenness_norm, 0), 4),
+    ndviNorm           = unit_index(ndvi_norm),
+    treeCoverNorm      = unit_index(tree_cover_norm),
+    lstNorm            = unit_index(lst_norm),
+    disturbanceNorm    = unit_index(disturbance_norm),
+    betweennessNorm    = unit_index(betweenness_norm),
     # corridor_importance is already a 0-1 percentile rank from
     # 04_connectivity, so it needs no further normalisation — re-stretching it
     # by p05/p95 would only clip the tails of an intentionally uniform scale.
     # This is what the connectivity layer draws: betweennessNorm stretches raw
     # betweenness, which under a dispersal cutoff peaks around 8e-05 with a
     # median of 0 and carries almost no visible signal.
-    corridorImportanceNorm = round(replace_na(corridor_importance, 0), 4),
-    expectedNorm       = round(replace_na(expected_richness_norm, 0), 4),
-    habitatQualityNorm = round(replace_na(habitat_quality_norm, 0), 4),
+    corridorImportanceNorm = unit_index(corridor_importance),
+    expectedNorm       = unit_index(expected_richness_norm),
+    habitatQualityNorm = unit_index(habitat_quality_norm),
     # Biodiversity-inference layers stay excluded (zeroed) for unsampled cells.
-    residualNorm       = if_else(is_unsampled, 0, round(replace_na(residual_norm, 0), 4)),
-    natureGapScoreNorm = if_else(is_unsampled, 0, round(replace_na(nature_gap_score_norm, 0), 4)),
-    interventionRankNorm = if_else(is_unsampled, 0, round(replace_na(intervention_rank_norm, 0), 4))
+    residualNorm       = if_else(is_unsampled, 0L, signed_unit_index(residual_norm)),
+    natureGapScoreNorm = if_else(is_unsampled, 0L, signed_unit_index(nature_gap_score_norm)),
+    interventionRankNorm = if_else(is_unsampled, 0L, unit_index(intervention_rank_norm))
   )
 
 hexgrid_pmtiles_path <- file.path(DATA_EXPORT, "hexgrid.pmtiles")

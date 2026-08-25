@@ -426,20 +426,57 @@ function buildDivergingExpression(
   stat: CityLayerStats | undefined,
 ): ExpressionSpecification {
   const bound = stat?.bound;
-  const valueExpression: ExpressionSpecification = bound != null && bound > 0
-    ? [
-        'coalesce',
-        ['get', normProperty],
-        ['/', ['get', rawProperty], bound],
-        0,
-      ] as ExpressionSpecification
-    : ['coalesce', ['get', normProperty], 0] as ExpressionSpecification;
+  // 'case' on ['has', ...] rather than a coalesce over ['get', ...]: the
+  // normalized value now needs scaling before use, and a scaled read can never
+  // be null, so it would swallow the raw fallback if it sat inside a coalesce.
+  const valueExpression: ExpressionSpecification = [
+    'case',
+    hasNumber(normProperty),
+    normUnit(normProperty),
+    bound != null && bound > 0
+      ? ['coalesce', ['/', ['get', rawProperty], bound], 0]
+      : 0,
+  ] as ExpressionSpecification;
 
   return [
     'interpolate',
     ['linear'],
     valueExpression,
     ...DIVERGING_STOPS.flatMap(([value, color]) => [value, color]),
+  ] as ExpressionSpecification;
+}
+
+/**
+ * Read a normalized render attribute as a 0–1 (or −1–1) value.
+ *
+ * export.R packs these into the tiles as integers — unit_index() writes 0–100,
+ * signed_unit_index() writes −100–100 — because a 4-dp float costs an 8-byte
+ * double per distinct value in tippecanoe's pool and blew hexgrid.pmtiles past
+ * the Storage upload cap on Gent. Archives published before that change still
+ * carry 0–1 floats, so the scale is decided by magnitude rather than by a
+ * version flag: |v| > 1 can only be an integer. The pipeline never emits ±1 for
+ * exactly this reason — it is the one value the two conventions share.
+ */
+function hasNumber(property: string): ExpressionSpecification {
+  // ['has', ...] alone is not enough: the park and patch layers are GeoJSON
+  // sources, where a property can be present and null. to-number would then
+  // error ("Expected value to be of type number, but found null instead") and
+  // paint 0 instead of falling through to the raw fallback. Comparing against a
+  // sentinel string catches null without evaluating it as a number.
+  return [
+    'all',
+    ['has', property],
+    ['!=', ['coalesce', ['get', property], 'MISSING'], 'MISSING'],
+  ] as ExpressionSpecification;
+}
+
+function normUnit(property: string): ExpressionSpecification {
+  const value: ExpressionSpecification = ['to-number', ['get', property]];
+  return [
+    'case',
+    ['>', ['abs', value], 1],
+    ['/', value, 100],
+    value,
   ] as ExpressionSpecification;
 }
 
@@ -456,13 +493,10 @@ function unitInterval(property: string): ExpressionSpecification {
 /** Canonical canopy-height value from vector tile / park aggregate properties (0–1). */
 function treeCoverValueExpression(): ExpressionSpecification {
   return [
-    'to-number',
-    [
-      'coalesce',
-      ['get', 'canopyHeightIdx'],
-      ['get', 'treeCoverNorm'],
-      ['/', ['coalesce', ['get', 'treeCover'], 0], 100],
-    ],
+    'case',
+    hasNumber('canopyHeightIdx'), normUnit('canopyHeightIdx'),
+    hasNumber('treeCoverNorm'), normUnit('treeCoverNorm'),
+    ['/', ['to-number', ['coalesce', ['get', 'treeCover'], 0]], 100],
   ] as ExpressionSpecification;
 }
 
@@ -479,7 +513,12 @@ function buildHeatExpression(cityStats: CityLayerStats[] = []): ExpressionSpecif
   return [
     'interpolate',
     ['linear'],
-    ['coalesce', ['get', 'lstNorm'], ['get', 'meanLstNorm'], fromRaw, 0],
+    [
+      'case',
+      hasNumber('lstNorm'), normUnit('lstNorm'),
+      hasNumber('meanLstNorm'), normUnit('meanLstNorm'),
+      ['coalesce', fromRaw, 0],
+    ],
     ...LAYER_RAMPS.heat.flatMap(([value, color]) => [value, color]),
   ] as ExpressionSpecification;
 }
@@ -511,10 +550,9 @@ function buildSequentialExpression(
   const rawValue: ExpressionSpecification = rawIsPercentIndex
     ? unitInterval(rawProperty)
     : ['coalesce', ['get', rawProperty], 0] as ExpressionSpecification;
-  const valueExpression: ExpressionSpecification = low != null && high != null && high > low
+  const fromRaw: ExpressionSpecification = low != null && high != null && high > low
     ? [
         'coalesce',
-        ['get', normProperty],
         [
           'max',
           0,
@@ -523,7 +561,13 @@ function buildSequentialExpression(
         rawValue,
         0,
       ] as ExpressionSpecification
-    : ['coalesce', ['get', normProperty], rawValue, 0] as ExpressionSpecification;
+    : ['coalesce', rawValue, 0] as ExpressionSpecification;
+  const valueExpression: ExpressionSpecification = [
+    'case',
+    hasNumber(normProperty),
+    normUnit(normProperty),
+    fromRaw,
+  ] as ExpressionSpecification;
 
   return [
     'interpolate',
