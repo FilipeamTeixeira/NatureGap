@@ -92,8 +92,8 @@ The whole pipeline runs through one entry point:
 
 ```bash
 cd pipeline
-Rscript run_pipeline.R                      # default city (yokohama-honmoku)
-NATUREGAP_CITY=porto-center Rscript run_pipeline.R
+Rscript run_pipeline.R                      # default city (yokohama)
+NATUREGAP_CITY=porto Rscript run_pipeline.R
 Rscript run_pipeline.R 2                    # start from step 2, skipping ingest
 ```
 
@@ -103,7 +103,7 @@ aggregation → export → optional PostgreSQL import. Individual stages can be
 sourced on their own once `config.R` has been loaded:
 
 ```r
-CITY <- "porto-center"
+CITY <- "porto"
 source("config.R")
 source("04_connectivity/connectivity.R")
 ```
@@ -160,7 +160,7 @@ and database contract), [`docs/data-contract.md`](docs/data-contract.md)
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-NEXT_PUBLIC_PIPELINE_CITY_IDS=porto-center,amsterdam-schimmelstraat,yokohama-honmoku
+NEXT_PUBLIC_PIPELINE_CITY_IDS=porto,amsterdam,yokohama,gent
 NEXT_PUBLIC_CITIZEN_PHOTO_BUCKET=citizen-photos
 DATABASE_URL=...            # R pipeline / import only
 ```

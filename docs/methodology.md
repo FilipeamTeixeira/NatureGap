@@ -39,9 +39,9 @@ CRS:
 
 - Local processing uses each city's national projected CRS, set as `CRS_LOCAL`
   in `pipeline/cities/<city>.R`:
-  - `yokohama-honmoku`: JGD2011 / Japan Plane Rectangular CS VI, `EPSG:6674`
-  - `amsterdam-schimmelstraat`: Amersfoort / RD New, `EPSG:28992`
-  - `porto-center`: ETRS89 / Portugal TM06, `EPSG:3763`
+  - `yokohama`: JGD2011 / Japan Plane Rectangular CS VI, `EPSG:6674`
+  - `amsterdam`: Amersfoort / RD New, `EPSG:28992`
+  - `porto`: ETRS89 / Portugal TM06, `EPSG:3763`
 - Web/PostGIS export: WGS84, `EPSG:4326`
 
 Contract:
@@ -848,9 +848,9 @@ corridor between two major cores is a finding worth seeing at city scale.
 
 | | corridors | sections | nodes (major/secondary/stepping) | median route |
 |---|---|---|---|---|
-| amsterdam-schimmelstraat | 34 | 66 | 31 (6/8/17) | 720 m |
-| porto-center | 49 | 85 | 40 (7/23/10) | 680 m |
-| yokohama-honmoku | 8 | 10 | 9 (5/3/1) | 1060 m |
+| amsterdam | 34 | 66 | 31 (6/8/17) | 720 m |
+| porto | 49 | 85 | 40 (7/23/10) | 680 m |
+| yokohama | 8 | 10 | 9 (5/3/1) | 1060 m |
 
 Amsterdam previously emitted 211 segments (median 92 m) and 404 nodes; Porto 420
 segments and 822 nodes. The edge GeoJSON is now about 5 KB per city.

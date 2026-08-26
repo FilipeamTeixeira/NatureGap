@@ -6,14 +6,14 @@ Use this when `pipeline/data/<city>/export/hexgrid.pmtiles` already exists and
 you only need the Storage bucket in the current manifest-based structure.
 
 ```bash
-npm run stage:pipeline-export -- --city yokohama-honmoku --version 20260627T120000Z
+npm run stage:pipeline-export -- --city yokohama --version 20260627T120000Z
 ```
 
 This creates:
 
 ```text
 pipeline-export/
-  yokohama-honmoku/
+  yokohama/
     current.json
     20260627T120000Z/
       manifest.json
@@ -36,9 +36,9 @@ Upload the contents into the Supabase Storage bucket named `pipeline-export`.
 Inside the bucket, object paths should start with the city id:
 
 ```text
-yokohama-honmoku/current.json
-yokohama-honmoku/20260627T120000Z/manifest.json
-yokohama-honmoku/20260627T120000Z/hexgrid.pmtiles
+yokohama/current.json
+yokohama/20260627T120000Z/manifest.json
+yokohama/20260627T120000Z/hexgrid.pmtiles
 ```
 
 Do not include another leading `pipeline-export/` folder inside the bucket.
@@ -118,7 +118,7 @@ Import with `activate = false`, then promote manually as an app admin in the
 SQL editor:
 
 ```sql
-select public.promote_pipeline_dataset('yokohama-honmoku', '20260721T111818Z');
+select public.promote_pipeline_dataset('yokohama', '20260721T111818Z');
 ```
 
 Use this when you want a human checkpoint before the new version goes live.
@@ -150,7 +150,7 @@ npm run sync:pipeline-from-storage -- --dry-run
 Single city:
 
 ```bash
-npm run sync:pipeline-from-storage -- --city yokohama-honmoku
+npm run sync:pipeline-from-storage -- --city yokohama
 ```
 
 ## Configure R/PostgreSQL
@@ -219,7 +219,7 @@ N *and everything after it*, including step 4 connectivity, which the runner's o
 header says runs on its own schedule. To re-run a single stage, source it directly:
 
 ```r
-CITY <- "porto-center"
+CITY <- "porto"
 source("config.R")
 source("05_patch/patch_aggregation.R")
 ```
@@ -232,7 +232,7 @@ half its keys match the current grid — both cases would otherwise produce a
 different, wrong patch richness without saying so. To check by hand:
 
 ```bash
-cd pipeline && Rscript -e 'suppressMessages({library(sf);library(jsonlite)}); t<-names(read_json(file.path("data",Sys.getenv("NATUREGAP_CITY","porto-center"),"processed/cell_taxa.json"),simplifyVector=FALSE)); g<-as.character(st_read(file.path("data",Sys.getenv("NATUREGAP_CITY","porto-center"),"processed/grid_residuals.gpkg"),quiet=TRUE,query="SELECT cell_id FROM grid_residuals")$cell_id); cat(sum(t %in% g),"of",length(t),"taxa keys match\n")'
+cd pipeline && Rscript -e 'suppressMessages({library(sf);library(jsonlite)}); t<-names(read_json(file.path("data",Sys.getenv("NATUREGAP_CITY","porto"),"processed/cell_taxa.json"),simplifyVector=FALSE)); g<-as.character(st_read(file.path("data",Sys.getenv("NATUREGAP_CITY","porto"),"processed/grid_residuals.gpkg"),quiet=TRUE,query="SELECT cell_id FROM grid_residuals")$cell_id); cat(sum(t %in% g),"of",length(t),"taxa keys match\n")'
 ```
 
 Regenerating it is cheap when the tile caches (`tiled_combined.rds`,

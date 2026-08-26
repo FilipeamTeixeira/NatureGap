@@ -6,14 +6,14 @@
 #   source("run_pipeline.R")
 #
 # To run a different city (files live in pipeline/cities/):
-#   CITY <- "amsterdam-schimmelstraat"
+#   CITY <- "amsterdam"
 #   source("config.R")
 #   source("run_pipeline.R")
 #   # or from the shell:
-#   NATUREGAP_CITY=amsterdam-schimmelstraat Rscript run_pipeline.R
+#   NATUREGAP_CITY=amsterdam Rscript run_pipeline.R
 #
 # Connectivity (stage 04) runs separately on its own schedule:
-#   CITY <- "porto-center"; source("config.R")
+#   CITY <- "porto"; source("config.R")
 #   source("04_connectivity/connectivity.R")
 #
 # To run only from a specific numbered folder (e.g. skip 01_ingest):

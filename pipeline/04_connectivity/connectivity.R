@@ -8,7 +8,7 @@
 # observers walk, not where wildlife can move.
 #
 # Run on an independent schedule:
-#   CITY <- "porto-center"; source("pipeline/config.R")
+#   CITY <- "porto"; source("pipeline/config.R")
 #   source("pipeline/04_connectivity/connectivity.R")
 #
 # Skips automatically when the habitat grid and the CONN_* tuning constants are

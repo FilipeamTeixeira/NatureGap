@@ -5,15 +5,15 @@
 # pipeline/cities/ (CITY_ID, CRS, OSM relation, regional PBF, extra downloaders).
 #
 # Run a city:
-#   CITY <- "porto-center"
+#   CITY <- "porto"
 #   source("config.R")
 #   source("run_pipeline.R")
 #
 #   # or from the shell, without editing anything:
-#   NATUREGAP_CITY=porto-center Rscript run_pipeline.R
+#   NATUREGAP_CITY=porto Rscript run_pipeline.R
 #
 # Add a city:
-#   1. Copy pipeline/cities/porto-center.R to pipeline/cities/<city-id>.R
+#   1. Copy pipeline/cities/porto.R to pipeline/cities/<city-id>.R
 #   2. Edit the values in it (nothing else needs editing)
 #   3. Run it as above
 
@@ -783,7 +783,7 @@ WC_FILE <- file.path(
 # EMC-BUILT (Copernicus impervious surface fraction):
 #   Download manually: https://human-settlement.emergency.copernicus.eu/dataDownload.php?ds=EMCbuiltS
 #   File name expected by the pipeline: EMC_CITY_ID.tif
-#   Example: EMC_porto-center.tif
+#   Example: EMC_porto.tif
 
 EMC_FILE <- file.path(
   PIPELINE_ROOT, "data", "raw", "emc_built",

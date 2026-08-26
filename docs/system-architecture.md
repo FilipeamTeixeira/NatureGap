@@ -267,11 +267,11 @@ Current grid facts:
 
 - Resolution: 20 m
 - Shape: hexagons
-- Cities configured: `yokohama-honmoku`, `amsterdam-schimmelstraat`,
-  `porto-center`
-- Default city in the R pipeline: `yokohama-honmoku` (`DEFAULT_CITY` in
+- Cities configured: `yokohama`, `amsterdam`,
+  `porto`
+- Default city in the R pipeline: `yokohama` (`DEFAULT_CITY` in
   `pipeline/config.R`)
-- Default city in the frontend: `porto-center` (`CITY.id` in
+- Default city in the frontend: `porto` (`CITY.id` in
   `src/lib/config.ts`, with `NEXT_PUBLIC_PIPELINE_CITY_IDS` selecting which
   Storage datasets are loaded)
 - R local CRS: `EPSG:6674` (Yokohama), `EPSG:28992` (Amsterdam), `EPSG:3763`
@@ -608,7 +608,7 @@ already internally compressed and manifests stay plain. See
 
 ```json
 {
-  "cityId": "yokohama-honmoku",
+  "cityId": "yokohama",
   "dataVersion": "20260627T120000Z",
   "hexgrid": "20260627T120000Z/hexgrid.pmtiles",
   "sourceLayer": "hexgrid",

@@ -1,7 +1,7 @@
 # Porto — city-specific values only.
 # Everything else comes from pipeline/config.R.
 #
-#   CITY <- "porto-center"; source("config.R"); source("run_pipeline.R")
+#   CITY <- "porto"; source("config.R"); source("run_pipeline.R")
 
 # ── City identity ─────────────────────────────────────────────────────────────
 # CITY_ID must be a stable slug — it is used as a primary-key prefix in

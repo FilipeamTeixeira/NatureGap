@@ -4,7 +4,7 @@
 # GeoJSONs, generates osmium batch config(s), and runs osmium extract.
 #
 # Usage:
-#   CITY <- "porto-center"; source("pipeline/config.R")
+#   CITY <- "porto"; source("pipeline/config.R")
 #   source("pipeline/01_ingest/tile_registry.R")
 
 library(sf)
@@ -19,7 +19,7 @@ missing_cfg <- required_cfg[!vapply(required_cfg, exists, logical(1L))]
 if (length(missing_cfg) > 0L) {
   stop(
     "Missing config: ", paste(missing_cfg, collapse = ", "),
-    ". Load a city first: CITY <- \"porto-center\"; source(\"config.R\").",
+    ". Load a city first: CITY <- \"porto\"; source(\"config.R\").",
     call. = FALSE
   )
 }

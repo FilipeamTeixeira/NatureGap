@@ -113,7 +113,7 @@ That list is authoritative; it currently holds 32 fields. Shape:
 
 ```json
 {
-  "cellId": "porto-center-1234",
+  "cellId": "porto-1234",
   "parkId": "jardim-da-cordoaria",
   "parkName": "Jardim da Cordoaria",
   "natureGapScore": 31.4,
@@ -201,7 +201,7 @@ Required properties include:
 
 ```json
 {
-  "cell_id": "porto-center-1234",
+  "cell_id": "porto-1234",
   "expected_richness": 34.8,
   "effort_corrected_richness": 12.4,
   "survey_effort_units": 5.2,
@@ -447,7 +447,7 @@ Example:
     "pressures": ["Low survey effort"],
     "interventions": [
       {
-        "id": "porto-center-1234-rank-8",
+        "id": "porto-1234-rank-8",
         "title": "Create or restore habitat corridor",
         "description": "Ranked #8 for intervention priority.",
         "impact": "medium",
@@ -498,7 +498,7 @@ Each city publishes immutable versioned products and a stable active pointer:
 
 ```json
 {
-  "cityId": "yokohama-honmoku",
+  "cityId": "yokohama",
   "dataVersion": "20260627T120000Z",
   "generatedAt": "2026-06-27T12:00:00Z",
   "sourceLayer": "hexgrid",

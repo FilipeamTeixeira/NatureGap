@@ -38,7 +38,7 @@ NL_CIR_NDVI_FILE <- file.path(
 
 WMS_BASE_URL   <- "https://service.pdok.nl/hwh/luchtfotocir/wms/v1_0"
 WMS_LAYER      <- "2025_ortho25IR"
-WMS_CRS        <- "EPSG:28992"  # matches amsterdam-schimmelstraat.R's CRS_LOCAL
+WMS_CRS        <- "EPSG:28992"  # matches amsterdam.R's CRS_LOCAL
 WMS_MAX_PIXELS <- 2400L         # safety margin under PDOK's stated MaxWidth/MaxHeight of 2500
 WMS_FORMAT     <- "image/jpeg"  # PDOK offers no lossless GetMap format
 TARGET_GSD_M   <- 0.5           # metres/pixel — coarser than native 25 cm; raise native if needed
