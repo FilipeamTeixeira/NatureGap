@@ -1,0 +1,60 @@
+{
+  "weights": {
+    "motorway": 10,
+    "trunk": 10,
+    "primary": 6,
+    "secondary": 4,
+    "tertiary": 3.092,
+    "residential": 1,
+    "unclassified": 1,
+    "service": 0.4,
+    "living_street": 0.4
+  },
+  "source": {
+    "motorway": "default",
+    "trunk": "default",
+    "primary": "default",
+    "secondary": "default",
+    "tertiary": "telraam",
+    "residential": "telraam",
+    "unclassified": "default",
+    "service": "default",
+    "living_street": "default"
+  },
+  "n_segments": {
+    "motorway": 0,
+    "trunk": 0,
+    "primary": 1,
+    "secondary": 1,
+    "tertiary": 8,
+    "residential": 26,
+    "unclassified": 0,
+    "service": 1,
+    "living_street": 2
+  },
+  "median_heavy_share": {
+    "motorway": null,
+    "trunk": null,
+    "primary": 0.1053,
+    "secondary": 0.0595,
+    "tertiary": 0.1029,
+    "residential": 0.0872,
+    "unclassified": null,
+    "service": 0.118,
+    "living_street": 0.1587
+  },
+  "provenance": {
+    "city": "gent",
+    "reference_class": "residential",
+    "reference_daily_car_equiv": 1475.6,
+    "window_days": 90,
+    "window_end": "2026-08-26",
+    "min_uptime": 0.5,
+    "min_hours": 200,
+    "min_segments_per_class": 5,
+    "heavy_factor": 10,
+    "match_tolerance_m": 25,
+    "segments_matched": 39,
+    "note": "Fitted from Telraam citizen counts. Classes marked source='default' had too few sensors and keep the reasoned value from config.R."
+  }
+}

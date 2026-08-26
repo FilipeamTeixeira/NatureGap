@@ -53,3 +53,29 @@ SHARD_TILES   <- "no"
 RASTER_DOWNLOADERS_EXTRA <- c(
   "00_download/download_canopy_height.R"
 )
+
+# ── Reference air-quality surface (calibration only) ──────────────────────────
+# RIVM / Atlas Leefomgeving NSL concentration maps: a 25 m grid in EPSG:28992,
+# openly served over WCS with Fees: NONE and AccessConstraints: NONE.
+#
+# A dated coverage on purpose. The service also exposes
+# "alo__rivm_jaargemiddeld_NO2_actueel", but "actueel" rolls forward, so a
+# calibration fitted against it could not be reproduced later.
+#
+# 2024 to match Gent's ATMO-Street year. Fitting the two cities on different
+# years would confound "which city" with "which year" — European NO2 fell
+# sharply between 2019 and 2024, so a cross-city transfer test would be
+# measuring fleet turnover as much as geography.
+#
+# Used ONLY by calibration/fit_lur.R; never exported.
+AIR_QUALITY_WCS <- list(
+  endpoint    = "https://data.rivm.nl/geo/alo/wcs",
+  coverage    = "alo__rivm_nsl_20260401_gm_NO22024",
+  crs         = "EPSG:28992",
+  pollutant   = "no2",
+  unit        = "ug/m3",
+  year        = 2024L,
+  model       = "RIVM NSL, 2026-04-01 release",
+  attribution = "RIVM / Atlas Leefomgeving",
+  max_bytes   = 50e6
+)

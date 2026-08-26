@@ -74,3 +74,26 @@ SHARD_TILES   <- "yes"
 RASTER_DOWNLOADERS_EXTRA <- c(
   "00_download/download_canopy_height.R"
 )
+
+# ── Reference air-quality surface (calibration only) ──────────────────────────
+# ATMO-Street, the VITO/VMM/IRCELINE street-level dispersion model for Flanders:
+# a 10 m grid in EPSG:31370, finer than the 20 m hexes. Openly served over WCS,
+# no request needed, CC BY 4.0.
+#
+# Used ONLY to fit the traffic -> NO2 relationship in calibration/fit_lur.R.
+# It is not a city input layer and is never exported. Attribution is required if
+# anything derived from it is published.
+#
+# Versioned: IRCELINE warns that only maps from the same model version are
+# comparable, so record the version alongside the year.
+AIR_QUALITY_WCS <- list(
+  endpoint    = "https://geo.irceline.be/wcs",
+  coverage    = "rioifdm__no2_anmean_2024_atmostreet_vl",
+  crs         = "EPSG:31370",
+  pollutant   = "no2",
+  unit        = "ug/m3",
+  year        = 2024L,
+  model       = "ATMO-Street v7.2",
+  attribution = "IRCELINE / VMM / VITO, CC BY 4.0",
+  max_bytes   = 50e6  # documented WCS response cap
+)

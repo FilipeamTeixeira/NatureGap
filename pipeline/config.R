@@ -158,7 +158,7 @@ if (!file.exists(CITY_FILE)) {
 local({
   optional <- c("relation_id", "bbox", "aoi_file", "aoi_layer", "BBOX_CITY",
                 "halo_m", "tile_size_m", "RASTER_DOWNLOADERS_EXTRA",
-                "SHARD_TILES", "SHARD_TILES_N")
+                "SHARD_TILES", "SHARD_TILES_N", "AIR_QUALITY_WCS")
   stale <- intersect(optional, ls(envir = globalenv()))
   if (length(stale)) rm(list = stale, envir = globalenv())
 })
@@ -313,6 +313,117 @@ CELL_SIZE <- 20   # metres
 # OSM geometry fragment cannot pass as an access point.
 PATH_RADIUS_M <- 40   # neighbourhood radius for path length (~2 hex rings)
 MIN_PATH_M    <- 50   # minimum path length in that neighbourhood to count as sampled
+
+# ── Traffic emissions exposure ───────────────────────────────────────────────
+# Road-traffic emissions proxy, built only from OSM geometry so it is available
+# for every city. This is a DEMAND-side pressure indicator (who is exposed), not
+# a habitat input: it must never feed habitat_quality or intervention_score, or
+# it contaminates the ecological residual. See docs/methodology.md.
+#
+# Deliberately distinct from `noise`, which also blends road density and
+# proximity but answers a different question:
+#   - emissions scale with traffic volume and heavy-vehicle share, not with
+#     speed, so motorways/trunks carry far more relative weight here than in
+#     road_weight()
+#   - the near-road increment for NO2 decays to background within tens of
+#     metres, hence a 40 m decay against road_proximity's 60 m
+#   - rail is excluded outright: electrified rail, tram and metro emit
+#     essentially nothing, where `noise` weights rail at 3
+#   - a street-canyon term has no equivalent in `noise` — the same emissions
+#     trapped between buildings produce higher concentrations than in the open
+#
+# UNCALIBRATED. These weights are reasoned defaults, replaced in Phase B by
+# values fitted to Telraam counts in Gent, and swept in
+# pipeline/sensitivity/sweep_traffic_exposure.R.
+TRAFFIC_EMISSION_WEIGHTS <- c(
+  motorway      = 10,
+  trunk         = 10,
+  primary       = 6,
+  secondary     = 4,
+  tertiary      = 2.5,
+  residential   = 1,
+  unclassified  = 1,
+  service       = 0.4,
+  living_street = 0.4
+)
+TRAFFIC_EMISSION_WEIGHT_DEFAULT <- 1
+
+TRAFFIC_NEAR_ROAD_RADIUS_M <- 150  # beyond this, treat the near-road increment as zero
+TRAFFIC_NEAR_ROAD_DECAY_M  <- 40   # e-folding distance of the near-road increment
+
+# Fixed reference values, NOT city-wide min/max. rescale01() is relative, so a
+# layer built on it makes every city's worst cell 1.0 and cross-city comparison
+# meaningless — which would also make the Gent/Amsterdam calibration
+# untransferable to Porto and Yokohama. These divisors give an absolute scale.
+TRAFFIC_NEAR_ROAD_REF <- 10    # near-road units: a cell on a motorway edge
+TRAFFIC_DENSITY_REF   <- 6000  # weighted road metres per hectare
+# 6000, not 3000: a 20 m hex is ~0.0346 ha, so a single centreline crossing it
+# contributes ~578 weighted m/ha per unit of emission weight. At a 3000
+# reference both a primary road (~3470) and a motorway (~5780) saturate the
+# density term at 1.0, erasing the distinction exactly where an emissions
+# layer most needs it. At 6000 they separate (~0.58 vs ~0.96).
+
+TRAFFIC_W_NEAR    <- 0.45
+TRAFFIC_W_DENSITY <- 0.35
+TRAFFIC_W_CANYON  <- 0.20
+
+# ── Telraam calibration (Gent only) ──────────────────────────────────────────
+# Telraam is a citizen-science traffic-counting network, dense in Flanders. It
+# is used ONCE, offline, to replace the reasoned TRAFFIC_EMISSION_WEIGHTS above
+# with values fitted to measured counts (pipeline/calibration/). The counts are
+# never exported; only the fitted weights are committed.
+#
+# Sensors are volunteer-mounted in windows, so coverage is heavily biased
+# toward residential streets. Motorway and trunk classes will have few or no
+# sensors — by construction, since you cannot mount one facing a motorway. The
+# fit therefore MERGES with the defaults above rather than replacing them, and
+# records per class which source won.
+TELRAAM_WINDOW_DAYS <- 90L        # length of the count window
+TELRAAM_WINDOW_END  <- NA_character_  # "YYYY-MM-DD" to pin the window, NA = today
+TELRAAM_CHUNK_DAYS  <- 30L        # request size; per-hour reports get large fast
+TELRAAM_QUERY_DELAY <- 0.5        # seconds between calls; be a good citizen
+TELRAAM_RETRY_WAIT  <- 5L         # seconds, multiplied by attempt number
+TELRAAM_MIN_UPTIME  <- 0.5        # drop hours where the sensor watched < half the hour
+TELRAAM_MIN_HOURS   <- 200L       # minimum qualifying hours for a segment to count
+TELRAAM_MIN_SEGMENTS_PER_CLASS <- 5L  # below this, keep the reasoned default
+TELRAAM_MATCH_TOLERANCE_M <- 25   # max distance when matching a segment to an OSM way
+# Heavy vehicles emit far more NOx and PM per vehicle than cars. This converts
+# a heavy count into car-equivalents before volumes are compared across road
+# classes. Order-of-magnitude, not calibrated — swept alongside the composite
+# weights in pipeline/sensitivity/sweep_traffic_exposure.R.
+TELRAAM_HEAVY_FACTOR <- 10
+
+# Fitted weights, when calibration has been run, override the reasoned defaults
+# above — per class, so a class the fit could not cover keeps its default.
+local({
+  path <- file.path(PIPELINE_ROOT, "calibration", "emission_weights.json")
+  if (!file.exists(path)) return(invisible(NULL))
+  fitted <- tryCatch(jsonlite::fromJSON(path), error = function(e) NULL)
+  if (is.null(fitted) || is.null(fitted$weights)) {
+    warning("calibration/emission_weights.json unreadable — keeping default emission weights.",
+            call. = FALSE)
+    return(invisible(NULL))
+  }
+  w <- unlist(fitted$weights)
+  src <- unlist(fitted$source)
+  known <- intersect(names(w), names(TRAFFIC_EMISSION_WEIGHTS))
+  if (length(known) == 0L) {
+    warning(
+      "calibration/emission_weights.json has no recognisable road-class names ",
+      "(is `weights` a JSON object rather than an array?) — keeping defaults.",
+      call. = FALSE
+    )
+    return(invisible(NULL))
+  }
+  updated <- TRAFFIC_EMISSION_WEIGHTS
+  updated[known] <- as.numeric(w[known])
+  assign("TRAFFIC_EMISSION_WEIGHTS", updated, envir = globalenv())
+  n_fit <- if (is.null(src)) NA_integer_ else sum(src[known] == "telraam")
+  message(sprintf(
+    "[config] Emission weights from calibration: %d of %d classes measured, rest default",
+    n_fit, length(known)
+  ))
+})
 
 # ── Habitat-resistance connectivity ──────────────────────────────────────────
 # Corridors run on a hex-adjacency graph weighted by habitat resistance, NOT on
@@ -713,6 +824,11 @@ RAW_OSM_GROUND_VEG <- file.path(DATA_RAW, "osm_ground_veg.gpkg")
 RAW_NATIONAL_GREEN <- file.path(DATA_RAW, "national_green_spaces.gpkg")
 RAW_OSM_PATHS  <- file.path(DATA_RAW, "osm_paths.gpkg")
 RAW_OSM_ROADS  <- file.path(DATA_RAW, "osm_roads.gpkg")
+RAW_TELRAAM_SEGMENTS <- file.path(DATA_RAW, "telraam_segments.gpkg")
+RAW_TELRAAM_TRAFFIC  <- file.path(DATA_RAW, "telraam_traffic.rds")
+# Reference air-quality surface for the LUR calibration (Gent, Amsterdam only).
+# Read locally, never exported — see pipeline/calibration/.
+RAW_AIR_QUALITY <- file.path(DATA_RAW, "air_quality_reference.tif")
 RAW_OSM_RAIL   <- file.path(DATA_RAW, "osm_rail.gpkg")
 RAW_OSM_LAMPS  <- file.path(DATA_RAW, "osm_street_lamps.gpkg")
 RAW_OSM_LIT_ROADS <- file.path(DATA_RAW, "osm_lit_roads.gpkg")

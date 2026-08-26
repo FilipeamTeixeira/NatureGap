@@ -1,0 +1,43 @@
+{
+  "verdict": "NOT transferable: must not be applied outside the fitted cities. Cities without a reference air-quality surface ship traffic_exposure as a unitless traffic-pressure index only, never a concentration.",
+  "transferable": false,
+  "terms": ["near_road_em", "road_density_em", "canyon", "ndvi_mean"],
+  "coefficients": {
+    "(Intercept)": 16.4743,
+    "near_road_em": 0.8965,
+    "road_density_em": -0.0003,
+    "canyon": 1.1626,
+    "ndvi_mean": -3.8864
+  },
+  "pooled_r2": 0.2797,
+  "residual_se_ugm3": 2.773,
+  "transfer": [
+    {
+      "fit_on": "gent",
+      "predict": "amsterdam",
+      "spearman": 0.26,
+      "r2": -1.377,
+      "rmse": 3.72,
+      "bias": -2.8,
+      "hotspot_agreement": 0.353
+    },
+    {
+      "fit_on": "amsterdam",
+      "predict": "gent",
+      "spearman": 0.513,
+      "r2": -0.983,
+      "rmse": 4.22,
+      "bias": 3.3,
+      "hotspot_agreement": 0.476
+    }
+  ],
+  "cities": {
+    "gent": 349034,
+    "amsterdam": 168874
+  },
+  "provenance": {
+    "response": "modelled annual mean NO2 (ug/m3)",
+    "sources": "Gent: ATMO-Street v7.2 2024 (IRCELINE/VMM/VITO, CC BY 4.0). Amsterdam: RIVM NSL 2024 (Atlas Leefomgeving).",
+    "caveat": "Fitted to dispersion-model output, not measurements: inherits those models' biases. No meteorology, no point sources. Apply to a city outside the fitted set only within the transfer error reported above, and label output a modelled estimate, never compliance data."
+  }
+}

@@ -116,6 +116,18 @@ road_weight <- function(highway) {
   )
 }
 
+# Relative emission strength per OSM road class. Separate from road_weight():
+# that one is tuned for the `noise` composite, where the ratio between a
+# motorway and a residential street is far narrower than it is for traffic
+# emissions. Weights come from cfg so a Telraam-fitted table can replace the
+# reasoned defaults without touching this function.
+emission_weight <- function(highway, weights, default = 1) {
+  x <- tolower(as.character(highway))
+  out <- unname(weights[x])
+  out[is.na(out)] <- default
+  as.numeric(out)
+}
+
 polygon_area_by_cell <- function(polygons, grid) {
   if (nrow(polygons) == 0L) {
     return(tibble(cell_id = grid$cell_id, area_m2 = 0))
@@ -365,6 +377,10 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
   hex_grid_origin <- cfg$HEX_GRID_ORIGIN %||% HEX_GRID_ORIGIN
   path_radius_m <- cfg$PATH_RADIUS_M %||% PATH_RADIUS_M
   min_path_m <- cfg$MIN_PATH_M %||% MIN_PATH_M
+  traffic_weights <- cfg$TRAFFIC_EMISSION_WEIGHTS %||% TRAFFIC_EMISSION_WEIGHTS
+  traffic_weight_default <- cfg$TRAFFIC_EMISSION_WEIGHT_DEFAULT %||% TRAFFIC_EMISSION_WEIGHT_DEFAULT
+  traffic_radius_m <- cfg$TRAFFIC_NEAR_ROAD_RADIUS_M %||% TRAFFIC_NEAR_ROAD_RADIUS_M
+  traffic_decay_m <- cfg$TRAFFIC_NEAR_ROAD_DECAY_M %||% TRAFFIC_NEAR_ROAD_DECAY_M
 
   core_local <- st_transform(st_as_sf(core_polygon), crs_local)
   halo_extent <- st_buffer(core_local, dist = halo_m)
@@ -712,6 +728,11 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
 
   cell_area_ha <- as.numeric(st_area(grid)) / 10000
   if (nrow(roads) > 0L) roads$.road_weight <- road_weight(roads$highway)
+  if (nrow(roads) > 0L) {
+    roads$.emission_weight <- emission_weight(
+      roads$highway, traffic_weights, traffic_weight_default
+    )
+  }
   # Pre-extract once; both the density and proximity helpers below would
   # otherwise each redo this same LINESTRING/POINT extraction independently.
   if (nrow(roads) > 0L) roads <- suppressWarnings(st_collection_extract(roads, "LINESTRING", warn = FALSE))
@@ -725,6 +746,17 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
     if (nrow(roads) > 0L) roads$.road_weight else NULL
   )
   rail_proximity <- distance_weighted_lines(rail, cell_centroids, 200, 80, rep(3, nrow(rail)))
+  # Traffic-emissions predictors. Same helpers as road_density/road_proximity,
+  # different weighting and a shorter decay — see config.R. Known limitation:
+  # distance_weighted_lines() uses the NEAREST line only, so a cell beside a
+  # residential street but 80 m from a motorway takes the residential value.
+  # road_density_em carries the within-cell multi-road signal; buffer sums for
+  # the LUR stage come later.
+  road_density_em <- line_density_by_cell(roads, grid_valid, ".emission_weight")
+  near_road_em <- distance_weighted_lines(
+    roads, cell_centroids, traffic_radius_m, traffic_decay_m,
+    if (nrow(roads) > 0L) roads$.emission_weight else NULL
+  )
   lamp_density <- point_density_by_cell(lamps, grid)
   lamp_proximity <- distance_weighted_points(lamps, cell_centroids, 80, 30)
   lit_road_density <- line_density_by_cell(lit_roads, grid_valid)
@@ -738,6 +770,8 @@ process_tile <- function(core_polygon, halo_pbf_path, obs_tile = NULL, cfg = NUL
       road_density = road_density,
       rail_density = rail_density,
       road_proximity = road_proximity,
+      road_density_em = road_density_em,
+      near_road_em = near_road_em,
       rail_proximity = rail_proximity,
       lamp_density = lamp_density,
       lamp_proximity = lamp_proximity,
@@ -853,6 +887,18 @@ finish_citywide_metrics <- function(grid) {
           0.20 * rescale01(rail_density) +
           0.05 * rescale01(rail_proximity)
       ),
+      # fixed_rescale01 against fixed references, NOT rescale01 like `noise`
+      # directly above. `noise` is city-relative by design; this layer is
+      # calibrated in Gent/Amsterdam and applied in Porto/Yokohama, so it has
+      # to mean the same thing in every city. Do not "tidy" this to match.
+      traffic_exposure = fixed_rescale01(
+        TRAFFIC_W_NEAR * fixed_rescale01(near_road_em, 0, TRAFFIC_NEAR_ROAD_REF) +
+          TRAFFIC_W_DENSITY * fixed_rescale01(road_density_em, 0, TRAFFIC_DENSITY_REF) +
+          # coalesce(), matching residuals.R: impervious_fraction is NA for the
+          # whole grid when its raster is absent, so fall back to WorldCover.
+          TRAFFIC_W_CANYON * coalesce(impervious_fraction, built_fraction_wc, 0),
+        0, 1
+      ),
       light_pollution = rescale01(
         0.50 * rescale01(lamp_density) +
           0.30 * rescale01(lamp_proximity) +
@@ -913,6 +959,18 @@ finish_citywide_metrics <- function(grid) {
       "lamp_density", "lamp_proximity", "lit_road_density", "path_density",
       "amenity_proximity", "water_prox", "permeable_fraction"
     )))
+
+  bad_traffic <- sum(
+    !is.finite(grid$traffic_exposure) |
+      grid$traffic_exposure < 0 |
+      grid$traffic_exposure > 1
+  )
+  if (bad_traffic > 0L) {
+    stop(sprintf(
+      "Traffic exposure contract violation: %d cells non-finite or outside [0, 1].",
+      bad_traffic
+    ), call. = FALSE)
+  }
 
   coords <- st_coordinates(suppressWarnings(st_centroid(grid)))
   grid <- grid[order(coords[, 2], coords[, 1]), ]
@@ -1103,6 +1161,10 @@ run_tiled_processing <- function(force = FALSE) {
     HEX_GRID_ORIGIN = HEX_GRID_ORIGIN,
     PATH_RADIUS_M = PATH_RADIUS_M,
     MIN_PATH_M = MIN_PATH_M,
+    TRAFFIC_EMISSION_WEIGHTS = TRAFFIC_EMISSION_WEIGHTS,
+    TRAFFIC_EMISSION_WEIGHT_DEFAULT = TRAFFIC_EMISSION_WEIGHT_DEFAULT,
+    TRAFFIC_NEAR_ROAD_RADIUS_M = TRAFFIC_NEAR_ROAD_RADIUS_M,
+    TRAFFIC_NEAR_ROAD_DECAY_M = TRAFFIC_NEAR_ROAD_DECAY_M,
     RAW_LANDCOVER = RAW_LANDCOVER,
     RAW_IMPERVIOUS = RAW_IMPERVIOUS,
     RAW_NDVI = RAW_NDVI,
