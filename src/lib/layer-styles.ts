@@ -813,6 +813,22 @@ export function hexFillColorExpression(
     return buildHeatExpression(cityStats);
   }
 
+  if (layerId === 'traffic') {
+    // Explicit branch, because the generic path below does NOT set
+    // rawIsPercentIndex. trafficExposure is packed as a 0-100 integer
+    // (unit_index in 06_export/export.R) while the city_layer_stats bounds it
+    // is stretched against are on the 0-1 scale, so without unitInterval() a
+    // tile value of 12 evaluates to (12 - 0.006) / 0.365 = 32.9, clamps to 1,
+    // and every non-zero cell paints at full intensity.
+    return withUnsampledFallback(layerId, buildSequentialExpression(
+      'trafficExposureNorm',
+      'trafficExposure',
+      LAYER_RAMPS.traffic,
+      statForMetric(cityStats, 'traffic_exposure'),
+      true,
+    ));
+  }
+
   const spec = LAYER_STYLE_SPECS[layerId];
   const ramp = LAYER_RAMPS[layerId as keyof typeof LAYER_RAMPS];
   if (!spec.property || !ramp) {
@@ -823,7 +839,6 @@ export function hexFillColorExpression(
     intervention: 'interventionRank',
     habitat: 'habitatQuality',
     connectivity: 'corridorImportance',
-    traffic: 'trafficExposure',
   };
 
   return withUnsampledFallback(layerId, buildSequentialExpression(

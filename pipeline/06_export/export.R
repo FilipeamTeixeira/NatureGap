@@ -1253,8 +1253,8 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     fragmentationIndex = pct_index(row$fragmentation_index),
     treeCover          = pct_index(row$tree_fraction),
     heatExposure       = pct_index(row$lst_rank),
-    trafficExposure    = pct_index(row$traffic_exposure),
-    rankStability      = pct_index(row$rank_stability),
+    trafficExposure    = unit_index(row$traffic_exposure),
+    rankStability      = unit_index(row$rank_stability),
     meanLst            = index_or_pct(row$mean_lst),
     lstIdx             = pct_index(row$lst_idx),
     landUseGreen       = pct_index(row$green_fraction_wc),
@@ -1353,7 +1353,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     treeCover          = pct_index(finite_mean(rows$tree_fraction)),
     canopyHeightIdx    = round(replace_na(finite_mean(rows$canopy_height_idx), 0), 4),
     heatExposure       = pct_index(finite_mean(rows$lst_rank)),
-    trafficExposure    = pct_index(finite_mean(rows$traffic_exposure)),
+    trafficExposure    = unit_index(finite_mean(rows$traffic_exposure)),
     meanLst            = index_or_pct(finite_mean(rows$mean_lst)),
     lstIdx             = pct_index(finite_mean(rows$lst_idx)),
     lstNorm            = round(replace_na(finite_mean(rows$lst_norm), 0), 4),
@@ -1840,10 +1840,16 @@ hexgrid_tiles <- hexgrid_render |>
     vegFraction        = unit_index(veg_fraction),
     ndviTexture        = unit_index(ndvi_texture),
     heatExposure       = pct_index(lst_rank),
-    trafficExposure    = pct_index(traffic_exposure),
+    # unit_index(), NOT pct_index(): layer-styles.ts unitInterval() tells a
+    # quantized integer from a legacy 0-1 float by magnitude, so a value of
+    # exactly 1 reads as 1.0 and paints a 1%-exposure cell at full intensity.
+    # traffic_exposure is bunched near zero (Porto p05 0.006, p10 0.016), so a
+    # large share of cells land on that ambiguous value — pct_index() made the
+    # whole low end render as maximum.
+    trafficExposure    = unit_index(traffic_exposure),
     # Share of CONN_ENSEMBLE_R runs placing the cell in the top N. Filter the
     # intervention layer on this: interventionRank alone is a single-R result.
-    rankStability      = pct_index(rank_stability),
+    rankStability      = unit_index(rank_stability),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
     landUseGreen       = pct_index(green_fraction_wc),
