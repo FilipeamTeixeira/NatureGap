@@ -9,6 +9,7 @@ export type LayerId =
   | 'biodiversity'
   | 'connectivity'
   | 'heat'
+  | 'traffic'
   | 'landuse'
   | 'survey-points'
   | 'structured-surveys'
@@ -75,6 +76,14 @@ export interface CellStatsFields {
   canopyHeightIdx?: number;
   /** 0–100 heat exposure rank (from Landsat LST when available). */
   heatExposure?: number;
+  /** 0–100 road-traffic emissions pressure, on a fixed cross-city scale. */
+  trafficExposure?: number;
+  /**
+   * 0–100 share of the CONN_MAX_RESISTANCE ensemble placing this cell in the
+   * top intervention set. undefined means the dataset predates the ensemble —
+   * distinct from 0, which means measured and never stable.
+   */
+  rankStability?: number;
   meanLst?: number;
   lstIdx?: number;
   lstNorm?: number;

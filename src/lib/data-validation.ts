@@ -98,6 +98,8 @@ function assertCellStats(value: unknown, id: string): asserts value is CellStats
     (value.treeCoverNorm === undefined || isNumber(value.treeCoverNorm)) &&
     (value.canopyHeightIdx === undefined || isNumber(value.canopyHeightIdx)) &&
     (value.heatExposure === undefined || isNumber(value.heatExposure)) &&
+    (value.trafficExposure === undefined || isNumber(value.trafficExposure)) &&
+    (value.rankStability === undefined || isNumber(value.rankStability)) &&
     (value.meanLst === undefined || isNumber(value.meanLst)) &&
     (value.lstIdx === undefined || isNumber(value.lstIdx)) &&
     (value.lstNorm === undefined || isNumber(value.lstNorm)) &&

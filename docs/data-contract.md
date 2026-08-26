@@ -109,7 +109,7 @@ shard as if it were the whole city.
 
 Required feature properties are declared in `PMTILES_REQUIRED_FIELDS`
 (`pipeline/06_export/export.R`) and validated before the tiles are written.
-That list is authoritative; it currently holds 32 fields. Shape:
+That list is authoritative; it currently holds 34 fields. Shape:
 
 ```json
 {
@@ -129,6 +129,8 @@ That list is authoritative; it currently holds 32 fields. Shape:
   "treeCover": 38,
   "canopyHeightIdx": 0.31,
   "heatExposure": 64,
+  "trafficExposure": 12,
+  "rankStability": 83,
   "meanLst": 31.2,
   "lstIdx": 36,
   "landUseGreen": 45,
@@ -152,7 +154,26 @@ That list is authoritative; it currently holds 32 fields. Shape:
 Scales:
 
 - `habitatQuality`, `corridorImportance`, `betweennessCentrality`, `treeCover`,
-  `heatExposure`, `lstIdx`, `landUseGreen` are `0`–`100` integer percentages.
+  `heatExposure`, `lstIdx`, `landUseGreen`, `trafficExposure`, `rankStability`
+  are `0`–`100` integer percentages.
+
+- `trafficExposure` is a road-traffic emissions pressure proxy built from OSM
+  geometry (near-road increment, emission-weighted road density, street-canyon
+  term). Unlike most fields here it is on a **fixed absolute scale**, so values
+  are comparable between cities — but city-wide aggregates of it are not, since
+  they depend on what the AOI boundary encloses (Yokohama's AOI is half water,
+  giving it a median of 0). It is a demand-side pressure indicator and does not
+  feed `habitatQuality` or `interventionRank`. It is **not** an air-quality
+  estimate: `pipeline/calibration/lur_coefficients.json` records that the
+  traffic-to-NO2 relationship does not transfer between cities.
+
+- `rankStability` is the share of `CONN_ENSEMBLE_R` runs placing the cell in the
+  top `RANK_STABILITY_TOP_N` by intervention score. `interventionRank` is a
+  single-R result and is highly sensitive to `CONN_MAX_RESISTANCE`, which is
+  uncalibrated — no cell in Gent's baseline top-20 survives every value of R.
+  Filter the intervention layer on `rankStability`; do not present
+  `interventionRank` alone as robust. See
+  [methodology.md](methodology.md) section 13.
 - The `*Norm` fields are the render-ready companions MapLibre styles directly:
   `[-1, 1]` for the diverging metrics (`natureGapScoreNorm`, `residualNorm`),
   `[0, 1]` for the rest.

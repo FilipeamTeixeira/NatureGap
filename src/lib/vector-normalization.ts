@@ -112,6 +112,16 @@ const ADDITIONAL_RENDER_METRICS = [
     aliases: ['heat_exposure', 'heatExposure', 'lst_idx', 'lstIdx', 'mean_lst', 'meanLst'],
   },
   {
+    sourceField: 'traffic_exposure',
+    outputField: 'trafficExposure',
+    aliases: ['traffic_exposure', 'trafficExposure'],
+  },
+  {
+    sourceField: 'rank_stability',
+    outputField: 'rankStability',
+    aliases: ['rank_stability', 'rankStability'],
+  },
+  {
     sourceField: 'land_use_green',
     outputField: 'landUseGreen',
     aliases: ['land_use_green', 'landUseGreen'],

@@ -60,7 +60,12 @@ PMTILES_REQUIRED_FIELDS <- c(
   "expectedNorm",
   "interventionRankNorm",
   "habitatQualityNorm",
-  "nObs"
+  "nObs",
+  # Tile-schema bump. Added together on purpose: each addition here invalidates
+  # already-published datasets against validate_render_fields(), so the traffic
+  # layer and the rank-stability field share one bump rather than forcing two.
+  "trafficExposure",
+  "rankStability"
 )
 
 validate_render_fields <- function(value) {
@@ -1248,6 +1253,8 @@ cell_stats_row <- function(row, max_expected, cell_taxa_lookup = list()) {
     fragmentationIndex = pct_index(row$fragmentation_index),
     treeCover          = pct_index(row$tree_fraction),
     heatExposure       = pct_index(row$lst_rank),
+    trafficExposure    = pct_index(row$traffic_exposure),
+    rankStability      = pct_index(row$rank_stability),
     meanLst            = index_or_pct(row$mean_lst),
     lstIdx             = pct_index(row$lst_idx),
     landUseGreen       = pct_index(row$green_fraction_wc),
@@ -1346,6 +1353,7 @@ aggregate_park_stats <- function(rows, max_expected, cell_taxa_lookup = list(), 
     treeCover          = pct_index(finite_mean(rows$tree_fraction)),
     canopyHeightIdx    = round(replace_na(finite_mean(rows$canopy_height_idx), 0), 4),
     heatExposure       = pct_index(finite_mean(rows$lst_rank)),
+    trafficExposure    = pct_index(finite_mean(rows$traffic_exposure)),
     meanLst            = index_or_pct(finite_mean(rows$mean_lst)),
     lstIdx             = pct_index(finite_mean(rows$lst_idx)),
     lstNorm            = round(replace_na(finite_mean(rows$lst_norm), 0), 4),
@@ -1561,6 +1569,7 @@ grid <- grid_raw |>
              "built_fraction_wc", "green_fraction_wc",
              "impervious_fraction", "osm_green_fraction",
              "osm_ground_veg_fraction", "osm_water_poly_fraction")),
+    any_of(c("traffic_exposure", "rank_stability", "intervention_rank_ensemble")),
     any_of(c("ndvi_mean", "veg_fraction", "ndvi_texture", "lst_rank", "heat_exposure", "noise",
              "light_pollution", "disturbance_index", "water_proximity",
              "mean_canopy", "mean_lst",
@@ -1588,7 +1597,8 @@ grid_all <- grid |> mutate(cell_id = paste0(CITY_ID, "-", cell_id))
 for (col in c(
   "ndvi_mean", "canopy_height_idx", "lst_idx", "lst_rank",
   "disturbance_index", "betweenness_centrality", "ecological_residual", "nature_gap_score",
-  "expected_richness", "intervention_rank", "habitat_quality"
+  "expected_richness", "intervention_rank", "habitat_quality",
+  "traffic_exposure", "rank_stability"
 )) {
   if (!col %in% names(grid_all)) grid_all[[col]] <- NA_real_
 }
@@ -1618,7 +1628,7 @@ grid_all <- grid_all |>
 LAYER_STAT_METRICS <- c(
   "nature_gap_score", "expected_richness", "ecological_residual",
   "intervention_rank", "habitat_quality", "canopy_height_idx",
-  "n_obs", "betweenness_centrality", "lst_idx"
+  "n_obs", "betweenness_centrality", "lst_idx", "traffic_exposure"
 )
 
 city_layer_stats <- LAYER_STAT_METRICS |>
@@ -1830,6 +1840,10 @@ hexgrid_tiles <- hexgrid_render |>
     vegFraction        = unit_index(veg_fraction),
     ndviTexture        = unit_index(ndvi_texture),
     heatExposure       = pct_index(lst_rank),
+    trafficExposure    = pct_index(traffic_exposure),
+    # Share of CONN_ENSEMBLE_R runs placing the cell in the top N. Filter the
+    # intervention layer on this: interventionRank alone is a single-R result.
+    rankStability      = pct_index(rank_stability),
     meanLst            = index_or_pct(mean_lst),
     lstIdx             = pct_index(lst_idx),
     landUseGreen       = pct_index(green_fraction_wc),

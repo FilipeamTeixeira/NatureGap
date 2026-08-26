@@ -43,6 +43,11 @@ grid <- if (file.exists(PROC_GRID_OBS)) {
   st_read(PROC_GRID_HABITAT, quiet = TRUE)
 }
 
+# traffic_exposure arrives via grid_observations (step 03 writes the cached
+# combined grid wholesale). A dataset built before the field existed will not
+# have it, and the cell_attributes transmute below is explicit, so default it.
+if (!"traffic_exposure" %in% names(grid)) grid$traffic_exposure <- NA_real_
+
 grid <- grid |>
   select(-any_of(c(
     "is_unsampled", "corridor_importance", "connectivity_score",
@@ -487,6 +492,7 @@ cell_attributes <- grid |>
     intervention_score,
     rank_stability,
     intervention_rank_ensemble,
+    traffic_exposure,
     heat_exposure,
     noise,
     light_pollution,

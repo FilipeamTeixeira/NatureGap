@@ -42,6 +42,7 @@ export const LAYER_DRAW_ORDER = [
   'biodiversity',
   'connectivity',
   'heat',
+  'traffic',
   'landuse',
 ] as const satisfies readonly LayerId[];
 
@@ -232,6 +233,7 @@ export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
   biodiversity: 'biodiversity-patch-fill',
   connectivity: 'connectivity-patch-fill',
   heat: 'heat-exposure-patch-fill',
+  traffic: 'traffic-exposure-patch-fill',
   landuse: 'land-use-patch-fill',
 };
 
@@ -246,6 +248,7 @@ export const HEX_FILL_LAYER_IDS: Record<HexLayerId, string> = {
   biodiversity: 'biodiversity-hex-fill',
   connectivity: 'connectivity-hex-fill',
   heat: 'heat-exposure-hex-fill',
+  traffic: 'traffic-exposure-hex-fill',
   landuse: 'land-use-hex-fill',
 };
 
@@ -418,6 +421,7 @@ const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'residual' | 'landuse'>
   biodiversity: [[0, '#42a5f5'], [5, '#1e88e5'], [15, '#1565c0'], [30, '#0d47a1'], [50, '#002171']],
   connectivity: [[0, '#ab47bc'], [0.25, '#8e24aa'], [0.5, '#7b1fa2'], [0.75, '#6a1b9a'], [1, '#4a148c']],
   heat:         [[0, '#4575b4'], [0.25, '#74add1'], [0.5, '#fdae61'], [0.75, '#f46d43'], [1, '#a50026']],
+  traffic:      [[0, '#f0ede8'], [0.25, '#d9c2a3'], [0.5, '#c08f55'], [0.75, '#8f5d2e'], [1, '#4f3115']],
 };
 
 function buildDivergingExpression(
@@ -723,6 +727,10 @@ export function patchFillColorExpression(
       return buildSequentialExpression('corridorImportanceNorm', 'corridorImportance', LAYER_RAMPS.connectivity, stat);
     case 'heat':
       return buildHeatExpression(cityStats);
+    case 'traffic':
+      return buildSequentialExpression(
+        'trafficExposureNorm', 'trafficExposure', LAYER_RAMPS.traffic, stat, true,
+      );
     case 'landuse':
       return landUseColorExpression();
     case 'biodiversity':
@@ -815,6 +823,7 @@ export function hexFillColorExpression(
     intervention: 'interventionRank',
     habitat: 'habitatQuality',
     connectivity: 'corridorImportance',
+    traffic: 'trafficExposure',
   };
 
   return withUnsampledFallback(layerId, buildSequentialExpression(
@@ -1017,6 +1026,18 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
       { color: '#4575b4', label: 'Cooler' },
     ],
   },
+  traffic: {
+    title: 'Traffic Exposure',
+    property: 'trafficExposureNorm',
+    rawMetric: 'traffic_exposure',
+    legend: [
+      { color: '#4f3115', label: 'Very high' },
+      { color: '#8f5d2e', label: 'High' },
+      { color: '#c08f55', label: 'Moderate' },
+      { color: '#d9c2a3', label: 'Low' },
+      { color: '#f0ede8', label: 'Very low' },
+    ],
+  },
   landuse: {
     title: 'Land Use',
     legend: [
@@ -1044,5 +1065,9 @@ export const THEMATIC_LAYER_GROUPS = [
   {
     title: 'Habitat',
     ids: ['habitat', 'treecover', 'vegetation', 'connectivity', 'heat', 'landuse'] as const satisfies readonly HexLayerId[],
+  },
+  {
+    title: 'Pressures',
+    ids: ['traffic'] as const satisfies readonly HexLayerId[],
   },
 ] as const;

@@ -63,6 +63,8 @@ export type RenderCellProperties = {
   betweennessCentrality?: number | null;
   treeCover?: number | null;
   heatExposure?: number | null;
+  trafficExposure?: number | null;
+  rankStability?: number | null;
   meanLst?: number | null;
   lstIdx?: number | null;
   landUseGreen?: number | null;
@@ -109,6 +111,8 @@ type CellAttributeRow = {
   corridor_importance: number | null;
   intervention_rank: number | null;
   heat_exposure: number | null;
+  traffic_exposure: number | null;
+  rank_stability: number | null;
   data_availability_ratio: number | null;
   fragmentation: number | null;
   connectivity_score: number | null;
@@ -280,6 +284,14 @@ function detailFromRow(
   const habitatQuality = pct(row?.habitat_quality ?? render.habitatQuality);
   const corridorImportance = pct(row?.corridor_importance ?? render.corridorImportance);
   const heatExposure = pct(row?.heat_exposure ?? render.heatExposure);
+  const trafficExposure = pct(row?.traffic_exposure ?? render.trafficExposure);
+  // Deliberately NOT pct()-ed through a 0 default: rank stability is undefined
+  // for datasets exported before the ensemble, and "not measured" must not be
+  // rendered as "measured as 0% stable".
+  const rawStability = row?.rank_stability ?? render.rankStability;
+  const rankStability = typeof rawStability === 'number' && Number.isFinite(rawStability)
+    ? pct(rawStability)
+    : undefined;
   const treeCover = pct(row?.tree_cover ?? render.treeCover ?? render.canopyHeightIdx);
   const meanLst = pct(render.meanLst);
   const landUseClass = row?.land_use_class ?? render.landUseClass ?? 'unknown';
@@ -327,6 +339,8 @@ function detailFromRow(
     treeCover,
     treeCoverNorm: row?.tree_cover_norm ?? render.treeCoverNorm ?? undefined,
     heatExposure,
+    trafficExposure,
+    rankStability,
     meanLst,
     lstIdx: pct(render.lstIdx),
     landUseGreen: pct(row?.land_use_green ?? render.landUseGreen),

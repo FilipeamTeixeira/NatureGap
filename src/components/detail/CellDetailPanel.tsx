@@ -529,6 +529,36 @@ export default function CellDetailPanel({
                 {cell.interventions.slice(0, 2).map((iv) => (
                   <InterventionCard key={iv.id} intervention={iv} />
                 ))}
+                {/*
+                  The ranking is computed at one value of an uncalibrated
+                  dispersal-resistance constant. rankStability is the share of a
+                  6-value ensemble that still places this cell in the top set,
+                  so it says how much the recommendation rests on that guess.
+                  undefined means the dataset predates the ensemble — shown as
+                  nothing rather than as 0, which would read as "never stable".
+                */}
+                {cell.rankStability != null && (
+                  <p className="text-[11px] leading-relaxed mt-2 pt-2.5 border-t border-[#E4E7E1] text-[#667066]">
+                    {cell.rankStability >= 100 ? (
+                      <>
+                        <span className="font-medium text-[#2E6F40]">Robust ranking.</span>{' '}
+                        This cell stays in the top set at every dispersal assumption tested.
+                      </>
+                    ) : (
+                      <>
+                        <span className={cn(
+                          'font-medium',
+                          cell.rankStability >= 50 ? 'text-[#9B6A1A]' : 'text-[#C97A2A]',
+                        )}>
+                          Rank stability {cell.rankStability}%.
+                        </span>{' '}
+                        Its position holds in {cell.rankStability}% of runs across the
+                        plausible range of a dispersal constant that has not been
+                        calibrated, so treat the rank as provisional.
+                      </>
+                    )}
+                  </p>
+                )}
               </Card>
             )}
           </div>
