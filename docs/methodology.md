@@ -370,12 +370,57 @@ Limitations:
   ecological result in any city other than possibly Porto until either the
   specification issue in section 6.1 is resolved or the metric is reported at a
   coarser grain.
-- The grain-size comparison called for previously has still not been run, and is
-  now the decisive test: refitting at cell, patch and district scale and
-  reporting explained deviance at each would establish whether aggregation
-  recovers signal or whether the observation density is simply too low.
-  Per-run explained deviance, dispersion and coefficients are recorded in
-  `expected_richness_model.json` so this stays visible rather than implied.
+- The grain-size comparison has now been run
+  (`pipeline/sensitivity/sweep_grain_scale.R`). The same specification was
+  refitted on square blocks from 20 m to 1000 m, with richness recomputed from
+  the observation points at each grain — richness is not additive, so summing
+  per-cell values would count a species once per cell it occupies. Explained
+  deviance, and the habitat coefficient with `log(cells per block)` added to
+  control the species-area effect:
+
+  | grain | Porto dev / hab | Gent dev / hab | Amsterdam dev / hab | Yokohama dev / hab |
+  | --- | --- | --- | --- | --- |
+  | 20 m | 0.069 / +2.85 | 0.008 / -0.15 | 0.029 / +1.31 | 0.079 / +3.88 |
+  | 100 m | 0.219 / +2.70 | 0.020 / -1.86 | 0.043 / +0.23 | 0.082 / +4.59 |
+  | 200 m | 0.244 / +2.03 | 0.045 / -2.73 | 0.013 / +1.33 | 0.128 / +4.09 |
+  | 500 m | 0.244 / +1.50 | 0.077 / -2.50 | 0.008 / +0.27 | 0.203 / +3.26 |
+  | 1000 m | 0.321 / +1.60 | 0.198 / -2.59 | 0.054 / -0.06 | 0.482 / +4.74 |
+
+  The mechanism is confirmed: 20 m units are dominated by zeros (69% of sampled
+  units in Porto, 94% in Yokohama, 54% in Gent), and no richness model can fit a
+  response that is mostly zero. Aggregation removes that (near 0% by 500 m).
+
+  But it rescues only two cities, and explained deviance alone is misleading —
+  the habitat coefficient is the diagnostic:
+  - **Porto**: habitat positive and stable at every grain, and it survives the
+    area control almost intact. The aggregation gain is a real signal that 20 m
+    was destroying.
+  - **Yokohama**: habitat positive throughout, but the area control removes a
+    third to a half of it at coarse grain (+8.47 to +4.74 at 1 km) and deviance
+    rises when area is added, so area was a genuine missing confounder. Only 80
+    sampled units support the 1 km row. Directionally consistent, thinly
+    supported.
+  - **Gent**: habitat is **negative at all six grains** and becomes more so with
+    aggregation, robust to the area control. Aggregation buys a better fit to a
+    model whose habitat term runs backwards. Not a recovered relationship.
+  - **Amsterdam**: no stable sign at any grain (four sign changes) and
+    dispersion reaching 726. No coherent signal at any scale tested.
+
+  Consequences. Per-cell reporting at 20 m is not defensible in any city.
+  Coarser-grain reporting is defensible for Porto, provisional for Yokohama, and
+  not defensible for Gent or Amsterdam at any grain tested — so the validity of
+  the Nature Gap is city-dependent and cannot be claimed as one uniform
+  methodology across the four cities. Dispersion does not improve with grain in
+  any city, so the quasi-Poisson variance structure is misspecified at every
+  scale, independently of grain.
+
+  The area coefficient is negative in Porto and Yokohama. This is not a
+  species-area result: the effort offset is `log(log1p(path_m))` and path length
+  scales with block extent, so the offset already carries area, and the control
+  term is picking up the residual after it. It is a symptom of the same
+  effort-entanglement described above, not an estimate of a species-area
+  exponent — `SPECIES_AREA_Z` remains an uncalibrated assumption and is
+  untouched by this analysis.
 
 ### 6.2 Patch (park) expected richness (`pipeline/05_patch/patch_aggregation.R`)
 

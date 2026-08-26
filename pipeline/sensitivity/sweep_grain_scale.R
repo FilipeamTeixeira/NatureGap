@@ -95,7 +95,13 @@ fit_at_grain <- function(g) {
       effort_corrected_richness = if_else(is_unsampled, NA_real_,
                                           species_richness / survey_effort_units),
       habitat_component = replace_na(habitat_quality, 0),
-      connectivity_component = pmin(1, pmax(0, replace_na(corridor_importance, 0)))
+      connectivity_component = pmin(1, pmax(0, replace_na(corridor_importance, 0))),
+      # Cells present in the block, as a measure of analysed land area. Blocks at
+      # the AOI edge are partial. log() because a log-link GLM with log(area)
+      # is the species-area form, so this coefficient is the confounder we are
+      # trying to separate from habitat — NOT an implementation or calibration
+      # of SPECIES_AREA_Z, which stays deferred.
+      log_area = log(n_cells)
     )
   maxp <- max(d$path_m[!d$is_unsampled], na.rm = TRUE)
   d$accessibility_component <- if_else(
@@ -110,23 +116,34 @@ fit_at_grain <- function(g) {
                       conn = NA, access = NA, fallback = NA))
   }
 
-  m <- suppressWarnings(fit_expected_model(
-    train = train, response = "species_richness", terms = EXPECTED_MODEL_TERMS,
-    min_rows = EXPECTED_MODEL_MIN_CELLS, scale_label = paste0("grain", g),
+  fit <- function(terms, label) suppressWarnings(fit_expected_model(
+    train = train, response = "species_richness", terms = terms,
+    min_rows = EXPECTED_MODEL_MIN_CELLS, scale_label = label,
     offset_col = "survey_effort_units"
   ))
-  cf <- m$record$coefficients
+
+  m0 <- fit(EXPECTED_MODEL_TERMS, paste0("grain", g))
+  c0 <- m0$record$coefficients
+
+  # The area control is only identifiable where block extent actually varies. At
+  # the finest grain a block holds ~1 cell, so log_area is near-constant and the
+  # term is degenerate — report NA rather than a meaningless coefficient.
+  has_area <- stats::var(train$log_area, na.rm = TRUE) > 1e-6
+  if (has_area) {
+    m1 <- fit(c(EXPECTED_MODEL_TERMS, "log_area"), paste0("grain", g, "_area"))
+    c1 <- m1$record$coefficients
+  }
+
   data.frame(
     grain_m = g,
-    units = nrow(d),
     sampled = nrow(train),
     zero_pct = round(100 * mean(train$species_richness == 0), 1),
-    dev = round(m$record$explainedDeviance, 4),
-    disp = round(m$record$dispersion, 1),
-    habitat = round(cf[["habitat_component"]], 3),
-    conn = round(cf[["connectivity_component"]], 3),
-    access = round(cf[["accessibility_component"]], 3),
-    fallback = m$record$fallback
+    dev = round(m0$record$explainedDeviance, 4),
+    hab = round(c0[["habitat_component"]], 3),
+    dev_ctl = if (has_area) round(m1$record$explainedDeviance, 4) else NA_real_,
+    hab_ctl = if (has_area) round(c1[["habitat_component"]], 3) else NA_real_,
+    area_ctl = if (has_area) round(c1[["log_area"]], 3) else NA_real_,
+    disp_ctl = if (has_area) round(m1$record$dispersion, 1) else NA_real_
   )
 }
 
@@ -141,6 +158,10 @@ cat(sprintf("\n== %s == expected richness vs analysis grain\n", CITY_ID))
 cat(sprintf("Pipeline's own 20 m hex fit, for context: %s\n", pipe_dev))
 cat("(this script's 20 m row uses additive path_km effort, so it will differ)\n\n")
 print(res, row.names = FALSE)
-cat("\ndev = explained deviance. zero_pct = share of sampled units with zero weighted richness.\n")
-cat("Rising dev with grain => the 20 m unit is destroying signal that exists.\n")
-cat("Flat, low dev at every grain => observation density cannot support richness estimation.\n")
+cat("\ndev / hab   : explained deviance and habitat coefficient, current specification.\n")
+cat("dev_ctl ... : the same, with log(cells in block) added to control the\n")
+cat("              species-area effect. area_ctl is that coefficient.\n\n")
+cat("Read it this way:\n")
+cat("  hab_ctl keeps its sign and magnitude  => habitat signal is real, not area.\n")
+cat("  hab_ctl collapses toward 0            => the apparent habitat effect was area.\n")
+cat("  dev_ctl >> dev                        => area was a missing confounder.\n")
