@@ -3,7 +3,7 @@
 # Validated to reproduce the pipeline baseline exactly (max|diff| = 0).
 suppressMessages({library(sf); library(dplyr); library(tidyr); library(jsonlite)})
 
-CITY <- Sys.getenv("SENS_CITY", "porto-center")
+CITY <- Sys.getenv("SENS_CITY", "porto")
 if (!exists("CONFIG_LOADED")) setwd(Sys.getenv("NATUREGAP_PIPELINE", "."))
 suppressMessages(source("config.R"))
 source(here::here("05_residuals", "expected_model.R"))

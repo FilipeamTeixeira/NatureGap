@@ -258,9 +258,43 @@ the offset's coefficient is fixed at 1, the expected *rate* is `exp(X.beta)` and
 needs no exposure at prediction time, which is how an unsampled cell still
 receives an expected value without inventing a reference effort.
 
-Measured on Porto: explained deviance **0.1987**, dispersion **10.53**. The heavy
-overdispersion is why the quasi- family is required — plain Poisson would report
-standard errors far too small.
+Fit, measured on all four configured cities (recorded per run in
+`processed/expected_richness_model.json`):
+
+| City | n train | explained deviance | dispersion | habitat | connectivity | accessibility |
+| --- | --- | --- | --- | --- | --- | --- |
+| Porto | 30,947 | 0.1405 | 16.7 | +3.543 | +0.023 | +6.268 |
+| Amsterdam | 67,147 | 0.0298 | 246.3 | +0.662 | +0.580 | +3.143 |
+| Yokohama | 52,014 | 0.0211 | 301.6 | +0.759 | +1.313 | +0.138 |
+| Gent | 64,875 | 0.0088 | 102.7 | **-0.152** | +0.282 | +2.520 |
+
+The heavy overdispersion is why the quasi- family is required — plain Poisson
+would report standard errors far too small. Dispersion of 246 and 302 is beyond
+"heavy": at that level the variance structure is misspecified, not merely
+inflated.
+
+Three findings in that table constrain what the expected model can be said to
+do, and they are not visible from Porto alone:
+
+1. **Explained deviance spans 0.009 to 0.140.** Porto, the only city measured in
+   earlier versions of this document, is the best case by a factor of five.
+2. **Coefficients are not stable across cities.** `habitat_component` ranges from
+   -0.152 to +3.543, including a sign change. A negative habitat coefficient
+   says better habitat predicts *fewer* species, which is not an ecological
+   result — it means the term is not identifying habitat.
+3. **Effort enters the model twice.** `survey_effort_units` is `log1p(path_local_m)`
+   and enters as `offset(log(.))` with its coefficient fixed at 1.
+   `accessibility_component` is that same quantity divided by a constant
+   (`log1p(path_local_m) / log1p(max_path_local_m)`) and enters as a *free*
+   covariate. The model can therefore re-estimate the effort adjustment it was
+   supposed to hold fixed, which is the most likely reason accessibility is the
+   dominant term in three of four cities.
+
+Consequence for the headline metric: `observed_richness` is already
+effort-corrected (section 5) and `expected_richness` is substantially a function
+of the same path density, so `ecological_residual` is a difference between two
+effort-laden quantities. Part of what the Nature Gap maps is where people walk.
+This is a specification problem, identified and not yet corrected.
 
 The predictors are unchanged from the previous formulation:
 `habitat_component` is `habitat_quality`, `connectivity_component` is
@@ -321,15 +355,27 @@ Limitations:
   a log link minimises deviance rather than squared error, so — unlike the earlier
   OLS version — the raw gap is **not** centred on the response scale: it is
   positive in ~90% of sampled cells (section 7).
-- The response is 89% zeros at 20 m and dispersion is 10.5, so much of the
-  variation remains unexplained. But roughly 20% of the deviance *is* explained by
-  habitat and accessibility, so an earlier characterisation of "essentially no
-  signal at hex scale" was too strong — it rested on a linear R² of 0.0148 that
-  the wrong link function had depressed. The honest reading is that the hex-scale
-  gap is weakly but genuinely determined. Whether it is determined well enough to
-  act on cell by cell is a separate question, which a comparison across grain
-  sizes would answer. Per-run explained deviance and dispersion are recorded so
-  this stays visible rather than implied.
+- The response is 89% zeros at 20 m, so much of the variation is unexplained. An
+  earlier version of this section reported "roughly 20% of the deviance" as
+  explained and concluded the hex-scale gap was "weakly but genuinely
+  determined". That reading rested on Porto alone and does not survive
+  measurement of the other three cities: explained deviance is 0.030 in
+  Amsterdam, 0.021 in Yokohama and **0.009 in Gent**, with dispersion up to 302
+  and an inverted habitat coefficient in Gent (see the table in section 6.1).
+  At 0.9% of deviance the Gent fit is not distinguishable from a constant, so
+  the per-cell residual there carries no habitat signal to speak of.
+- The claim that survives is narrower: at hex scale the expected model is weakly
+  determined **in Porto** and effectively undetermined in Gent, with Amsterdam
+  and Yokohama in between. The per-cell Nature Gap should not be presented as an
+  ecological result in any city other than possibly Porto until either the
+  specification issue in section 6.1 is resolved or the metric is reported at a
+  coarser grain.
+- The grain-size comparison called for previously has still not been run, and is
+  now the decisive test: refitting at cell, patch and district scale and
+  reporting explained deviance at each would establish whether aggregation
+  recovers signal or whether the observation density is simply too low.
+  Per-run explained deviance, dispersion and coefficients are recorded in
+  `expected_richness_model.json` so this stays visible rather than implied.
 
 ### 6.2 Patch (park) expected richness (`pipeline/05_patch/patch_aggregation.R`)
 
@@ -973,14 +1019,41 @@ PostgreSQL/PostGIS must not:
    of them. Their effect on the published intervention ranking is measured in
    [sensitivity-analysis.md](sensitivity-analysis.md): the habitat weights and
    `SPECIES_AREA_Z` barely move it, but **`CONN_MAX_RESISTANCE` does** — at
-   R = 100 only 1 of Amsterdam's top 20 cells survives. The top-20 list should not
-   be presented as robust until that constant is calibrated. Expected richness is the exception — it is now fitted per city
-   (section 6) — which also means it is not comparable between cities. Three cities are configured (`yokohama-honmoku`,
-   `amsterdam-schimmelstraat`, `porto-center`); NIR/CIR coverage exists for
-   Amsterdam and Porto only, so Yokohama falls back to WorldCover fractions for
-   permeability.
-6. OSM dependency: path, green-space, lighting, and road completeness vary by region.
-7. Structured-survey dependence: live app surveys enter through the
+   R = 100 the ranking reorders substantially. The pipeline now reports this per
+   cell rather than leaving it as a caveat: `corridor_importance` is recomputed
+   across `CONN_ENSEMBLE_R` = {5, 10, 20, 30, 50, 100}, the full residual chain
+   is re-run at each value, and `rank_stability` records the share of runs
+   placing the cell in the top `RANK_STABILITY_TOP_N`. Share of the baseline
+   top-20 stable across every R:
+
+   | City | stable / 20 | mean stability |
+   | --- | --- | --- |
+   | Yokohama | 12 | 0.85 |
+   | Porto | 10 | 0.84 |
+   | Amsterdam | 4 | 0.69 |
+   | Gent | **0** | 0.49 |
+
+   No cell in Gent's baseline top-20 survives every value of R. Filter on
+   `rank_stability`; `intervention_rank` alone is a single-R result and must not
+   be presented as robust. The ensemble quantifies this dependence — it does not
+   remove it and does not make the ranking more accurate, because
+   `CONN_MAX_RESISTANCE` remains uncalibrated. There is no single correct value:
+   dispersal cost through built ground differs by orders of magnitude between
+   taxa, and this graph stands in for all of them at once.
+
+   Expected richness is fitted per city (section 6), which also means it is not
+   comparable between cities. Four cities are configured (`porto`, `amsterdam`,
+   `yokohama`, `gent`); NIR/CIR coverage exists for Porto, Amsterdam and Gent,
+   so Yokohama falls back to WorldCover fractions for permeability.
+6. Effort enters the expected-richness model twice: once as a fixed offset
+   (`survey_effort_units`) and once as a free covariate
+   (`accessibility_component`), both derived from `path_local_m`. Since
+   `observed_richness` is also effort-corrected, `ecological_residual` is a
+   difference between two effort-laden quantities and partly maps pedestrian
+   access rather than ecology. Accessibility is the dominant predictor in three
+   of four cities. See section 6.1 — identified, not yet corrected.
+7. OSM dependency: path, green-space, lighting, and road completeness vary by region.
+8. Structured-survey dependence: live app surveys enter through the
    `pipeline_observations_export` view and must be exported before Step 03 for
    the latest approved records to affect the run.
 

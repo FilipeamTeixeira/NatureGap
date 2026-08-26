@@ -1,14 +1,26 @@
 # Sensitivity Analysis
 
 How much does the published intervention ranking depend on parameters that were
-never calibrated? Run on the 2026-08-20 exports for all three cities.
+never calibrated?
+
+> **The tables below were run on the 2026-08-20 exports and are superseded.**
+> The pipeline has changed since, and re-running `sweep_connectivity.R` on
+> current data gives materially different figures — Porto retains 0.65 of its
+> top-20 at R = 100, not the 0.45 reported here. Four cities are now configured,
+> not three. Current per-run figures come from `rank_stability`, produced by
+> `05_residuals/residuals.R` and summarised in
+> [methodology.md](methodology.md) section 13. Regenerate this document before
+> citing any number in it.
+>
+> Current baseline top-20 stability across R = {5, 10, 20, 30, 50, 100}:
+> Yokohama 12/20, Porto 10/20, Amsterdam 4/20, **Gent 0/20**.
 
 Scripts: `pipeline/sensitivity/sweep_habitat_effort.R` and
 `pipeline/sensitivity/sweep_connectivity.R`.
 
 ```bash
-cd pipeline && SENS_CITY=porto-center Rscript sensitivity/sweep_habitat_effort.R
-cd pipeline && SENS_CITY=porto-center Rscript sensitivity/sweep_connectivity.R
+cd pipeline && SENS_CITY=porto Rscript sensitivity/sweep_habitat_effort.R
+cd pipeline && SENS_CITY=porto Rscript sensitivity/sweep_connectivity.R
 ```
 
 ## Method
@@ -161,9 +173,12 @@ Supported:
 Not supported:
 
 - Any claim that the top-20 intervention list is robust. `CONN_MAX_RESISTANCE` is
-  uncalibrated and the list is highly sensitive to it in two of three cities.
-  Until it is calibrated, the honest presentation is a range or an ensemble across
-  R, not a single ranked list.
+  uncalibrated and the list is highly sensitive to it in three of four cities.
+  The ensemble this section called for is now implemented — `rank_stability`
+  (`05_residuals/residuals.R`) reports the share of R values placing a cell in
+  the top N, validated against the pipeline baseline at `max|diff| = 0` and
+  against this sweep at every R for Porto. Present the ranking filtered by
+  stability, never `intervention_rank` alone.
 
 ## Limitations of this analysis
 

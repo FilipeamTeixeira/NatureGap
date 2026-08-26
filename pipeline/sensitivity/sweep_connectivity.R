@@ -1,6 +1,6 @@
 # CONN_MAX_RESISTANCE sweep: recomputes corridor_importance with the pipeline's
 # own build_habitat_graph(), then re-runs the intervention chain.
-CITY <- Sys.getenv("SENS_CITY", "porto-center")
+CITY <- Sys.getenv("SENS_CITY", "porto")
 if (!exists("CONFIG_LOADED")) setwd(Sys.getenv("NATUREGAP_PIPELINE", "."))
 suppressMessages(source("config.R"))
 suppressMessages(source(here::here("04_connectivity", "connectivity_load.R")))
