@@ -363,9 +363,28 @@ TRAFFIC_DENSITY_REF   <- 6000  # weighted road metres per hectare
 # density term at 1.0, erasing the distinction exactly where an emissions
 # layer most needs it. At 6000 they separate (~0.58 vs ~0.96).
 
-TRAFFIC_W_NEAR    <- 0.45
-TRAFFIC_W_DENSITY <- 0.35
-TRAFFIC_W_CANYON  <- 0.20
+# Set from evidence, not judgement. Regressing modelled NO2 on these predictors
+# across Gent (ATMO-Street) and Amsterdam (RIVM) and standardising by each
+# predictor's spread gives the effect of a 1-SD change, in ug/m3:
+#
+#                  near_road_em   road_density_em   canyon
+#   gent                  1.351            -0.025    0.743
+#   amsterdam             1.092            -0.250    0.209
+#   share of |effect|     0.671             0.087    0.243
+#
+# The first weights here were 0.45 / 0.35 / 0.20, reasoned before that evidence
+# existed. Density was not merely over-weighted: its measured effect is
+# NEGATIVE in both cities, so a positive 0.35 was wrong-signed. It keeps a small
+# positive weight rather than zero because this layer is a traffic-pressure
+# index, not an NO2 estimate, and road quantity within a cell is part of what it
+# is meant to express — zeroing it would overfit the index to air quality.
+#
+# Effect of the change (sensitivity/sweep_traffic_exposure.R): Spearman 0.985
+# (Porto) and 0.994 (Gent) against the old weights, with 80% and 87% of the top
+# decile retained — the ranking survives, the top end reshuffles somewhat.
+TRAFFIC_W_NEAR    <- 0.65
+TRAFFIC_W_DENSITY <- 0.10
+TRAFFIC_W_CANYON  <- 0.25
 
 # ── Telraam calibration (Gent only) ──────────────────────────────────────────
 # Telraam is a citizen-science traffic-counting network, dense in Flanders. It

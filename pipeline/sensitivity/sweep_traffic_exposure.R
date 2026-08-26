@@ -66,6 +66,11 @@ variants <- list(
   report("density-heavy 0.25/0.60/0.15", compose(w_near = 0.25, w_dens = 0.60, w_canyon = 0.15)),
   report("no canyon    0.55/0.45/0.00", compose(w_near = 0.55, w_dens = 0.45, w_canyon = 0.00)),
   report("canyon-heavy 0.35/0.25/0.40", compose(w_near = 0.35, w_dens = 0.25, w_canyon = 0.40)),
+  # Weights implied by standardised LUR coefficients across Gent and Amsterdam
+  # (share of summed |effect per 1 SD|): near 0.671, density 0.087, canyon 0.243.
+  # road_density_em measured NEGATIVE in both cities, so its 0.35 weight in the
+  # original composite is not merely too large, it is wrong-signed.
+  report("LUR-informed 0.65/0.10/0.25", compose(w_near = 0.65, w_dens = 0.10, w_canyon = 0.25)),
   report("near_ref 6",    compose(near_ref = 6)),
   report("near_ref 15",   compose(near_ref = 15)),
   report("dens_ref 3000", compose(dens_ref = 3000)),
