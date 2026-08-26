@@ -589,15 +589,39 @@ function buildExpectedExpression(
   const stat = statForMetric(cityStats, 'expected_richness');
   const low = stat?.p05 ?? stat?.minVal;
   const high = stat?.p95 ?? stat?.maxVal;
-  const rawValue = unitInterval('expectedRichness');
+
+  // expectedRichness is a SPECIES COUNT (e.g. 34.8), and the expected_richness
+  // stats are on that same count scale, so it is stretched directly against
+  // them. Passing it through unitInterval() divided every count above 1 by 100,
+  // putting all of them below p05 and pinning this fallback to 0.
+  const rawCount: ExpressionSpecification = [
+    'coalesce', ['to-number', ['coalesce', ['get', 'expectedRichness'], 0]], 0,
+  ] as ExpressionSpecification;
   const fromRaw: ExpressionSpecification = low != null && high != null && high > low
-    ? ['max', 0, ['min', 1, ['/', ['-', rawValue, low], ['-', high, low]]]] as ExpressionSpecification
-    : rawValue;
+    ? ['max', 0, ['min', 1, ['/', ['-', rawCount, low], ['-', high, low]]]] as ExpressionSpecification
+    // No stats to stretch against: unitInterval is wrong for a count, but it is
+    // the only bounded thing available, and every published dataset ships
+    // city_layer_stats so this branch is not reached in practice.
+    : unitInterval('expectedRichness');
+
+  // normUnit(), not a bare ['get']. The two norm fields arrive on DIFFERENT
+  // scales: hex tiles carry expectedNorm as a 0-100 integer (unit_index in
+  // 06_export/export.R), while the parks GeoJSON carries expectedRichnessNorm
+  // as a 0-1 float. Reading the integer raw overshot the ramp's last stop at 1,
+  // so every hex above ~1% clamped to the max colour and only exact 0 gave the
+  // min — the layer rendered as two colours with nothing in between. Parks were
+  // unaffected, which is why patch zoom looked correct.
+  const valueExpression: ExpressionSpecification = [
+    'case',
+    hasNumber('expectedRichnessNorm'), normUnit('expectedRichnessNorm'),
+    hasNumber('expectedNorm'), normUnit('expectedNorm'),
+    fromRaw,
+  ] as ExpressionSpecification;
 
   return [
     'interpolate',
     ['linear'],
-    ['coalesce', ['get', 'expectedRichnessNorm'], ['get', 'expectedNorm'], fromRaw, 0],
+    valueExpression,
     ...ramp.flatMap(([value, color]) => [value, color]),
   ] as ExpressionSpecification;
 }
