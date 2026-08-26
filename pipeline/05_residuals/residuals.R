@@ -238,6 +238,114 @@ grid <- grid |>
     intervention_rank = rank(-intervention_score, ties.method = "first", na.last = "keep")
   )
 
+# ── 3b. Rank stability across CONN_MAX_RESISTANCE ────────────────────────────
+# intervention_rank above is computed at the single baseline R and is left
+# exactly as it was. This adds, alongside it, a measure of how much that rank
+# depends on the assumption — see docs/sensitivity-analysis.md section 1, where
+# only 5% of Amsterdam's baseline top-20 survives R = 100.
+#
+# rank_stability is the share of R values placing the cell in the top
+# RANK_STABILITY_TOP_FRAC of scored cells. 1.0 means the cell ranks highly
+# whether wildlife disperses easily or barely at all; a low value means the
+# cell's position is an artefact of the chosen R, not a finding.
+
+ens_cols <- grep("^corridor_importance_r[0-9]+$", names(grid), value = TRUE)
+
+if (length(ens_cols) == 0L) {
+  # Datasets built before the ensemble existed. NA, not 0: "not measured" and
+  # "measured as unstable" must not look alike to a consumer.
+  grid$rank_stability <- NA_real_
+  grid$intervention_rank_ensemble <- NA_real_
+  warning(
+    "No corridor_importance_r* columns — rank stability unavailable. Re-run ",
+    "04_connectivity/connectivity.R with FORCE_CONNECTIVITY=1.",
+    call. = FALSE
+  )
+} else {
+  # The whole chain must be re-run per R, not just the final multiplier.
+  # corridor_importance is one of EXPECTED_MODEL_TERMS via connectivity_component
+  # (05_residuals/expected_model.R:27), so R propagates through the refitted
+  # expected-richness model into the residual and underperformance as well.
+  # Varying only the multiplier understated the sensitivity: it reported 0.70
+  # top-20 retention for Porto at R = 100 where the published sweep reports 0.45.
+  #
+  # This mirrors sensitivity/sweep_connectivity.R, and carries the same guard it
+  # does: reproduce the pipeline's own baseline exactly first, or the numbers
+  # below measure reconstruction error rather than sensitivity.
+  ens_chain <- function(ci) {
+    d <- grid
+    d$connectivity_component <- pmin(1, pmax(0, replace_na(ci, 0)))
+    d$habitat_component <- replace_na(d$habitat_quality, 0)
+    m <- suppressWarnings(fit_expected_model(
+      train = d |> st_drop_geometry() |>
+        filter(!replace_na(is_unsampled, TRUE), is.finite(effort_corrected_richness)),
+      response = "species_richness", terms = EXPECTED_MODEL_TERMS,
+      min_rows = EXPECTED_MODEL_MIN_CELLS, scale_label = "ensemble",
+      offset_col = "survey_effort_units"
+    ))
+    exp_r <- m$predict(st_drop_geometry(d))
+    resid <- ifelse(replace_na(d$is_unsampled, TRUE), NA_real_,
+                    exp_r - d$effort_corrected_richness)
+    med <- stats::median(resid[is.finite(resid)])
+    if (!is.finite(med)) med <- 0
+    up <- pmax(0, resid - med)
+    (replace_na(up, 0) * 0.5) * (replace_na(ci, 0) * 0.5)
+  }
+
+  base_col <- paste0("corridor_importance_r", CONN_MAX_RESISTANCE)
+  if (base_col %in% ens_cols) {
+    check <- max(abs(ens_chain(grid[[base_col]]) - grid$intervention_score), na.rm = TRUE)
+    cat(sprintf("Ensemble baseline reproduction: max|diff| = %.3e\n", check))
+    if (!is.finite(check) || check > 1e-8) {
+      stop(sprintf(
+        "Ensemble chain does not reproduce the pipeline baseline (max|diff| = %.3e). ",
+        check), "Stability numbers would measure reconstruction error.", call. = FALSE)
+    }
+  }
+
+  ens_scores <- vapply(ens_cols, function(cn) ens_chain(grid[[cn]]),
+                       numeric(nrow(grid)))
+
+  top_flag <- vapply(seq_len(ncol(ens_scores)), function(j) {
+    v <- ens_scores[, j]
+    scored <- is.finite(v) & v > 0
+    out <- rep(FALSE, length(v))
+    if (!any(scored)) return(out)
+    keep <- head(order(-v), min(RANK_STABILITY_TOP_N, sum(scored)))
+    out[keep] <- scored[keep]
+    out
+  }, logical(nrow(grid)))
+
+  # Per-R overlap with the baseline top-N, directly comparable to the table in
+  # docs/sensitivity-analysis.md section 1. Divergence there means the ensemble
+  # and the published sweep disagree, and one of them is wrong.
+  base_topn <- head(order(-grid$intervention_score), RANK_STABILITY_TOP_N)
+  cat("Baseline top-", RANK_STABILITY_TOP_N, " retention by R:\n", sep = "")
+  for (j in seq_along(ens_cols)) {
+    cat(sprintf("  R=%-4s %.2f\n", sub("^corridor_importance_r", "", ens_cols[j]),
+                mean(top_flag[base_topn, j])))
+  }
+
+  grid$rank_stability <- rowMeans(top_flag)
+  med_score <- apply(ens_scores, 1, stats::median, na.rm = TRUE)
+  grid$intervention_rank_ensemble <- rank(-med_score, ties.method = "first",
+                                          na.last = "keep")
+
+  cat(sprintf(
+    "Rank stability over R = {%s}: %d cells stable in every run, %d in none\n",
+    paste(sub("^corridor_importance_r", "", ens_cols), collapse = ", "),
+    sum(grid$rank_stability == 1, na.rm = TRUE),
+    sum(grid$rank_stability == 0, na.rm = TRUE)
+  ))
+
+  base_top <- head(order(-grid$intervention_score), TOP_N)
+  cat(sprintf(
+    "Baseline top-%d: %d of %d hold up across every R (mean stability %.2f)\n",
+    TOP_N, sum(grid$rank_stability[base_top] == 1, na.rm = TRUE), TOP_N,
+    mean(grid$rank_stability[base_top], na.rm = TRUE)
+  ))
+}
+
 top_cells <- grid |>
   st_drop_geometry() |>
   filter(!is.na(intervention_rank), intervention_score > 0) |>
@@ -377,6 +485,8 @@ cell_attributes <- grid |>
     betweenness_centrality,
     intervention_rank,
     intervention_score,
+    rank_stability,
+    intervention_rank_ensemble,
     heat_exposure,
     noise,
     light_pollution,

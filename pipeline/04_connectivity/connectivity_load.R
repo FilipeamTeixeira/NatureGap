@@ -453,7 +453,15 @@ join_connectivity_to_cells <- function(grid_sf, nodes_parquet = connectivity_pat
   betweenness <- as.numeric(nodes$betweenness_centrality)[idx]
   corridor <- as.numeric(nodes$corridor_importance)[idx]
 
+  # Ensemble columns (corridor_importance_r<R>) ride along when present, so
+  # residuals.R can derive rank stability. Absent for datasets built before the
+  # ensemble existed, which is why residuals.R treats them as optional.
+  ens_cols <- grep("^corridor_importance_r[0-9]+$", names(nodes), value = TRUE)
+  ens <- lapply(ens_cols, function(cn) as.numeric(nodes[[cn]])[idx])
+  names(ens) <- ens_cols
+
   tibble::tibble(
+    !!!ens,
     cell_id = grid_sf$cell_id,
     # Non-NA marks a cell that is in the corridor graph; NA marks a wall
     # excluded by CONN_MIN_PERMEABILITY.

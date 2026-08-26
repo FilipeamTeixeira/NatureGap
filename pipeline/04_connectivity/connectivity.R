@@ -148,6 +148,37 @@ if (!force_run && connectivity_up_to_date(grid_sf = grid_habitat)) {
     100 * mean(nodes_df$corridor_importance > 0, na.rm = TRUE)
   ))
 
+  # ── Ensemble over CONN_MAX_RESISTANCE ──────────────────────────────────────
+  # The published ranking is highly sensitive to this constant and it is
+  # uncalibrated (docs/sensitivity-analysis.md section 1). Recompute corridor
+  # importance across the plausible range so residuals.R can report which cells
+  # rank highly regardless of it. The baseline column above is untouched: this
+  # is additive, and intervention_rank still comes from CONN_MAX_RESISTANCE.
+  #
+  # Graph structure does not depend on R — R rescales edge weights, while
+  # CONN_MIN_PERMEABILITY decides which cells are in the graph at all — but the
+  # graph is rebuilt per R anyway rather than reweighted by hand, so this uses
+  # exactly the same code path as the baseline and cannot drift from it.
+  for (r_val in CONN_ENSEMBLE_R) {
+    col <- paste0("corridor_importance_r", r_val)
+    if (r_val == CONN_MAX_RESISTANCE) {
+      nodes_df[[col]] <- nodes_df$corridor_importance
+      next
+    }
+    net_r <- build_habitat_graph(grid_habitat, max_resistance = r_val)
+    bc_r <- igraph::betweenness(
+      net_r$graph,
+      weights = igraph::E(net_r$graph)$weight,
+      cutoff = CONN_DISPERSAL_M,
+      normalized = TRUE
+    )
+    ci_r <- corridor_percentile(as.numeric(bc_r[as.character(net_r$nodes$node_id)]))
+    nodes_df[[col]] <- ci_r[match(as.character(nodes_df$node_id),
+                                  as.character(net_r$nodes$node_id))]
+    message(sprintf("[connectivity]   ensemble R=%-3g  %d cells carry routes",
+                    r_val, sum(nodes_df[[col]] > 0, na.rm = TRUE)))
+  }
+
   # Edge-level corridor importance on the graph as well as in the parquet. Edge
   # order is preserved by graph_from_data_frame(), so this aligns with edges_df.
   igraph::E(g)$importance <- edges_df$corridor_importance

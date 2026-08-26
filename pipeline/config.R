@@ -469,6 +469,35 @@ local({
 # structural, not cosmetic.
 CONN_MAX_RESISTANCE   <- 20    # step cost at permeability = 0, relative to ideal = 1
 
+# CONN_MAX_RESISTANCE is uncalibrated and the published ranking is highly
+# sensitive to it: sweeping 5-100 leaves only 5% of Amsterdam's baseline top-20
+# intact at R = 100 (docs/sensitivity-analysis.md section 1). There is no single
+# right value — a fox crosses a road at low cost, a ground beetle at very high
+# cost, and this graph stands in for every taxon at once.
+#
+# So the ranking is reported with a robustness measure rather than as a single
+# authoritative list. corridor_importance is recomputed across this set, and
+# 05_residuals/residuals.R derives rank_stability from it.
+#
+# This does NOT make the ranking more accurate — there is no ground truth to
+# move closer to. It identifies which cells rank highly regardless of the
+# assumption, which is a different and weaker claim, and the honest one.
+# intervention_rank itself stays at CONN_MAX_RESISTANCE for continuity.
+CONN_ENSEMBLE_R <- c(5, 10, 20, 30, 50, 100)
+
+# A cell counts as "top" at a given R if it is in the top N by intervention
+# score at that R. A FIXED COUNT, not a fraction: the number of scored cells
+# collapses as R rises (Porto: 32,551 cells carry routes at R = 5, 7,142 at
+# R = 100), so a 10% threshold meant "top 3,255" in one run and "top 714" in
+# another, and a cell sitting 700th counted as stable. That produced a
+# reassuring 18-of-20 for Porto while docs/sensitivity-analysis.md reports only
+# 0.45 top-20 retention at R = 100 — the metric was measuring nothing.
+#
+# Match TOP_N in 05_residuals/residuals.R: the short-list is the decision, so
+# the stability question is "would this cell be on the short-list whatever R
+# turns out to be?"
+RANK_STABILITY_TOP_N <- 20L
+
 # Cells at or below this permeability are walls: nothing disperses through
 # them, so they are dropped from the graph rather than carried as very-high-cost
 # nodes. In a dense city this is most of the grid (Amsterdam keeps 16.5k of
