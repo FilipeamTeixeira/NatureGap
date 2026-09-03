@@ -441,6 +441,23 @@ normalize_inat_results <- function(df) {
     df$species_guess
   }
 
+  # Fields the v1 API returns but flatten() leaves optional, so read them
+  # defensively: a bbox where no record is obscured comes back without the
+  # geoprivacy columns at all.
+  col <- function(name, default) {
+    if (name %in% names(df)) df[[name]] else rep(default, nrow(df))
+  }
+
+  # Two accuracies are reported. positional_accuracy is the observer's own GPS
+  # figure; public_positional_accuracy is the radius of what the API actually
+  # published, and the two diverge exactly when a record is obscured. The
+  # coordinates above are the published ones, so the published radius is the
+  # one that describes them.
+  accuracy <- suppressWarnings(dplyr::coalesce(
+    as.numeric(col("public_positional_accuracy", NA_real_)),
+    as.numeric(col("positional_accuracy", NA_real_))
+  ))
+
   tibble(
     id                = df$id,
     scientific_name   = df$taxon.name,
@@ -449,7 +466,11 @@ normalize_inat_results <- function(df) {
     observed_on       = df$observed_on,
     latitude          = vapply(coords, `[[`, numeric(1), "lat"),
     longitude         = vapply(coords, `[[`, numeric(1), "lon"),
-    quality_grade     = df$quality_grade
+    quality_grade     = df$quality_grade,
+    positional_accuracy = accuracy,
+    geoprivacy        = as.character(col("geoprivacy", NA_character_)),
+    taxon_geoprivacy  = as.character(col("taxon_geoprivacy", NA_character_)),
+    obscured          = as.logical(col("obscured", NA))
   )
 }
 
@@ -841,6 +862,20 @@ gbif_raw <- if (!exists("GBIF_USE_DOWNLOAD") || isTRUE(GBIF_USE_DOWNLOAD)) {
 if (is.null(gbif_raw)) {
   gbif_max <- if (exists("GBIF_MAX_RESULTS")) GBIF_MAX_RESULTS else 10000L
   gbif_raw <- fetch_gbif_for_bbox(BBOX_FETCH, gbif_max)
+}
+
+# Basis exclusion, applied to whichever fetch path ran. Not a download predicate:
+# GBIF_BASIS_OF_RECORD feeds gbif_predicate_hash(), so narrowing it there would
+# discard every cached archive. See OBS_EXCLUDE_BASIS in config.R.
+excluded_basis <- if (exists("OBS_EXCLUDE_BASIS")) OBS_EXCLUDE_BASIS else NULL
+if (!is.null(gbif_raw) && length(excluded_basis) > 0L &&
+    "basisOfRecord" %in% names(gbif_raw)) {
+  n_before <- nrow(gbif_raw)
+  gbif_raw <- gbif_raw[
+    !toupper(gbif_raw$basisOfRecord) %in% toupper(excluded_basis), , drop = FALSE
+  ]
+  cat(sprintf("  → GBIF: dropped %d records of excluded basis (%s)\n",
+              n_before - nrow(gbif_raw), paste(excluded_basis, collapse = ", ")))
 }
 
 if (is.null(gbif_raw) || nrow(gbif_raw) == 0) {

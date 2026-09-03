@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, LogIn, LogOut, UserPlus } from 'lucide-rea
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { LogoFull } from '@/components/layout/Logo';
 
 type Mode = 'sign-in' | 'sign-up';
 
@@ -59,6 +60,7 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-md bg-white border border-[#E4E7E1] rounded-lg p-6">
       <div className="mb-6">
+        <LogoFull size={104} className="block mx-auto mb-6" />
         <h1 className="text-[24px] font-semibold text-[#1F2A1F] tracking-tight">Sign in</h1>
         <p className="text-[13px] text-[#667066] mt-2 leading-relaxed">
           Use your NatureGap account to submit observations and surveys.

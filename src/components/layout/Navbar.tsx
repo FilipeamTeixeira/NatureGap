@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Leaf, LogOut, User } from 'lucide-react';
+import { ChevronDown, LogOut, User } from 'lucide-react';
 import { CITY, cityMeta, isRegisteredCityId, listCities } from '@/lib/config';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { LogoMark } from '@/components/layout/Logo';
 
 const NAV_LINKS = [
   { label: 'Explore', href: '/' },
@@ -67,9 +68,7 @@ export default function Navbar({ activePath, cityId, onCitySelect }: NavbarProps
         href="/"
         className="flex items-center gap-2.5 font-semibold text-[#1F2A1F] text-[15px] tracking-tight flex-shrink-0"
       >
-        <div className="w-7 h-7 bg-[#2E6F40] rounded-lg flex items-center justify-center">
-          <Leaf size={13} strokeWidth={2.5} className="text-white" />
-        </div>
+        <LogoMark size={26} />
         <span>NatureGap</span>
       </Link>
 

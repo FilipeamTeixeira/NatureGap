@@ -271,15 +271,64 @@ GBIF_DOWNLOAD_TIMEOUT_MIN <- 90L
 # and coordinate-flagged records are excluded server-side for the same reason.
 # The download API has no taxonRank predicate, so this one is applied on import.
 GBIF_TAXON_RANKS <- c("SPECIES", "SUBSPECIES", "VARIETY", "FORM")
-# Optional and analysis-affecting, so unset by default: NULL keeps every year
-# in the bbox. Set per city (e.g. 2015L) to trade coverage for a recency window.
+# Download-side year predicate, and part of the occ_download cache key. Left
+# unset so cached archives stay valid: the analysis-side recency window is
+# OBS_YEAR_MIN below, which is applied to all three observation streams at once
+# and can be re-tuned without a fresh download. Set this only to shrink what
+# GBIF is asked to prepare in the first place.
 GBIF_YEAR_MIN <- NULL
 # Amsterdam's bbox turns up records that are not field observations of urban
 # biota: 27,642 MATERIAL_SAMPLE rows are 16S microbial sequences (MiCoDa),
 # FOSSIL_SPECIMEN is self-explanatory, and LIVING_SPECIMEN would place zoo and
 # botanical-garden animals in whichever hex holds Artis. Excluding them keeps
 # richness a measure of what lives in a cell. Set to NULL to keep everything.
+# PRESERVED_SPECIMEN is kept here but excluded downstream by OBS_EXCLUDE_BASIS:
+# this vector feeds gbif_predicate_hash(), so narrowing it would invalidate every
+# cached archive and force a re-download of ~2 GB across the four cities.
 GBIF_BASIS_OF_RECORD <- c("HUMAN_OBSERVATION", "PRESERVED_SPECIMEN", "OCCURRENCE")
+
+# ── Observation quality gates ───────────────────────────────────────────────
+# Applied once, to all three streams together, in load_obs_for_tiling()
+# (02_habitat/process_tile.R). One place rather than three, so iNaturalist, GBIF
+# and app records are held to the same standard instead of to whatever each
+# upstream API happened to offer, and so re-tuning any of these needs a stage-2
+# re-run rather than a fresh download.
+#
+# Positional accuracy. The analytical cell is 20 m across, so a record whose own
+# metadata says it cannot be placed within 20 m is not evidence about a
+# particular hexagon. Measured on the current GBIF archives: stated uncertainty
+# is worse than 1 km for 71.2% of Amsterdam's records, 42.9% of Gent's and 9.4%
+# of Yokohama's, and the worst stated values run to 2,700 km — country
+# centroids, currently assigned to a named hex.
+OBS_MAX_ACCURACY_M <- 30
+# Most records state no accuracy at all: 91.6% in Porto, 83.4% in Yokohama.
+# Dropping those would discard the GBIF stream in two of four cities, so unknown
+# accuracy is downweighted rather than deleted. This multiplies
+# observation_weight, and process_tile.R takes the *maximum* weight per
+# (cell, taxon), so a species also recorded precisely is not penalised — the
+# discount bites only where every record of that species in that cell is of
+# unknown precision. Uncalibrated, like the habitat weights: sweep it before
+# citing anything that depends on it.
+OBS_UNKNOWN_ACCURACY_WEIGHT <- 0.5
+# iNaturalist randomises the coordinates of obscured records within roughly a
+# 0.2-degree box — tens of kilometres. That is not imprecision a threshold can
+# filter, because the published point is not where the organism was, so these
+# are dropped outright. Requires a stage-1 re-run: archives fetched before the
+# geoprivacy fields were captured cannot be screened retrospectively.
+OBS_DROP_OBSCURED <- TRUE
+# Recency. Records are matched against Sentinel-2 NDVI and Landsat LST, so one
+# predating that imagery is compared to a landscape that did not exist when it
+# was made. 2015 is the Sentinel-2 MSI operational start, which is why the floor
+# sits there rather than at a round number. Retains 94.6% of Porto's GBIF
+# records, 81.9% of Amsterdam's, 54.4% of Gent's, 34.0% of Yokohama's. Yokohama
+# is already the sparsest city and the weakest fit; override per city in
+# pipeline/cities/<city>.R if that cost leaves too few rows to fit.
+OBS_YEAR_MIN <- 2015L
+# Excluded on import (01_ingest/ingest.R) rather than at the choke point,
+# because basisOfRecord is a GBIF-only field and is dropped before the streams
+# are bound. Preserved specimens are museum and herbarium material, routinely
+# georeferenced from a place name, which cannot support a 20 m cell.
+OBS_EXCLUDE_BASIS <- c("PRESERVED_SPECIMEN")
 # osmdata defaults to overpass.kumi.systems, which is often overloaded and
 # retries with 60 s backoff. Prefer overpass-api.de; fall back if it is busy:
 # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances

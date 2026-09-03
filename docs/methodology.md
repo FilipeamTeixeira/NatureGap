@@ -90,6 +90,52 @@ Eligibility rules for app observations before R import:
 - Preserve structured-survey effort and habitat indicators.
 - Preserve the assigned 20 m `cell_id` when available.
 
+### 3.1 Observation quality gates
+
+All three streams are held to one standard, applied once in
+`apply_obs_quality_gates()` (`pipeline/02_habitat/process_tile.R`) after the
+streams are bound rather than per source. Constants live in `config.R`.
+
+| gate | constant | rule |
+| --- | --- | --- |
+| obscured coordinates | `OBS_DROP_OBSCURED` | drop iNaturalist records where `obscured`, `geoprivacy` or `taxon_geoprivacy` is set |
+| positional accuracy | `OBS_MAX_ACCURACY_M` = 30 | drop records whose *stated* accuracy exceeds the threshold |
+| unknown accuracy | `OBS_UNKNOWN_ACCURACY_WEIGHT` = 0.5 | keep, and multiply `observation_weight` |
+| recency | `OBS_YEAR_MIN` = 2015 | drop records before the Sentinel-2 MSI operational start, and undated records |
+| record basis | `OBS_EXCLUDE_BASIS` | drop GBIF `PRESERVED_SPECIMEN` (applied on import, `01_ingest/ingest.R`) |
+
+Accuracy is `public_positional_accuracy` for iNaturalist,
+`coordinateUncertaintyInMeters` for GBIF, and `gps_accuracy_m` for app records —
+the last of which was exported but discarded before these gates existed.
+
+Two design points decide the coverage cost:
+
+1. **Unknown accuracy is downweighted, not dropped.** 91.6% of Porto's GBIF
+   records and 83.4% of Yokohama's state no accuracy at all; a hard rule would
+   discard the GBIF stream in two of four cities. The discount interacts with
+   `taxon_weight = max(observation_weight)` per (cell, taxon), so a species also
+   recorded precisely is not penalised — the weight bites only where every
+   record of that species in that cell is imprecise.
+2. **Stated-but-coarse accuracy is dropped.** These are records whose own
+   metadata says they cannot locate a 20 m cell: worse than 1 km for 71.2% of
+   Amsterdam's records and 42.9% of Gent's, with the worst stated values at
+   2,700 km.
+
+Effect on the GBIF stream, measured on the archives as fetched:
+
+| City | records | after gates | retained | of survivors, accuracy unknown |
+| --- | --- | --- | --- | --- |
+| Porto | 299,071 | 272,367 | 91.1% | 95.6% |
+| Amsterdam | 1,118,999 | 207,381 | 18.5% | 86.9% |
+| Gent | 1,246,884 | 279,431 | 22.4% | 44.0% |
+| Yokohama | 42,539 | 11,662 | 27.4% | 84.4% |
+
+Amsterdam and Yokohama lose most of their GBIF records, and 29.8% of Yokohama's
+archive was `PRESERVED_SPECIMEN` alone. Both cities were already the weakest
+fits (section 6.1), so the gates are expected to change those fits materially;
+whether they improve them is an empirical question for the next run, not a claim
+made here.
+
 ## 4. Habitat Quality Index
 
 Habitat quality is computed per tile in
@@ -1059,9 +1105,9 @@ PostgreSQL/PostGIS must not:
 2. Taxonomic bias: iNaturalist and GBIF skew toward visible and charismatic taxa.
 3. Temporal mismatch: satellite imagery and field records rarely align exactly.
 4. Data sparsity: unsampled cells are excluded, not treated as zero biodiversity.
-5. Uncalibrated defaults: habitat index weights, `SPECIES_AREA_Z`, connectivity
-   and network constants are shared across all cities and calibrated against none
-   of them. Their effect on the published intervention ranking is measured in
+5. Uncalibrated defaults: habitat index weights, `SPECIES_AREA_Z`,
+   `OBS_UNKNOWN_ACCURACY_WEIGHT`, connectivity and network constants are shared
+   across all cities and calibrated against none of them. Their effect on the published intervention ranking is measured in
    [sensitivity-analysis.md](sensitivity-analysis.md): the habitat weights and
    `SPECIES_AREA_Z` barely move it, but **`CONN_MAX_RESISTANCE` does** — at
    R = 100 the ranking reorders substantially. The pipeline now reports this per
@@ -1132,6 +1178,10 @@ Every pipeline run should record:
 - `MAX_EXPECTED_RICHNESS` (exported for transparency; scales nothing at either
   scale)
 - `MIN_PATH_M` and `PATH_RADIUS_M` (effort-correction thresholds)
+- the observation quality gates (section 3.1): `OBS_MAX_ACCURACY_M`,
+  `OBS_UNKNOWN_ACCURACY_WEIGHT`, `OBS_DROP_OBSCURED`, `OBS_YEAR_MIN`,
+  `OBS_EXCLUDE_BASIS`, and the per-gate drop counts reported by
+  `apply_obs_quality_gates()`
 - `CONN_*` and `NET_*` (connectivity and derived-network constants)
 - source data dates or versions
 - PMTiles source-layer name

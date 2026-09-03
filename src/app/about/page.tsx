@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Navbar from '@/components/layout/Navbar';
-import { Leaf } from 'lucide-react';
+import { LogoMark } from '@/components/layout/Logo';
 import { SCORE_COLORS, SCORE_THRESHOLDS } from '@/lib/config';
 
 export const metadata: Metadata = {
@@ -149,9 +149,7 @@ export default function AboutPage() {
       <div className="flex-1 overflow-y-auto bg-[#F7F8F5]">
         <div className="max-w-2xl mx-auto px-6 py-12">
           <div className="flex items-center gap-2.5 mb-6">
-            <div className="w-8 h-8 bg-[#2E6F40] rounded-lg flex items-center justify-center flex-shrink-0">
-              <Leaf size={14} strokeWidth={2} className="text-white" />
-            </div>
+            <LogoMark size={34} className="flex-shrink-0" />
             <h1 className="text-[32px] font-semibold text-[#1F2A1F] tracking-tight leading-tight">
               About NatureGap
             </h1>
@@ -165,6 +163,7 @@ export default function AboutPage() {
           </p>
           <p className="text-[14px] text-[#667066] leading-relaxed mb-12">
             The map covers <strong className="text-[#1F2A1F] font-semibold">Porto</strong>,{' '}
+             <strong className="text-[#1F2A1F] font-semibold">Ghent</strong>, {' '}
             <strong className="text-[#1F2A1F] font-semibold">Amsterdam</strong> and{' '}
             <strong className="text-[#1F2A1F] font-semibold">Yokohama</strong>. Each city is
             analysed separately, using the same method. Three cities on two continents keep

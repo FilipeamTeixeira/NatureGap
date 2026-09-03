@@ -978,6 +978,77 @@ finish_citywide_metrics <- function(grid) {
   grid
 }
 
+# Quality gates shared by every observation stream, applied after the streams are
+# bound so iNaturalist, GBIF and app records are held to one standard rather than
+# to whatever each upstream API happened to offer. Constants and the measurements
+# behind them: config.R, "Observation quality gates".
+#
+# Order matters only for the reported counts, not the result: each gate is
+# reported against what reached it, so the numbers sum to the total dropped.
+apply_obs_quality_gates <- function(obs) {
+  if (nrow(obs) == 0L) {
+    obs$accuracy_known <- logical(0)
+    return(obs)
+  }
+  n0 <- nrow(obs)
+
+  n_obscured <- 0L
+  if (exists("OBS_DROP_OBSCURED") && isTRUE(OBS_DROP_OBSCURED)) {
+    keep <- !(obs$obscured_flag %in% TRUE)
+    n_obscured <- sum(!keep)
+    obs <- obs[keep, , drop = FALSE]
+  }
+
+  n_old <- 0L
+  year_min <- if (exists("OBS_YEAR_MIN")) OBS_YEAR_MIN else NULL
+  if (length(year_min) == 1L && !is.na(year_min) && nrow(obs) > 0L) {
+    yr <- year(obs$observed_on)
+    # An undated record cannot be shown to fall inside the window. Every stream
+    # carries a date, so missing means unusable for a recency claim, not exempt.
+    keep <- !is.na(yr) & yr >= as.integer(year_min)
+    n_old <- sum(!keep)
+    obs <- obs[keep, , drop = FALSE]
+  }
+
+  n_coarse <- 0L
+  max_acc <- if (exists("OBS_MAX_ACCURACY_M")) OBS_MAX_ACCURACY_M else NULL
+  if (length(max_acc) == 1L && !is.na(max_acc) && nrow(obs) > 0L) {
+    # NA passes here by design: unknown accuracy is downweighted below, not cut.
+    keep <- is.na(obs$accuracy_m) | obs$accuracy_m <= as.numeric(max_acc)
+    n_coarse <- sum(!keep)
+    obs <- obs[keep, , drop = FALSE]
+  }
+
+  obs$accuracy_known <- !is.na(obs$accuracy_m)
+  unknown_w <- if (exists("OBS_UNKNOWN_ACCURACY_WEIGHT")) OBS_UNKNOWN_ACCURACY_WEIGHT else 1
+  n_unknown <- sum(!obs$accuracy_known)
+  if (!isTRUE(all.equal(as.numeric(unknown_w), 1))) {
+    obs$observation_weight <- ifelse(
+      obs$accuracy_known,
+      obs$observation_weight,
+      obs$observation_weight * as.numeric(unknown_w)
+    )
+  }
+
+  cat(sprintf(
+    "  → observation gates: %d of %d kept — dropped %d obscured, %d before %s, %d coarser than %s m\n",
+    nrow(obs), n0, n_obscured,
+    n_old, if (length(year_min) == 1L) as.character(year_min) else "NA",
+    n_coarse, if (length(max_acc) == 1L) as.character(max_acc) else "NA"
+  ))
+  cat(sprintf(
+    "  → %d of the %d survivors state no accuracy and enter at weight x%s\n",
+    n_unknown, nrow(obs), as.character(unknown_w)
+  ))
+  if (nrow(obs) > 0L) {
+    per_source <- table(obs$observation_source)
+    cat(sprintf("  → by source: %s\n", paste(
+      sprintf("%s %d", names(per_source), as.integer(per_source)), collapse = ", "
+    )))
+  }
+  obs
+}
+
 load_obs_for_tiling <- function(crs_local) {
   read_std <- function(path, source_name, mapper) {
     if (!file.exists(path)) {
@@ -985,7 +1056,8 @@ load_obs_for_tiling <- function(crs_local) {
         taxon_name = character(), iconic_taxon_name = character(),
         observed_on = as.Date(character()), common_label = character(),
         observation_source = character(), observation_weight = numeric(),
-        observer_id = character(), geometry = st_sfc(crs = crs_local)
+        observer_id = character(), accuracy_m = numeric(),
+        obscured_flag = logical(), geometry = st_sfc(crs = crs_local)
       ))
     }
     raw <- st_read(path, quiet = TRUE)
@@ -996,6 +1068,13 @@ load_obs_for_tiling <- function(crs_local) {
   inat_std <- read_std(RAW_INAT, "inat", function(raw) {
     if (!"common_name" %in% names(raw)) raw$common_name <- rep(NA_character_, nrow(raw))
     if (!"user.login" %in% names(raw)) raw[["user.login"]] <- rep(NA_character_, nrow(raw))
+    # Absent in archives fetched before ingest.R captured them. Defaulting to NA
+    # rather than to a passing value means an un-refreshed archive is treated as
+    # unknown-precision and downweighted, not waved through.
+    if (!"positional_accuracy" %in% names(raw)) raw$positional_accuracy <- rep(NA_real_, nrow(raw))
+    if (!"obscured" %in% names(raw)) raw$obscured <- rep(NA, nrow(raw))
+    if (!"geoprivacy" %in% names(raw)) raw$geoprivacy <- rep(NA_character_, nrow(raw))
+    if (!"taxon_geoprivacy" %in% names(raw)) raw$taxon_geoprivacy <- rep(NA_character_, nrow(raw))
     raw |>
       st_transform(crs_local) |>
       mutate(
@@ -1004,16 +1083,27 @@ load_obs_for_tiling <- function(crs_local) {
         common_label = as.character(common_name),
         observation_source = "inat",
         observation_weight = 1,
-        observer_id = as.character(.data[["user.login"]])
+        observer_id = as.character(.data[["user.login"]]),
+        accuracy_m = suppressWarnings(as.numeric(positional_accuracy)),
+        # Either flag obscures the coordinates: geoprivacy is the observer's own
+        # choice, taxon_geoprivacy iNaturalist's automatic protection of a
+        # threatened species. Anything other than "open" is randomised.
+        obscured_flag = obscured %in% TRUE |
+          (!is.na(geoprivacy) & geoprivacy != "open") |
+          (!is.na(taxon_geoprivacy) & taxon_geoprivacy != "open")
       ) |>
       select(taxon_name, iconic_taxon_name, observed_on, common_label,
-             observation_source, observation_weight, observer_id)
+             observation_source, observation_weight, observer_id,
+             accuracy_m, obscured_flag)
   })
 
   gbif_std <- read_std(RAW_GBIF, "gbif", function(raw) {
     if (!"vernacularName" %in% names(raw)) raw$vernacularName <- rep(NA_character_, nrow(raw))
     if (!"class" %in% names(raw)) raw$class <- rep(NA_character_, nrow(raw))
     if (!"recordedBy" %in% names(raw)) raw$recordedBy <- rep(NA_character_, nrow(raw))
+    if (!"coordinateUncertaintyInMeters" %in% names(raw)) {
+      raw$coordinateUncertaintyInMeters <- rep(NA_real_, nrow(raw))
+    }
     raw |>
       st_transform(crs_local) |>
       mutate(
@@ -1023,10 +1113,15 @@ load_obs_for_tiling <- function(crs_local) {
         common_label = as.character(vernacularName),
         observation_source = "gbif",
         observation_weight = 1,
-        observer_id = as.character(recordedBy)
+        observer_id = as.character(recordedBy),
+        accuracy_m = suppressWarnings(as.numeric(coordinateUncertaintyInMeters)),
+        # GBIF has no equivalent flag: a generalised record is expressed as a
+        # large uncertainty, which the accuracy gate already catches.
+        obscured_flag = FALSE
       ) |>
       select(taxon_name, iconic_taxon_name, observed_on, common_label,
-             observation_source, observation_weight, observer_id)
+             observation_source, observation_weight, observer_id,
+             accuracy_m, obscured_flag)
   })
 
   supabase_observations_enabled <- identical(Sys.getenv("SUPABASE_OBSERVATIONS_ENABLED", unset = "0"), "1") ||
@@ -1039,6 +1134,7 @@ load_obs_for_tiling <- function(crs_local) {
   ) {
     raw <- st_read(supabase_path, quiet = TRUE)
     if (!"observer_id" %in% names(raw)) raw$observer_id <- rep(NA_character_, nrow(raw))
+    if (!"gps_accuracy_m" %in% names(raw)) raw$gps_accuracy_m <- rep(NA_real_, nrow(raw))
     raw |>
       st_transform(crs_local) |>
       mutate(
@@ -1053,22 +1149,30 @@ load_obs_for_tiling <- function(crs_local) {
           is.na(observation_weight) ~ 1,
           TRUE ~ as.numeric(observation_weight)
         ),
-        observer_id = as.character(observer_id)
+        observer_id = as.character(observer_id),
+        # AGENTS.md: GPS accuracy is always stored and used in weighting. It is
+        # exported by 01_ingest/export_supabase_observations.R and, until this
+        # gate existed, dropped here.
+        accuracy_m = suppressWarnings(as.numeric(gps_accuracy_m)),
+        obscured_flag = FALSE
       ) |>
       select(taxon_name, iconic_taxon_name, observed_on, common_label,
-             observation_source, observation_weight, observer_id)
+             observation_source, observation_weight, observer_id,
+             accuracy_m, obscured_flag)
   } else {
     st_sf(
       taxon_name = character(), iconic_taxon_name = character(),
       observed_on = as.Date(character()), common_label = character(),
       observation_source = character(), observation_weight = numeric(),
-      observer_id = character(), geometry = st_sfc(crs = crs_local)
+      observer_id = character(), accuracy_m = numeric(),
+      obscured_flag = logical(), geometry = st_sfc(crs = crs_local)
     )
   }
 
   bind_rows(inat_std, gbif_std, supabase_std) |>
     filter(!is.na(taxon_name)) |>
-    mutate(observation_weight = replace_na(observation_weight, 1))
+    mutate(observation_weight = replace_na(observation_weight, 1)) |>
+    apply_obs_quality_gates()
 }
 
 # Is the pre-projected canopy cache still usable for this AOI?
