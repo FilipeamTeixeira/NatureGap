@@ -706,6 +706,17 @@ const UNSAMPLED_AWARE_LAYERS = new Set(['impact', 'residual', 'intervention']);
 /** Legend swatch for the grey that withUnsampledFallback() draws on those layers. */
 const NO_DATA_LEGEND: LayerLegendItem = { color: UNSAMPLED_FILL_COLOR, label: 'Not assessed (no usable data)' };
 
+/**
+ * Layers built on the ecological residual. Where a city's residual window is
+ * not 'informative' (lib/residual-window.ts) the residual is one of its inputs
+ * re-rendered, so these draw flat grey for that city instead of a ramp.
+ * 'intervention' is deliberately absent: at this data density it already reads
+ * as "corridor cells with few records", which is how it is labelled.
+ */
+export const GAP_LAYERS: ReadonlySet<string> = new Set(['impact', 'residual']);
+
+const GAP_WITHHELD_FILL: ExpressionSpecification = ['literal', UNSAMPLED_FILL_COLOR] as ExpressionSpecification;
+
 /** Render observed-richness-dependent layers as flat grey when the feature is unsampled. */
 function withUnsampledFallback(layerId: string, expression: ExpressionSpecification): ExpressionSpecification {
   if (!UNSAMPLED_AWARE_LAYERS.has(layerId)) return expression;
@@ -779,6 +790,25 @@ export function patchFillColorExpressionForCities(
   layerId: PatchFillLayerId,
   cityIds: string[],
   allCityStats: CityLayerStats[],
+  gapUnsupportedCityIds: string[] = [],
+): ExpressionSpecification {
+  const expression = patchFillColorForCities(layerId, cityIds, allCityStats);
+  if (!GAP_LAYERS.has(layerId) || gapUnsupportedCityIds.length === 0) return expression;
+  // Keyed on the feature's own cityId, independently of the stats dispatch
+  // above, whose fallback branch also catches cities without stats.
+  return [
+    'match',
+    ['get', 'cityId'],
+    gapUnsupportedCityIds,
+    GAP_WITHHELD_FILL,
+    expression,
+  ] as unknown as ExpressionSpecification;
+}
+
+function patchFillColorForCities(
+  layerId: PatchFillLayerId,
+  cityIds: string[],
+  allCityStats: CityLayerStats[],
 ): ExpressionSpecification {
   if (cityIds.length === 0) return patchFillColorExpression(layerId, []);
   if (cityIds.length === 1) {
@@ -800,11 +830,17 @@ export function patchFillColorExpressionForCities(
   ] as unknown as ExpressionSpecification;
 }
 
-/** Hex-level fill colour (zoom ≥ 14). */
+/**
+ * Hex-level fill colour (zoom ≥ 14). Hex sources are per dataset, so the caller
+ * passes that dataset's city verdict: `gapUnsupported` greys the GAP_LAYERS.
+ */
 export function hexFillColorExpression(
   layerId: HexLayerId,
   cityStats: CityLayerStats[] = [],
+  gapUnsupported = false,
 ): ExpressionSpecification {
+  if (gapUnsupported && GAP_LAYERS.has(layerId)) return GAP_WITHHELD_FILL;
+
   if (layerId === 'impact') {
     return withUnsampledFallback(layerId, buildDivergingExpression(
       'natureGapScoreNorm',

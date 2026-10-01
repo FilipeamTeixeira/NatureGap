@@ -18,8 +18,9 @@ import {
   fetchParkDetail,
   type RenderCellProperties,
 } from '@/lib/cell-detail';
-import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
+import { HAS_PATCH_OVERVIEW, THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import { CITY, isRegisteredCityId } from '@/lib/config';
+import { gapMapUnsupported, type ResidualWindow } from '@/lib/residual-window';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -61,6 +62,15 @@ export default function Page() {
   const [actions, setActions] = useState<TakeAction[]>([]);
   const [cellDetailLoading, setCellDetailLoading] = useState(false);
   const [viewCityId, setViewCityId] = useState<string | null>(null);
+  // Residual-window verdicts per city (lib/residual-window.ts), set once the
+  // map's datasets load; null until then.
+  const [residualWindows, setResidualWindows] = useState<Record<string, ResidualWindow | null> | null>(null);
+  // Which verdict the open panel uses: a hex cell or a whole park.
+  const [selectedScale, setSelectedScale] = useState<'hex' | 'patch'>('hex');
+  // An explicit thematic choice is never overridden by the default below, and
+  // the default only undoes a switch it made itself.
+  const userPickedLayerRef = useRef(false);
+  const autoHabitatRef = useRef(false);
   const cellClickGenerationRef = useRef(0);
 
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
@@ -74,9 +84,45 @@ export default function Page() {
   const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? viewCityId ?? CITY.id;
   const router = useRouter();
 
-  const handleViewCityChange = useCallback((cityId: string | undefined) => {
-    setViewCityId(cityId ?? null);
+  // Where a city's records can't support a gap map (methodology §8.4), the
+  // Nature Gap layer is all grey, so open on Habitat quality instead — a
+  // measured layer that covers every cell. Initial state stays MAP_LAYERS so the
+  // server render matches; this runs when the verdicts arrive and whenever the
+  // city in view changes, from those events rather than from an effect.
+  const residualWindowsRef = useRef<Record<string, ResidualWindow | null> | null>(null);
+  const viewCityIdRef = useRef<string | null>(null);
+  const applyDefaultLayer = useCallback((cityId: string) => {
+    const windows = residualWindowsRef.current;
+    if (!windows || userPickedLayerRef.current) return;
+    // Hex cells are the only gap map drawn while park fills are off at
+    // overview zoom (HAS_PATCH_OVERVIEW); with them on, a withheld park
+    // verdict would grey the opening view too.
+    const unsupported = gapMapUnsupported(windows[cityId]?.hex)
+      || (HAS_PATCH_OVERVIEW && gapMapUnsupported(windows[cityId]?.patch));
+    const target: HexLayerId | null = unsupported
+      ? 'habitat'
+      : autoHabitatRef.current ? 'impact' : null;
+    if (!target) return;
+    autoHabitatRef.current = unsupported;
+    setLayers((prev) => {
+      if (prev.some((layer) => layer.id === target && layer.enabled)) return prev;
+      return prev.map((layer) => (THEMATIC_LAYER_IDS as readonly string[]).includes(layer.id)
+        ? { ...layer, enabled: layer.id === target }
+        : layer);
+    });
   }, []);
+
+  const handleViewCityChange = useCallback((cityId: string | undefined) => {
+    viewCityIdRef.current = cityId ?? null;
+    setViewCityId(cityId ?? null);
+    applyDefaultLayer(cityId ?? CITY.id);
+  }, [applyDefaultLayer]);
+
+  const handleResidualWindows = useCallback((windows: Record<string, ResidualWindow | null>) => {
+    residualWindowsRef.current = windows;
+    setResidualWindows(windows);
+    applyDefaultLayer(viewCityIdRef.current ?? CITY.id);
+  }, [applyDefaultLayer]);
 
   const handleCitySelect = useCallback((cityId: string) => {
     cellClickGenerationRef.current += 1;
@@ -84,7 +130,11 @@ export default function Page() {
     setSelectedCell(null);
     setSelectedWard(null);
     setSelectedSurveyPoint(null);
+    viewCityIdRef.current = cityId;
     setViewCityId(cityId);
+    // The default layer follows the map, not the menu: MapView reports the city
+    // actually on screen once the flight lands (handleViewCityChange), which
+    // keeps it in step with the legend and paint if the flight is interrupted.
     setFlyToTarget({ cityId });
     router.replace(`/?city=${encodeURIComponent(cityId)}`, { scroll: false });
   }, [router]);
@@ -92,6 +142,7 @@ export default function Page() {
   useLayoutEffect(() => {
     const cityId = cityIdFromLocation();
     if (!cityId) return;
+    viewCityIdRef.current = cityId;
     setViewCityId(cityId);
     setFlyToTarget({ cityId });
   }, []);
@@ -145,6 +196,7 @@ export default function Page() {
 
   const toggleLayer = (id: string) => {
     const isThematic = (THEMATIC_LAYER_IDS as readonly string[]).includes(id);
+    if (isThematic) userPickedLayerRef.current = true;
     setLayers((prev) => prev.map((layer) => {
       if (isThematic && (THEMATIC_LAYER_IDS as readonly string[]).includes(layer.id)) {
         return { ...layer, enabled: layer.id === id };
@@ -162,6 +214,7 @@ export default function Page() {
 
     const clickId = ++cellClickGenerationRef.current;
     setSelectedCell(preview);
+    setSelectedScale('hex');
     setCellDetailLoading(true);
     setSelectedWard(null);
     setSelectedSurveyPoint(null);
@@ -174,9 +227,16 @@ export default function Page() {
   };
 
   const handleParkClick = async (parkId: string, coordinates: [number, number]) => {
+    // Supersede any hex detail still loading, as the other selection handlers
+    // do: otherwise it lands after this park and is shown with the park's
+    // (patch) residual verdict instead of its own.
+    const clickId = ++cellClickGenerationRef.current;
+    setCellDetailLoading(false);
     const cell = await fetchParkDetail(parkId, coordinates);
+    if (clickId !== cellClickGenerationRef.current) return;
     if (cell) {
       setSelectedCell(cell);
+      setSelectedScale('patch');
       setSelectedWard(null);
       setSelectedSurveyPoint(null);
     }
@@ -241,6 +301,7 @@ export default function Page() {
             selectedSurveyPointId={selectedSurveyPoint?.id ?? null}
             onSurveyPointSelect={handleSurveyPointSelect}
             onViewCityChange={handleViewCityChange}
+            onResidualWindows={handleResidualWindows}
           />
         </div>
 
@@ -251,6 +312,7 @@ export default function Page() {
           {selectedCell ? (
             <CellDetailPanel
               cell={selectedCell}
+              residualWindow={residualWindows?.[selectedCell.cityId]?.[selectedScale] ?? null}
               activeLayer={activeLayer}
               detailLoading={cellDetailLoading}
               events={events}

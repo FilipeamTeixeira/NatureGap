@@ -1,6 +1,7 @@
 import { PMTiles } from 'pmtiles';
 import { STORAGE } from './config';
 import { listActivePipelineDatasets, resolveHexgridPaths } from './pipeline-manifest';
+import type { ResidualWindow } from './residual-window';
 import { supabase } from './supabase';
 
 export type HexPmtilesDataset = {
@@ -13,6 +14,8 @@ export type HexPmtilesDataset = {
   sourceLayer: string;
   bounds: [number, number, number, number];
   maxZoom: number;
+  /** The city's residual window, repeated on every shard of a sharded city. */
+  residualWindow: ResidualWindow | null;
 };
 
 function sourceId(datasetId: string): string {
@@ -38,13 +41,29 @@ export function hexDatasetsForMapView(datasets: HexPmtilesDataset[]): HexPmtiles
 }
 
 export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
-  if (!supabase) return [];
+  return (await listHexPmtilesDatasetsWithWindows()).datasets;
+}
+
+/**
+ * The readable hex archives, plus every active city's residual window. The
+ * windows come from the manifests, not from the archives, so a city whose
+ * tiles fail to load still has its verdict applied to its parks and panels
+ * rather than silently falling back to the full gap map.
+ */
+export async function listHexPmtilesDatasetsWithWindows(): Promise<{
+  datasets: HexPmtilesDataset[];
+  residualWindows: Record<string, ResidualWindow | null>;
+}> {
+  if (!supabase) return { datasets: [], residualWindows: {} };
   const client = supabase;
 
   const datasets = await listActivePipelineDatasets();
+  const residualWindows = Object.fromEntries(
+    datasets.map((dataset) => [dataset.cityId, dataset.residualWindow] as const),
+  );
   if (datasets.length === 0) {
     console.warn('[pmtiles-storage] No active PMTiles datasets found in Supabase Storage.');
-    return [];
+    return { datasets: [], residualWindows };
   }
 
   // A city that sets SHARD_TILES publishes its tileset as several archives, so
@@ -88,6 +107,7 @@ export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
         sourceLayer: dataset.sourceLayer,
         bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat] as [number, number, number, number],
         maxZoom: header.maxZoom,
+        residualWindow: dataset.residualWindow,
       };
     } catch (error) {
       console.warn('[pmtiles-storage] Skipping unreadable PMTiles archive for', objectPath, error);
@@ -95,5 +115,8 @@ export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
     }
   }));
 
-  return readable.filter((dataset): dataset is HexPmtilesDataset => dataset !== null);
+  return {
+    datasets: readable.filter((dataset): dataset is HexPmtilesDataset => dataset !== null),
+    residualWindows,
+  };
 }

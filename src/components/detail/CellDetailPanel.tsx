@@ -7,6 +7,11 @@ import { cityMeta } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
 import type { CommunityEvent, TakeAction } from '@/lib/data';
+import {
+  gapMapUnsupported,
+  residualWindowReason,
+  type ResidualWindowScale,
+} from '@/lib/residual-window';
 import ScoreGauge from './ScoreGauge';
 import InterventionCard from './InterventionCard';
 
@@ -50,6 +55,12 @@ const SPECIES_LABELS: Record<string, string> = {
 
 interface CellDetailPanelProps {
   cell: CellData;
+  /**
+   * This city's residual window at the selected scale (hex cell or park).
+   * Outside the window the panel withholds the residual-based Nature Gap and
+   * residual figures, as the map does (docs/methodology.md §8.4).
+   */
+  residualWindow?: ResidualWindowScale | null;
   activeLayer: HexLayerId;
   /** True while species, interventions, and other Storage-backed fields are loading. */
   detailLoading?: boolean;
@@ -159,10 +170,10 @@ function unsampledDetail(cell: CellData, noRecords: string, noPath: string): str
  * Ecological Residual, Observed Biodiversity, Intervention Priority) so an
  * unsampled cell never reads as a genuinely neutral score.
  */
-function UnsampledNotice({ detail }: { detail?: string }) {
+function UnsampledNotice({ detail, title = UNSAMPLED_MESSAGE }: { detail?: string; title?: string }) {
   return (
     <div className="bg-[#F0F0EE] rounded-xl p-4 border border-dashed border-[#D1D8CE]">
-      <p className="text-[12px] font-semibold text-[#667066]">{UNSAMPLED_MESSAGE}</p>
+      <p className="text-[12px] font-semibold text-[#667066]">{title}</p>
       {detail && (
         <p className="text-[11px] text-[#A8B4A8] mt-1 leading-relaxed">{detail}</p>
       )}
@@ -181,7 +192,7 @@ function NoHexObservationsNotice() {
   );
 }
 
-function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
+function ExpectedRichnessExplainer({ cell, gapReason }: { cell: CellData; gapReason?: string | null }) {
   const hqPct = (cell.habitatQualityIndex * 100).toFixed(1);
   return (
     <div className="mt-4 pt-4 border-t border-[#E4E7E1] flex flex-col gap-3">
@@ -208,18 +219,26 @@ function ExpectedRichnessExplainer({ cell }: { cell: CellData }) {
           The model is fitted on this city&apos;s sampled cells only, so expected richness is a
           within-city benchmark and is not comparable between cities.
         </li>
-        <li>
-          The residual below measures shortfall the habitat model could not explain — not absolute
-          ecological deficit. It is not centred on zero: the model predicts a rate on a log scale,
-          so most cells sit slightly above their prediction.
-        </li>
+        {!gapReason && (
+          <li>
+            The residual below measures shortfall the habitat model could not explain — not absolute
+            ecological deficit. It is not centred on zero: the model predicts a rate on a log scale,
+            so most cells sit slightly above their prediction.
+          </li>
+        )}
       </ul>
-      <p className="text-[12px] text-[#667066] leading-relaxed">
-        Ecological residual = expected richness ({formatMetric(cell.expectedRichness, 2)}) −
-        effort-corrected richness ({formatMetric(cell.observedRichness, 2)}) =
-        {' '}{formatMetric(cell.ecologicalResidual, 2)}.
-        {' '}Positive values mean fewer species are recorded than the model predicts.
-      </p>
+      {gapReason ? (
+        <p className="text-[12px] text-[#667066] leading-relaxed">
+          Read expected and observed richness side by side rather than as a difference. {gapReason}
+        </p>
+      ) : (
+        <p className="text-[12px] text-[#667066] leading-relaxed">
+          Ecological residual = expected richness ({formatMetric(cell.expectedRichness, 2)}) −
+          effort-corrected richness ({formatMetric(cell.observedRichness, 2)}) =
+          {' '}{formatMetric(cell.ecologicalResidual, 2)}.
+          {' '}Positive values mean fewer species are recorded than the model predicts.
+        </p>
+      )}
     </div>
   );
 }
@@ -254,6 +273,7 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
 
 export default function CellDetailPanel({
   cell,
+  residualWindow = null,
   activeLayer,
   detailLoading = false,
   events = [],
@@ -265,6 +285,13 @@ export default function CellDetailPanel({
   const isUnder = cell.impactScore > 5;
   const speciesTotal = cell.species.reduce((s, sp) => s + sp.count, 0);
   const showResidualSummary = activeLayer === 'residual';
+  const cityName = cityMeta(cell.cityId).name;
+  // Set when this city's records can't support the residual at this scale; the
+  // Nature Gap score is half residual, so both figures are withheld together.
+  const gapReason = gapMapUnsupported(residualWindow) && residualWindow
+    ? residualWindowReason(cityName, residualWindow)
+    : null;
+  const gapWithheldTitle = `Not shown for ${cityName}`;
 
   return (
     <div className="h-full bg-[#F7F8F5] flex flex-col overflow-hidden">
@@ -297,14 +324,14 @@ export default function CellDetailPanel({
           <span
             className={cn(
               'text-[11px] font-semibold px-3 py-1 rounded-full inline-block',
-              cell.isUnsampled
+              gapReason || cell.isUnsampled
                 ? 'bg-[#F0F0EE] text-[#667066]'
                 : isUnder
                   ? 'bg-[#FDF0E4] text-[#C97A2A]'
                   : 'bg-[#DDEAD8] text-[#2E6F40]',
             )}
           >
-            {cell.isUnsampled ? 'Not enough data yet' : ecologicalStatus(cell.impactScore)}
+            {gapReason ? 'Gap not assessed' : cell.isUnsampled ? 'Not enough data yet' : ecologicalStatus(cell.impactScore)}
           </span>
           <span
             className={cn(
@@ -351,7 +378,9 @@ export default function CellDetailPanel({
               <Card>
                 <CardTitle>Ecological residual</CardTitle>
                 <CardSubtitle>Biodiversity-specific metric</CardSubtitle>
-                {cell.isUnsampled ? (
+                {gapReason ? (
+                  <UnsampledNotice title={gapWithheldTitle} detail={gapReason} />
+                ) : cell.isUnsampled ? (
                   <UnsampledNotice
                     detail={unsampledDetail(
                       cell,
@@ -396,7 +425,18 @@ export default function CellDetailPanel({
               <Card>
                 <CardTitle>Nature Gap</CardTitle>
                 <CardSubtitle>Composite ecological condition</CardSubtitle>
-                {cell.isUnsampled ? (
+                {gapReason ? (
+                  <>
+                    <UnsampledNotice
+                      title={gapWithheldTitle}
+                      detail={`${gapReason} Habitat quality and connectivity are shown on their own layers; expected and observed richness are in the Biodiversity tab.`}
+                    />
+                    {/* Not gated: at this data density the ranking reads as corridor cells with few records. */}
+                    <div className="mt-3 text-[11px] text-[#667066]">
+                      Where to look next: {cell.interventionRank != null ? `#${cell.interventionRank}` : 'unranked'}
+                    </div>
+                  </>
+                ) : cell.isUnsampled ? (
                   <UnsampledNotice
                     detail={unsampledDetail(
                       cell,
@@ -606,7 +646,7 @@ export default function CellDetailPanel({
                   Fitted from habitat {cell.habitatQualityIndex.toFixed(3)}, corridor, and access
                 </div>
               </div>
-              <ExpectedRichnessExplainer cell={cell} />
+              <ExpectedRichnessExplainer cell={cell} gapReason={gapReason} />
             </Card>
 
             {speciesTotal > 0 && (

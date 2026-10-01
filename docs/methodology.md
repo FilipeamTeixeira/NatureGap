@@ -686,7 +686,8 @@ cor(R, E), the variance shared with the observation, and a `regime` of
 `observation-dominated`, `informative` or `model-dominated`. Hex values cover the
 sampled cells; park values use the unrounded pooled values, not `park-stats.json`,
 which rounds `expectedRichness` to 0.1 and would move Porto's park λ to 0.0149.
-Nothing is gated on the result.
+The pipeline gates nothing on the result; the frontend uses it to decide what
+to draw (§8.4).
 
 Porto, 2026-10-01 export:
 
@@ -703,6 +704,44 @@ holding at least one record and at least one species, and the share of all
 records that fall in excluded cells. Those records never reach the model. Porto:
 30,947 of 119,771 cells admitted (25.8%), 7,340 of them (23.7%) holding any
 record, and 107,161 of 227,110 records (47.2%) in excluded cells.
+
+#### Coarser grain does not restore the window
+
+Pooling to parks does not rescue it: park λ is 0.0001–0.025 across the four
+cities (lower than hex in Porto and Gent, higher in Amsterdam and Yokohama, far
+from the window in all). So the grain sweep
+(`pipeline/sensitivity/sweep_grain_scale.R`) now reports λ for the same
+specification refitted on square blocks, and `lambda_once` for the same fit
+with effort entered once — the accessibility term dropped and nothing else, so
+effort is the offset only (paper R6).
+Its 20 m row uses additive in-cell path length, so it does not reproduce the
+published hex λ; consistency across grains is what it measures.
+
+| grain | Porto | Yokohama | Amsterdam | Gent |
+| --- | --- | --- | --- | --- |
+| 20 m | 0.0058 (0.0058) | 0.0036 (0.0036) | 0.0003 (0.0003) | <0.0001 (<0.0001) |
+| 100 m | 0.050 (0.037) | 0.0095 (0.0066) | 0.0021 (0.0020) | 0.0047 (0.0043) |
+| 200 m | 0.0085 (0.0053) | 0.032 (0.020) | 0.0019 (0.0019) | 0.0009 (0.0009) |
+| 500 m | 0.19 (0.060) | 0.11 (0.071) | 0.0031 (0.0025) | 0.061 (0.060) |
+| 1000 m | **0.31** (0.053) | **0.31** (0.12) | 0.040 (0.0021) | 0.16 (0.14) |
+
+λ, current specification; `lambda_once` in brackets; bold is inside the window.
+At every grain fine enough to act on, the residual is the observation in all
+four cities. Porto and Yokohama reach the window only at 1 km, on 58 and 80
+blocks, and only because the duplicated effort term supplies the expectation's
+spread: with effort entered once neither reaches it at any grain, and Porto's
+1 km λ falls from 0.31 to 0.053. λ is also fragile to a handful of extreme
+blocks (Porto's dip at 200 m) — the record-concentration problem, where a few
+blocks hold tens of thousands of records — which is not a grain effect.
+
+The consequence is a reporting rule rather than a new grid: where a city's
+window is not `informative`, the frontend withholds the two residual-based
+layers (Nature Gap and Ecological residual) and points to their inputs
+instead (§8.4). The residual is still computed,
+exported and recorded; the layers return on their own when a run's λ enters the
+window. Better observations are the route there: structured, effort-known
+surveys reduce Var(observed) noise, whereas a richer expectation model cannot
+add variance the data does not support.
 
 ## 8. Nature Gap Score
 
@@ -845,6 +884,40 @@ residual layer. `impactScore` is a legacy field holding
 `round(bio_residual_norm * 50)` — the biodiversity term alone, and now on the
 centred scale, so its values change meaning with this revision. Prefer
 `natureGapScore`.
+
+### 8.4 When the map withholds the score
+
+The Nature Gap score is half residual, so it inherits the residual window
+(§7.1). The frontend reads each city's verdict from the manifest
+(`metricDefinitions.ecologicalResidual.window`, via
+`src/lib/residual-window.ts`) and, for any city whose verdict is not
+`informative`:
+
+- draws the Nature Gap and Ecological residual layers in the not-assessed grey,
+  per city — hex cells against the `hex` verdict, parks against `patch` — so a
+  map showing two cities greys only the unsupported one;
+- replaces those layers' ramps in the legend with "Not shown for {city}" and
+  the city's own numbers (λ, and the share of the difference that is the
+  observation);
+- shows the same reason in place of the score band and the residual arithmetic
+  in cell and park panels, and leaves the score out of the hover popup;
+- opens on Habitat quality instead of Nature Gap, unless the viewer has picked
+  a thematic layer, and switches back only if it made the switch itself. The
+  choice follows the `hex` verdict, since hex cells are the only gap map drawn
+  while park fills are off at overview zoom (`HAS_PATCH_OVERVIEW`); with them
+  on, a withheld `patch` verdict counts too.
+
+The two inputs — which is what the difference contains anyway (paper R1) — stay
+available separately: expected richness as its own layer, and the observation
+as the Observed biodiversity layer (record counts per cell) and as
+effort-corrected observed richness in each panel's Biodiversity tab. There is no
+map layer of effort-corrected observed richness. "Where to look next" also
+stays: at this data density its ranking already reads as corridor cells with
+few records. A dataset whose manifest has no window block
+keeps the previous behaviour. Nothing is recomputed or hidden in the exports;
+the decision is made at display time and reverses on its own when a run's λ
+enters the window. On the 2026-10-01 exports every city is
+`observation-dominated` at both scales.
 
 ## 9. Connectivity Analysis
 

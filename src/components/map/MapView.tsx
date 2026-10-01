@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { getCityLayerStats, wardCentroidsGeoJSON } from '@/lib/data';
-import { CITY, MAP_CONFIG } from '@/lib/config';
-import { hexDatasetsForMapView, listHexPmtilesDatasets } from '@/lib/pmtiles-storage';
+import { CITY, MAP_CONFIG, cityMeta } from '@/lib/config';
+import { hexDatasetsForMapView, listHexPmtilesDatasetsWithWindows } from '@/lib/pmtiles-storage';
+import {
+  gapMapUnsupported,
+  residualWindowReason,
+  type ResidualWindow,
+} from '@/lib/residual-window';
 import type { RenderCellProperties } from '@/lib/cell-detail';
 import type { MapLayer } from '@/lib/types';
 import {
@@ -27,6 +32,8 @@ import {
   hexFillColorExpression,
   hexFillOpacityForLayer,
   getEnabledLayerIds,
+  GAP_LAYERS,
+  UNSAMPLED_FILL_COLOR,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
   LAYER_DRAW_ORDER,
@@ -60,6 +67,7 @@ import {
   hexOutlineLayerId,
   hexSelectedLayerId,
   refreshHexLayers,
+  setMapResidualWindows,
   cityIdForViewport,
   cityIdFromHexLayerId,
   selectedHexFilter,
@@ -86,6 +94,8 @@ interface MapViewProps {
   onSurveyPointSelect?: (id: string, coordinates: [number, number]) => void;
   /** Fires when the view moves over a different city's exported extent. */
   onViewCityChange?: (cityId: string | undefined) => void;
+  /** Fires once the datasets load, with each city's residual window (null when its manifest predates it). */
+  onResidualWindows?: (windows: Record<string, ResidualWindow | null>) => void;
 }
 
 // Must match --minimum-zoom in pipeline/06_export/export.R and HEX_REGIME.far
@@ -108,6 +118,7 @@ export default function MapView({
   selectedSurveyPointId,
   onSurveyPointSelect,
   onViewCityChange,
+  onResidualWindows,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -121,12 +132,31 @@ export default function MapView({
   const surveyPointsRef = useRef<GeoJSON.FeatureCollection | undefined>(surveyPointsGeoJSON);
   const displayCityIdRef = useRef(displayCityId ?? CITY.id);
   const onViewCityChangeRef = useRef(onViewCityChange);
+  const onResidualWindowsRef = useRef(onResidualWindows);
   const viewCityIdRef = useRef<string | undefined>(undefined);
   const pendingCityFocusRef = useRef<string | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
+  const [residualWindows, setResidualWindows] = useState<Record<string, ResidualWindow | null>>({});
+  // The city under the view centre, as reported to the page. Kept as state so
+  // the legend follows the map rather than a selection left open elsewhere.
+  const [viewportCityId, setViewportCityId] = useState<string | undefined>(undefined);
   const enabledLayerIds = getEnabledLayerIds(layers);
   const activeThematic = activeThematicLayerId(layers);
-  const enabledLegends = enabledLayerIds.map((id: HexLayerId) => LAYER_STYLE_SPECS[id]);
+  // The legend's gap verdict describes the city on screen at the scale on
+  // screen — hex cells from DETAIL_ZOOM in, parks below it — matching the paint,
+  // which gates each city's own features.
+  const legendCityId = viewportCityId ?? displayCityId ?? CITY.id;
+  const legendWindowScale = mapZoom >= DETAIL_ZOOM
+    ? residualWindows[legendCityId]?.hex
+    : residualWindows[legendCityId]?.patch;
+  const legendGapReason = gapMapUnsupported(legendWindowScale) && legendWindowScale
+    ? residualWindowReason(cityMeta(legendCityId).name, legendWindowScale)
+    : null;
+  const enabledLegends = enabledLayerIds.map((id: HexLayerId) => ({
+    ...LAYER_STYLE_SPECS[id],
+    // A gap layer drawn grey for this city must not show a ramp it isn't using.
+    withheld: GAP_LAYERS.has(id) && legendGapReason !== null,
+  }));
 
   useEffect(() => {
     onClickRef.current = onHexClick;
@@ -153,6 +183,10 @@ export default function MapView({
   }, [onViewCityChange]);
 
   useEffect(() => {
+    onResidualWindowsRef.current = onResidualWindows;
+  }, [onResidualWindows]);
+
+  useEffect(() => {
     structuredSurveysRef.current = structuredSurveysGeoJSON;
     surveyPointsRef.current = surveyPointsGeoJSON;
   }, [structuredSurveysGeoJSON, surveyPointsGeoJSON]);
@@ -160,7 +194,7 @@ export default function MapView({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     registerPmtilesProtocol();
-    const pmtilesDatasetsPromise = listHexPmtilesDatasets();
+    const pmtilesDatasetsPromise = listHexPmtilesDatasetsWithWindows();
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -178,6 +212,7 @@ export default function MapView({
       const cityId = cityIdForViewport(map);
       if (cityId === viewCityIdRef.current) return;
       viewCityIdRef.current = cityId;
+      setViewportCityId(cityId);
       onViewCityChangeRef.current?.(cityId);
     };
 
@@ -248,8 +283,15 @@ export default function MapView({
       refreshHexLayers(map, layersRef.current);
 
       void (async () => {
-        const pmtilesDatasets = await pmtilesDatasetsPromise;
+        const { datasets: pmtilesDatasets, residualWindows: windows } = await pmtilesDatasetsPromise;
         if (mapRef.current !== map) return;
+        // Published before the archives are checked: the verdicts come from the
+        // manifests, and parks and panels need them even if no tiles load.
+        // The map object holds them for paint; React state for the legend; the
+        // page for the default layer and panels.
+        setMapResidualWindows(map, windows);
+        setResidualWindows(windows);
+        onResidualWindowsRef.current?.(windows);
         if (pmtilesDatasets.length === 0) {
           console.warn('[MapView] No hexgrid PMTiles datasets available.');
           return;
@@ -259,6 +301,7 @@ export default function MapView({
         setHexDatasets(map, activeHexDatasets);
 
         for (const dataset of activeHexDatasets) {
+          const gapUnsupported = gapMapUnsupported(dataset.residualWindow?.hex);
           map.addSource(dataset.sourceId, {
             type: 'vector',
             url: `pmtiles://${dataset.publicUrl}`,
@@ -277,7 +320,7 @@ export default function MapView({
               minzoom: DETAIL_ZOOM,
               layout: { visibility: 'none' },
               paint: {
-                'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId)),
+                'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId), gapUnsupported),
                 'fill-opacity': hexFillOpacityForLayer(layerId),
                 // See HEX_REGIME in layer-styles.ts. These two properties are the
                 // whole zoom progression: antialiasing off at city zoom removes
@@ -530,7 +573,10 @@ export default function MapView({
         const props = renderCellProperties(f.properties);
         if (!props) return;
         const numericScore = Number(props.natureGapScore);
-        const impactOn = getEnabledLayerIds(layersRef.current).includes('impact');
+        const hoveredCityId = cityIdFromHexLayerId(map, f.layer.id);
+        const hoveredWindow = getHexDatasets(map).find((d) => d.cityId === hoveredCityId)?.residualWindow;
+        const impactOn = getEnabledLayerIds(layersRef.current).includes('impact')
+          && !gapMapUnsupported(hoveredWindow?.hex);
 
         popupRef.current?.remove();
         popupRef.current = new maplibregl.Popup({
@@ -729,7 +775,7 @@ export default function MapView({
     <div className="relative w-full h-full" style={{ minHeight: 0 }}>
       <div ref={containerRef} className="w-full h-full" style={{ position: 'absolute', inset: 0 }} />
 
-      {activeThematic === 'impact' && mapZoom >= DETAIL_ZOOM && (
+      {activeThematic === 'impact' && mapZoom >= DETAIL_ZOOM && !legendGapReason && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <p className="text-[11px] text-[#667066] bg-white/92 backdrop-blur-sm border border-[#E4E7E1] rounded-full px-3 py-1.5 shadow-sm">
             Within-park values are indicative
@@ -747,7 +793,12 @@ export default function MapView({
                 {legend.title}
               </p>
               <div className="flex flex-col gap-1.5">
-                {legend.legend.map(({ color, label, symbol }, i, arr) => {
+                {legend.withheld ? (
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 flex-shrink-0 rounded-[3px]" style={{ backgroundColor: UNSAMPLED_FILL_COLOR }} />
+                    <span className="text-[10px] text-[#667066] leading-tight">Not shown for {cityMeta(legendCityId).name}</span>
+                  </div>
+                ) : legend.legend.map(({ color, label, symbol }, i, arr) => {
                   let formattedLabel = label;
                   if (legend.rawMetric) {
                     const statsList = getCityLayerStats(displayCityId ?? CITY.id);
@@ -802,16 +853,16 @@ export default function MapView({
                     </div>
                   );
                 })}
-                {legend.noData && (
+                {!legend.withheld && legend.noData && (
                   <div className="flex items-center gap-2.5 mt-1">
                     <span className="w-2.5 h-2.5 flex-shrink-0 rounded-[3px]" style={{ backgroundColor: legend.noData.color }} />
                     <span className="text-[10px] text-[#667066] leading-tight">{legend.noData.label}</span>
                   </div>
                 )}
               </div>
-              {legend.note && (
+              {(legend.withheld ? legendGapReason : legend.note) && (
                 <p className="text-[9px] text-[#A8B4A8] leading-snug mt-2.5 max-w-[190px]">
-                  {legend.note}
+                  {legend.withheld ? legendGapReason : legend.note}
                 </p>
               )}
             </div>

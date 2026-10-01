@@ -1,4 +1,5 @@
 import { isRegisteredCityId, STORAGE } from './config';
+import { residualWindowFromManifest, type ResidualWindow } from './residual-window';
 import { supabase } from './supabase';
 
 export type ActivePipelineDataset = {
@@ -11,6 +12,8 @@ export type ActivePipelineDataset = {
   /** Set when the city publishes its tileset as several archives (SHARD_TILES). */
   hexgridShardPaths: string[];
   files: Record<string, string>;
+  /** The manifest's residual window; null for datasets exported before it existed. */
+  residualWindow: ResidualWindow | null;
 };
 
 type CurrentPointer = {
@@ -34,6 +37,7 @@ type DatasetManifest = {
     shards?: unknown;
   };
   files?: unknown;
+  metricDefinitions?: unknown;
 };
 
 type PipelineDatasetRow = {
@@ -199,6 +203,7 @@ function datasetFromPointers(
     hexgridPath,
     hexgridShardPaths: shardPathsFromPointers(cityFolder, basePath, current, manifest),
     files,
+    residualWindow: residualWindowFromManifest(manifest),
   };
 }
 
@@ -243,6 +248,7 @@ async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
       hexgridPath: joinPath(basePath, manifestPmtilesPath ?? STORAGE.HEXGRID_PMTILES_KEY),
       hexgridShardPaths: shardPathsFromPointers(basePath, basePath, null, manifest),
       files,
+      residualWindow: residualWindowFromManifest(manifest),
     };
   }));
 

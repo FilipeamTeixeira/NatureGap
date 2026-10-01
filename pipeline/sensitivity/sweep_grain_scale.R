@@ -34,6 +34,7 @@ CITY <- Sys.getenv("SENS_CITY", "porto")
 if (!exists("CONFIG_LOADED")) setwd(Sys.getenv("NATUREGAP_PIPELINE", "."))
 suppressMessages(source("config.R"))
 suppressMessages(source(here::here("05_residuals", "expected_model.R")))
+source(here::here("residual_diagnostics.R"))
 
 GRAINS <- as.numeric(strsplit(Sys.getenv("GRAINS", "20,60,100,200,500,1000"), ",")[[1]])
 
@@ -111,9 +112,12 @@ fit_at_grain <- function(g) {
 
   train <- d |> filter(!is_unsampled, is.finite(effort_corrected_richness))
   if (nrow(train) < 30L) {
-    return(data.frame(grain_m = g, units = nrow(d), sampled = sum(!d$is_unsampled),
-                      zero_pct = NA, dev = NA, disp = NA, habitat = NA,
-                      conn = NA, access = NA, fallback = NA))
+    # Same columns as the fitted row below, or rbind() fails on the whole sweep.
+    return(data.frame(grain_m = g, sampled = nrow(train), zero_pct = NA_real_,
+                      dev = NA_real_, hab = NA_real_, dev_ctl = NA_real_,
+                      hab_ctl = NA_real_, area_ctl = NA_real_, disp_ctl = NA_real_,
+                      lambda = NA_real_, shared_obs = NA_real_,
+                      regime = "undetermined", lambda_once = NA_real_))
   }
 
   fit <- function(terms, label) suppressWarnings(fit_expected_model(
@@ -134,6 +138,16 @@ fit_at_grain <- function(g) {
     c1 <- m1$record$coefficients
   }
 
+  # The residual window (docs/methodology.md §7.1): does the expectation vary
+  # enough for expected minus observed to be anything but the observation?
+  # lambda_once refits the current specification minus accessibility_component
+  # and nothing else, so effort enters only as the offset (paper R6): it shows
+  # how much of lambda the duplicated effort term supplies.
+  w0 <- residual_window(m0$predict(train), train$effort_corrected_richness)
+  once_terms <- setdiff(EXPECTED_MODEL_TERMS, "accessibility_component")
+  m_once <- fit(once_terms, paste0("grain", g, "_effort_once"))
+  w_once <- residual_window(m_once$predict(train), train$effort_corrected_richness)
+
   data.frame(
     grain_m = g,
     sampled = nrow(train),
@@ -143,7 +157,11 @@ fit_at_grain <- function(g) {
     dev_ctl = if (has_area) round(m1$record$explainedDeviance, 4) else NA_real_,
     hab_ctl = if (has_area) round(c1[["habitat_component"]], 3) else NA_real_,
     area_ctl = if (has_area) round(c1[["log_area"]], 3) else NA_real_,
-    disp_ctl = if (has_area) round(m1$record$dispersion, 1) else NA_real_
+    disp_ctl = if (has_area) round(m1$record$dispersion, 1) else NA_real_,
+    lambda = signif(w0$lambda, 3),
+    shared_obs = round(w0$sharedVarianceWithObserved, 3),
+    regime = w0$regime,
+    lambda_once = signif(w_once$lambda, 3)
   )
 }
 
@@ -165,3 +183,11 @@ cat("Read it this way:\n")
 cat("  hab_ctl keeps its sign and magnitude  => habitat signal is real, not area.\n")
 cat("  hab_ctl collapses toward 0            => the apparent habitat effect was area.\n")
 cat("  dev_ctl >> dev                        => area was a missing confounder.\n")
+cat(sprintf(
+  "\nlambda      : Var(expected) / Var(observed); the residual is informative only inside [%s, %s].\n",
+  RESIDUAL_WINDOW_LAMBDA[["lower"]], RESIDUAL_WINDOW_LAMBDA[["upper"]]
+))
+cat("shared_obs  : share of the residual's variance it holds in common with the observation.\n")
+cat("lambda_once : lambda with effort entered once (offset only, no accessibility term).\n")
+cat("  A grain helps only if lambda reaches the window AND lambda_once does too —\n")
+cat("  otherwise the expectation's spread is the duplicated effort term, not habitat.\n")

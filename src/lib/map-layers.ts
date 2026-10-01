@@ -9,6 +9,7 @@ import maplibregl from 'maplibre-gl';
 import { getCityLayerStats } from '@/lib/data';
 import { CITY, MAP_CONFIG } from '@/lib/config';
 import type { HexPmtilesDataset } from '@/lib/pmtiles-storage';
+import { gapMapUnsupported, type ResidualWindow } from '@/lib/residual-window';
 import type { MapLayer } from '@/lib/types';
 import {
   NETWORK_LAYER_IDS,
@@ -49,20 +50,27 @@ export function activeThematicLayerId(layers: MapLayer[]): HexLayerId {
 export function applyLayerPaintExpressions(map: maplibregl.Map) {
   const allCityStats = getCityLayerStats();
   const cityIds = Array.from(new Set(allCityStats.map((stat) => stat.cityId)));
+  const windows = getMapResidualWindows(map);
+  const patchGapUnsupported = Object.keys(windows).filter((cityId) => gapMapUnsupported(windows[cityId]?.patch));
   try {
     for (const layerId of PATCH_FILL_LAYER_ORDER) {
       const layer = PATCH_FILL_LAYER_IDS[layerId];
       if (!map.getLayer(layer)) continue;
-      map.setPaintProperty(layer, 'fill-color', patchFillColorExpressionForCities(layerId, cityIds, allCityStats));
+      map.setPaintProperty(
+        layer,
+        'fill-color',
+        patchFillColorExpressionForCities(layerId, cityIds, allCityStats, patchGapUnsupported),
+      );
     }
 
     for (const dataset of getHexDatasets(map)) {
       const cityStats = getCityLayerStats(dataset.cityId);
+      const gapUnsupported = gapMapUnsupported(dataset.residualWindow?.hex);
       for (const layerId of LAYER_DRAW_ORDER) {
         if (!hasHexOverlay(layerId)) continue;
         const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
         if (!map.getLayer(mlId)) continue;
-        map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(layerId, cityStats));
+        map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(layerId, cityStats, gapUnsupported));
         // Re-asserted here, not just at addLayer time. These two carry the whole
         // zoom regime (see HEX_REGIME), and a layer created before this code
         // existed — a hot reload in dev, or any path that recreates the style
@@ -149,6 +157,17 @@ export function getHexDatasets(map: maplibregl.Map): HexPmtilesDataset[] {
 
 export function setHexDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
   (map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets = datasets;
+}
+
+type MapWithWindows = { __naturegapResidualWindows?: Record<string, ResidualWindow | null> };
+
+/** Every active city's residual window, including cities whose archives failed to load. */
+export function getMapResidualWindows(map: maplibregl.Map): Record<string, ResidualWindow | null> {
+  return (map as unknown as MapWithWindows).__naturegapResidualWindows ?? {};
+}
+
+export function setMapResidualWindows(map: maplibregl.Map, windows: Record<string, ResidualWindow | null>) {
+  (map as unknown as MapWithWindows).__naturegapResidualWindows = windows;
 }
 
 export function hexInteractiveLayerIds(map: maplibregl.Map): string[] {

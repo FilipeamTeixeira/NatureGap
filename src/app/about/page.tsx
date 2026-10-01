@@ -101,7 +101,7 @@ const METRICS = [
   },
   {
     title: 'Nature Gap score',
-    body: 'The headline number. The ecological residual supplies half of it. Weak habitat quality supplies 30 per cent, and weak connectivity the remaining 20 per cent. Each part is measured against the typical cell in the same city, so zero means ordinary for that city rather than adequate in any absolute sense. The point of comparison is recalculated on every run, which makes a score meaningful within one city and one analysis, and nowhere else.',
+    body: 'The composite score. The ecological residual supplies half of it. Weak habitat quality supplies 30 per cent, and weak connectivity the remaining 20 per cent. Each part is measured against the typical cell in the same city, so zero means ordinary for that city rather than adequate in any absolute sense. The point of comparison is recalculated on every run, which makes a score meaningful within one city and one analysis, and nowhere else. Because half of it is the residual, the map shows it only for cities whose records can support a gap map. Elsewhere the map opens on habitat quality, the legend says why, and the two inputs stay available on their own: expected richness as a layer, recorded observations as the Observed biodiversity layer, and both side by side in each place’s Biodiversity tab.',
   },
   {
     title: 'Corridor importance',
