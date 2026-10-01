@@ -28,8 +28,9 @@ export default async function TakeActionPage() {
             Take action
           </h1>
           <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">
-            Every action below is ranked by ecological impact. Start with what fits your time, and
-            use the map to find where your effort will matter most.
+            General actions that help urban wildlife. They are not ranked by measured impact; the
+            data cannot support that yet. Start with what fits your time, and use the map to find
+            places where nobody has recorded wildlife yet.
           </p>
 
           <div className="flex flex-col gap-3">

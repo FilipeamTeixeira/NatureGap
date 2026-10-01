@@ -58,8 +58,8 @@ const STEPS = [
     body: 'A statistical model learns how species richness relates to habitat, connectivity and access across the whole city, then predicts what each cell should hold. Expected minus observed is the gap.',
   },
   {
-    title: 'Rank the restoration opportunities',
-    body: 'A cell rises to the top of the list when it falls short of its prediction and also sits on an important route between patches of habitat.',
+    title: 'Rank where to look next',
+    body: 'A cell rises to the top of the list when fewer species are recorded there than predicted and it also sits on an important route between patches of habitat. Usually that is a well-vegetated cell nobody has surveyed yet.',
   },
 ];
 
@@ -97,7 +97,7 @@ const METRICS = [
   },
   {
     title: 'Ecological residual',
-    body: 'Expected richness minus observed richness. A positive figure means fewer species were found than habitat and connectivity predict, which points to a shortfall. A negative figure means more were found than predicted, which can mark a refuge. This is what the model could not explain, not a direct measure of ecological loss.',
+    body: 'Expected richness minus observed richness. A positive figure means fewer species were recorded than habitat and connectivity predict; a negative figure means more. Because most cells hold few or no records, the figure mostly reflects how much has been recorded: in Porto it shares 97 per cent of its variation with the observed richness it is calculated from. This is what the model could not explain, not a measure of ecological loss.',
   },
   {
     title: 'Nature Gap score',
@@ -108,8 +108,8 @@ const METRICS = [
     body: 'How often a cell lies on an efficient route between patches of habitat. Neighbouring cells form a network in which movement grows more costly as vegetation gives way to concrete, and stops altogether where the ground is entirely built. Only routes short enough for an animal to plausibly travel are counted. A cell scoring zero carries no route at all. That places it outside the network, rather than making it a weak part of one.',
   },
   {
-    title: 'Restoration priority',
-    body: 'Where work would achieve the most. A cell scores only if it is both performing worse than the typical cell in its city and carrying real connectivity value. Excellent habitat with no shortfall does not qualify, and neither does a large shortfall in an isolated pocket. For the highest-ranked cells, the model also estimates how much connectivity restoring them would add.',
+    title: 'Where to look next',
+    body: 'Cells worth surveying first. A cell ranks when its recorded richness falls further below expectation than the typical cell in its city, and it lies on a habitat corridor. At this scale that mostly picks well-vegetated cells with few or no records: in three of the four cities the twenty top-ranked cells hold no recorded species at all. Treat the list as a guide to fieldwork, not as evidence that nature is missing there. For the highest-ranked cells, the model also estimates how much connectivity improving them would add.',
   },
 ];
 
@@ -122,12 +122,12 @@ const RELIABILITY = [
   {
     verdict: 'Robust',
     title: 'The search threshold',
-    body: 'The 50-metre path minimum decides which cells are analysed at all. Moving it changes the analysed area by almost a factor of four, so it matters for any claim about how much of a city has been covered. It has little effect on which sites reach the top of the restoration list.',
+    body: 'The 50-metre path minimum decides which cells are analysed at all. Moving it changes the analysed area by almost a factor of four, so it matters for any claim about how much of a city has been covered. It has little effect on which sites reach the top of the list of where to look next.',
   },
   {
     verdict: 'Not robust',
     title: 'The cost of crossing built ground',
-    body: 'One constant genuinely changes the answer. Making built surfaces harder to cross reorders the restoration list. At the most extreme value tested, only one of Amsterdam’s top twenty sites survives, and fewer than half of Porto’s. Until this figure is calibrated against real dispersal data, the ranking is a starting point for fieldwork rather than a settled result.',
+    body: 'One constant genuinely changes the answer. Making built surfaces harder to cross reorders the list of where to look next. At the most extreme value tested, only one of Amsterdam’s top twenty sites survives, and fewer than half of Porto’s. Until this figure is calibrated against real dispersal data, the ranking is a starting point for fieldwork rather than a settled result.',
   },
 ];
 
@@ -135,7 +135,7 @@ const LIMITATIONS = [
   'Most records come from volunteers, so they cluster near homes and popular parks and favour species that are easy to spot. Footpath length estimates where people searched. It says nothing about their skill, the time of year, or land the public cannot enter.',
   'Satellite greenness cannot separate native planting from ornamental or invasive growth. Surface temperature still depends on which days the satellite passed overhead, even after seasonal averaging.',
   'OpenStreetMap coverage varies between cities. Both the disturbance reading and the search-effort adjustment inherit whatever is missing locally.',
-  'Most 20-metre cells contain no species records at all. The model explains roughly a fifth of the variation in Porto and less in the sparser cities. The signal is real but weak, and whether it supports decisions cell by cell, rather than neighbourhood by neighbourhood, is still an open question.',
+  'Most 20-metre cells contain no species records at all. The model explains about 14 per cent of the variation in Porto and 3 per cent or less in the other cities. At this grain the signal does not support decisions cell by cell; in Porto it holds up once cells are pooled into blocks of 100 metres or more.',
   'Expected richness is fitted and tested on the same data, so the residual is not independent of the model that produced it.',
   'Connectivity uses a generic vegetation-against-concrete model. It does not represent the needs of any particular species, and it does not yet identify individual barriers such as a specific road or railway. The estimated gain from restoring a cell is a local approximation, not a full simulation.',
   'Fragmentation, patch isolation and similar landscape measures are not yet calculated, and nothing on this site uses them.',
@@ -156,10 +156,12 @@ export default function AboutPage() {
           </div>
 
           <p className="text-[15px] text-[#3F4A3F] leading-relaxed mb-4">
-            Some parts of a city hold less wildlife than their habitat suggests they should.
-            NatureGap measures that shortfall. It estimates the biodiversity each patch of
-            ground could support, compares it against the species actually recorded there,
-            and maps the difference.
+            NatureGap estimates the biodiversity each patch of ground could support, compares
+            it with the species actually recorded there, and maps the difference. Across most
+            of a city that difference mainly shows where nobody has recorded wildlife yet,
+            rather than where wildlife is missing, and the map marks those places as not
+            assessed. The habitat, tree cover, heat and connectivity layers come from satellite
+            and map data, not from wildlife records.
           </p>
           <p className="text-[14px] text-[#667066] leading-relaxed mb-12">
             The map covers <strong className="text-[#1F2A1F] font-semibold">Porto</strong>,{' '}
@@ -325,10 +327,10 @@ export default function AboutPage() {
             Scope and licensing
           </h2>
           <p className="text-[14px] text-[#667066] leading-relaxed mb-3">
-            NatureGap shows where urban habitat is under-delivering by the standards of its
-            own city, and where restoration would close that gap most efficiently. It is not
-            a species inventory, an offset calculator, or a way to rank one city against
-            another.
+            NatureGap shows how a city’s habitat, tree cover, heat and connectivity vary, where
+            wildlife records are missing, and where a survey would add most to what is known.
+            It is not a species inventory, an offset calculator, or a way to rank one city
+            against another.
           </p>
           <p className="text-[14px] text-[#667066] leading-relaxed">
             The analysis, its documentation and this application are all public. Code is MIT

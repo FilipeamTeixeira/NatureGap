@@ -702,9 +702,11 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
         sourceField = "ecological_residual",
         definition = paste(
           "expected_richness minus effort_corrected_richness, where expected_richness is",
-          "the fitted expectation of that same quantity — so this is a statistical residual:",
-          "centred on zero and orthogonal to the fitted predictors.",
+          "the fitted expectation of that same quantity — so this is a statistical residual.",
+          "The log-link fit guarantees a zero effort-weighted sum, not a symmetric spread:",
+          "most sampled cells sit slightly above zero and a few far below (docs/methodology.md §7).",
           "Positive means fewer species recorded than the model predicts.",
+          "`window` records whether it carries information beyond its two inputs.",
           "Separate from nature_gap_score."
         ),
         pressureCutoff = if (is.finite(RESIDUAL_PRESSURE_CUTOFF)) {

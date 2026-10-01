@@ -23,8 +23,7 @@ export default async function CommunityPage() {
             Community
           </h1>
           <p className="text-[14px] text-[#667066] mb-10 leading-relaxed">
-            Local events and citizen science opportunities in {CITY.name}. Each event ties directly
-            to high-priority map cells.
+            Local events and citizen science opportunities in {CITY.name}.
           </p>
 
           <div className="flex flex-col gap-3">

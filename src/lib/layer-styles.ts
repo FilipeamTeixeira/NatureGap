@@ -972,9 +972,10 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
     noData: NO_DATA_LEGEND,
   },
   intervention: {
-    title: 'Intervention Ranking',
+    title: 'Where to look next',
     property: 'interventionRankNorm',
     rawMetric: 'intervention_rank',
+    note: 'Corridor cells recorded further below expectation than is typical — mostly good habitat with few or no records. A survey here adds most to what the map knows; it is not evidence that nature is missing.',
     legend: [
       { color: '#4a148c', label: 'Top priority' },
       { color: '#6a1b9a', label: 'High' },

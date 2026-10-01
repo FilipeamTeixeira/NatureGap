@@ -8,7 +8,7 @@ export const MAP_LAYERS: MapLayer[] = [
   { id: 'impact',       label: 'Nature gap',              enabled: true,  color: '#427033' },
   { id: 'expected',     label: 'Expected richness',       enabled: false, color: '#0d47a1' },
   { id: 'residual',     label: 'Ecological residual',     enabled: false, color: '#C95B4B' },
-  { id: 'intervention', label: 'Intervention priority',   enabled: false, color: '#7b1fa2' },
+  { id: 'intervention', label: 'Where to look next',      enabled: false, color: '#7b1fa2' },
   { id: 'habitat',      label: 'Habitat quality',         enabled: false, color: '#2E6F40' },
   { id: 'treecover',    label: 'Tree cover',              enabled: false, color: '#388e3c' },
   { id: 'vegetation',   label: 'Vegetation (0.5 m)',      enabled: false, color: '#78c679' },

@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'NatureGap',
-  description: 'See where nature is under pressure and what you can do about it. Open-source ecological health mapping.',
+  description: 'Open-source map of urban nature: habitat, tree cover, heat and connectivity, and where wildlife records are still missing.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

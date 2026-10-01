@@ -2,7 +2,7 @@
 
 An open-source web tool that helps residents, schools, and local groups understand the ecological health of their neighbourhood and take meaningful action.
 
-Unlike generic environmental dashboards, NatureGap produces a spatially explicit **residual map** — the gap between expected and observed nature — and translates that into ranked, location-specific interventions rather than generic advice.
+Unlike generic environmental dashboards, NatureGap produces a spatially explicit **residual map** — the gap between expected and observed nature — and publishes with every run the diagnostics that say whether the data can support it: λ, observation coverage and rank stability ([`docs/methodology.md`](docs/methodology.md) §7.1). Today the residual mostly shows where nobody has recorded wildlife yet, so cells without usable data are marked *not assessed*, and the ranking is a guide to where to survey next rather than a list of places where nature is missing.
 
 **Cities analysed:** Porto (Portugal), Amsterdam (Netherlands), Honmoku/Yokohama (Japan). Porto is the frontend's default city.
 
@@ -14,7 +14,7 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 |---|---|
 | **Residual analysis** | Compares expected biodiversity (habitat model) with observed (citizen science), cell by cell on a 20 m hex grid |
 | **Effort correction** | Species richness divided by `log1p` of pedestrian path length within 40 m of each cell; cells with under 50 m of path are excluded, not scored zero |
-| **Graph-theoretic corridors** | Dispersal-limited betweenness on a habitat-resistance graph, reduced to a node/corridor network — "restoring *this* cell improves connectivity most efficiently" |
+| **Graph-theoretic corridors** | Dispersal-limited betweenness on a habitat-resistance graph, reduced to a node/corridor network — which cells carry the most habitat routes, and where corridors cross weak ground |
 | **Fully open source** | Methodology, pipeline, and application code are all public |
 
 The headline metric is the **Nature Gap score**: positive means fewer species are recorded than the habitat predicts (pressure), negative means more (surplus). See [`docs/methodology.md`](docs/methodology.md) §8.

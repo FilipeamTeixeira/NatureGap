@@ -423,7 +423,7 @@ export default function CellDetailPanel({
                         </div>
                       </div>
                       <div className="mt-3 text-[11px] text-[#667066]">
-                        Intervention priority {cell.interventionRank ?? 'unranked'}
+                        Where to look next: {cell.interventionRank != null ? `#${cell.interventionRank}` : 'unranked'}
                       </div>
                     </div>
                   </div>
@@ -716,7 +716,7 @@ export default function CellDetailPanel({
             <div>
               <p className="text-[18px] font-semibold text-[#1F2A1F] mb-1">Ways to help</p>
               <p className="text-[12px] text-[#667066] mb-4">
-                Ranked by ecological impact — the same list everywhere on the map.
+                General actions, not ranked by measured impact — the same list everywhere on the map.
               </p>
               <div className="flex flex-col gap-3">
                 {actions.length === 0 && (
