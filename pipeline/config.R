@@ -720,6 +720,13 @@ MAX_EXPECTED_RICHNESS <- 350L
 EXPECTED_MODEL_MIN_CELLS   <- 30L   # sampled hexes required to fit at hex scale
 EXPECTED_MODEL_MIN_PATCHES <- 8L    # sampled patches required to fit at patch scale
 
+# Residual window (docs/methodology.md §7.1). For R = expected - observed, the
+# variance R shares with each side is fixed by lambda = Var(expected) /
+# Var(observed): below the lower bound R is mostly the observation with its sign
+# flipped, above the upper bound mostly the model. Reported per run in the
+# export manifest (residual_diagnostics.R); nothing is gated on it.
+RESIDUAL_WINDOW_LAMBDA <- c(lower = 0.25, upper = 4)
+
 # Species-area power law parameters. Used by patch_aggregation.R only: patch
 # area genuinely varies, so an area term is meaningful there. SPECIES_AREA_Z is
 # retained as the documented ASSUMPTION for the exponent (it sits within the

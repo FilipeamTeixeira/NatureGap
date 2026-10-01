@@ -296,6 +296,7 @@ function detailFromRow(
   const meanLst = pct(render.meanLst);
   const landUseClass = row?.land_use_class ?? render.landUseClass ?? 'unknown';
   const habitatPotentialValue = row?.habitat_potential;
+  const isUnsampled = row?.is_unsampled ?? render.isUnsampled ?? undefined;
   const displayName = render.parkName && render.parkName !== 'city-green'
     ? render.parkName
     : 'Green area';
@@ -322,12 +323,13 @@ function detailFromRow(
     ecologicalResidual,
     ecologicalResidualNormalized: row?.ecological_residual_norm ?? render.ecologicalResidualNormalized ?? render.residualNorm ?? undefined,
     dataAvailabilityRatio: row?.data_availability_ratio ?? undefined,
-    isUnsampled: row?.is_unsampled ?? render.isUnsampled ?? undefined,
+    isUnsampled,
     temporalBiasFlag: row?.temporal_bias_flag ?? undefined,
     pathKm: row?.path_km ?? undefined,
     nObs: Number(row?.n_obs ?? render.nObs ?? 0),
     nSurveyDates: Number(row?.n_survey_dates ?? 0),
-    status: impactStatus(impactScore),
+    // An unsampled cell's score is a 0 default, not a measurement.
+    status: isUnsampled ? 'not-assessed' : impactStatus(impactScore),
     habitatPotential: habitatPotentialValue === 'high' || habitatPotentialValue === 'moderate' || habitatPotentialValue === 'low'
       ? habitatPotentialValue
       : habitatPotential(habitatQuality),

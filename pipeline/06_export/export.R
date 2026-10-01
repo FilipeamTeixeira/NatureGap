@@ -13,6 +13,7 @@ library(igraph)
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 source(here::here("score_scaling.R"), local = FALSE)
 source(here::here("cell_taxa.R"), local = FALSE)
+source(here::here("residual_diagnostics.R"), local = FALSE)
 
 dir.create(DATA_EXPORT, recursive = TRUE, showWarnings = FALSE)
 
@@ -65,7 +66,10 @@ PMTILES_REQUIRED_FIELDS <- c(
   # already-published datasets against validate_render_fields(), so the traffic
   # layer and the rank-stability field share one bump rather than forcing two.
   "trafficExposure",
-  "rankStability"
+  "rankStability",
+  # Written only on unsampled cells (see hexgrid_tiles), so it is listed in the
+  # tile metadata whenever a tileset holds at least one unsampled cell.
+  "isUnsampled"
 )
 
 validate_render_fields <- function(value) {
@@ -676,7 +680,10 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
           "OSM pedestrian path length in metres within %d m of the cell centroid; a cell is unsampled below %d m.",
           PATH_RADIUS_M, MIN_PATH_M
         ),
-        missingValueRule = "Unsampled cells keep observed_richness and survey_effort_units as null; sampled cells with no observations use 0."
+        missingValueRule = "Unsampled cells keep observed_richness and survey_effort_units as null; sampled cells with no observations use 0.",
+        # How much of the grid and of the record stream the admission rule leaves
+        # the observation (docs/methodology.md §7.1).
+        coverage = OBSERVATION_COVERAGE
       ),
       effortCorrectedRichness = list(
         sourceField = "effort_corrected_richness",
@@ -704,7 +711,10 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
           round(RESIDUAL_PRESSURE_CUTOFF, 6)
         } else {
           NA_real_
-        }
+        },
+        # lambda and the variance the residual shares with each input, per scale
+        # (docs/methodology.md §7.1).
+        window = RESIDUAL_WINDOW_RECORD
       ),
       natureGapScore = list(
         sourceField = "nature_gap_score",
@@ -977,9 +987,12 @@ compute_city_stats <- function(values, metric_name, city_id) {
 # ── Shared helpers for JSON export ───────────────────────────────────────────
 
 # See SCORE_BREAKS above: higher score = worse, matching config.ts.
+# A missing score is "not-assessed", never "as-expected": mapping it to the
+# middle band published 3,440 of Porto's 5,254 parks — every park with no
+# usable data — as measured and typical (docs/methodology.md §8.2).
 score_status <- function(score) {
   dplyr::case_when(
-    is.na(score) ~ "as-expected",
+    is.na(score) ~ "not-assessed",
     score < SCORE_BREAKS[["much_better"]] ~ "much-better",
     score < SCORE_BREAKS[["better"]]      ~ "better",
     score < SCORE_BREAKS[["as_expected"]] ~ "as-expected",
@@ -1877,7 +1890,14 @@ hexgrid_tiles <- hexgrid_render |>
     # Biodiversity-inference layers stay excluded (zeroed) for unsampled cells.
     residualNorm       = if_else(is_unsampled, 0L, signed_unit_index(residual_norm)),
     natureGapScoreNorm = if_else(is_unsampled, 0L, signed_unit_index(nature_gap_score_norm)),
-    interventionRankNorm = if_else(is_unsampled, 0L, unit_index(intervention_rank_norm))
+    interventionRankNorm = if_else(is_unsampled, 0L, unit_index(intervention_rank_norm)),
+    # Those zeros sit on the diverging ramp's midpoint, so without this flag an
+    # unsampled cell painted "near expected" — 70.7% of Porto's drawn hexes.
+    # layer-styles.ts withUnsampledFallback() greys any feature carrying it.
+    # TRUE only: NA is dropped from the tiles, so sampled cells cost no bytes.
+    # Porto measured +0.30 MiB; Gent's tighter shard is estimated at ~+0.3 MiB,
+    # leaving it ~0.3 MiB under MAX_UPLOAD_BYTES.
+    isUnsampled        = if_else(is_unsampled, TRUE, NA)
   )
 
 hexgrid_tilesets <- write_hexgrid_tilesets(hexgrid_tiles, DATA_EXPORT)
@@ -2064,6 +2084,34 @@ cat(sprintf("Written: park-stats.json (%d parks)\n", length(park_stats_out)))
 
 jsonlite::write_json(top, file.path(DATA_EXPORT, "top_interventions.json"), pretty = TRUE)
 cat("Written: top_interventions.json\n")
+
+# ── 4b. Residual window and observation coverage (methodology §7.1) ─────────
+# Measured on the published quantities, for the manifest. Hex: every cell
+# (grid_all, not the habitat-filtered grid), sampled subset. Parks: the
+# unrounded values in green_metrics — park-stats.json rounds expectedRichness
+# to 0.1, which would move Porto's park lambda from 0.0129 to 0.0149.
+hex_sampled <- !grid_all$is_unsampled
+RESIDUAL_WINDOW_RECORD <- list(
+  hex = residual_window(
+    grid_all$expected_richness[hex_sampled],
+    grid_all$effort_corrected_richness[hex_sampled]
+  ),
+  # Empty when parks.geojson was skipped, which records n = 0, "undetermined".
+  patch = residual_window(green_metrics$expected_richness, green_metrics$effort_corrected_richness)
+)
+OBSERVATION_COVERAGE <- observation_coverage(
+  grid_all$is_unsampled, grid_all$n_obs, grid_all$species_richness
+)
+for (scale in names(RESIDUAL_WINDOW_RECORD)) {
+  cat(format_residual_window(scale, RESIDUAL_WINDOW_RECORD[[scale]]), "\n")
+}
+cat(sprintf(
+  "Observation coverage: %d / %d cells admitted; %d hold >= 1 species; %.1f%% of %s records fall in excluded cells\n",
+  OBSERVATION_COVERAGE$cellsAdmitted, OBSERVATION_COVERAGE$cellsTotal,
+  OBSERVATION_COVERAGE$admittedWithSpecies,
+  100 * OBSERVATION_COVERAGE$recordsDiscardedShare,
+  format(OBSERVATION_COVERAGE$recordsTotal, big.mark = ",")
+))
 
 # ── 5. Summary ────────────────────────────────────────────────────────────────
 

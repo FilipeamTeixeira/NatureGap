@@ -250,7 +250,9 @@ Missing-value rule:
 - Sampled cells with no records keep `survey_effort_units_i > 0` and export
   `observed_richness_i = 0`.
 - Unsampled cells export `observed_richness_i = NA`; exporters may coalesce to
-  `0` only for render-only PMTiles fields that cannot style nulls reliably.
+  `0` only for render-only PMTiles fields that cannot style nulls reliably, and
+  must then flag the cell `isUnsampled` so the zero is never drawn as a value
+  (§11).
 - Patch-level `observed_richness` is **not** an aggregate of the cell-level
   field. It is a ratio of pooled sums — distinct taxa pooled across the patch's
   sampled cells, divided by those cells' pooled `survey_effort_units` (§6.2).
@@ -657,6 +659,46 @@ Limitations:
   provisional until observations are pooled at a scale where richness counts are
   non-trivial.
 
+### 7.1 Residual window and observation coverage
+
+The expected model's fit statistic says how well `expected_richness` tracks the
+observation. It does not say what `ecological_residual` is made of. For
+R = E − Y, with λ = Var(E) / Var(Y) and ρ = cor(E, Y):
+
+```text
+cor(R, -Y) = (1 - ρ√λ) / √(1 + λ - 2ρ√λ)
+```
+
+At λ ≪ 1 the residual is the observation with its sign flipped; at λ ≫ 1 it is
+the model. `RESIDUAL_WINDOW_LAMBDA` (`config.R`) sets the window at [0.25, 4],
+which is generous: at λ = 0.25 and ρ = 0 the residual still shares 80% of its
+variance with the observation.
+
+Every export computes this per scale (`pipeline/residual_diagnostics.R`) and
+writes it to the manifest at `metricDefinitions.ecologicalResidual.window`: n,
+both variances, λ, ρ, cor(R, −Y) as measured and as the formula predicts,
+cor(R, E), the variance shared with the observation, and a `regime` of
+`observation-dominated`, `informative` or `model-dominated`. Hex values cover the
+sampled cells; park values use the unrounded pooled values, not `park-stats.json`,
+which rounds `expectedRichness` to 0.1 and would move Porto's park λ to 0.0149.
+Nothing is gated on the result.
+
+Porto, 2026-10-01 export:
+
+| scale | n | λ | ρ | cor(R, −Y) | shared with the observation | regime |
+| --- | --- | --- | --- | --- | --- | --- |
+| hex | 30,947 | 0.0280 | 0.176 | 0.9859 | 97.2% | observation-dominated |
+| park | 1,814 | 0.0129 | 0.062 | 0.9936 | 98.7% | observation-dominated |
+
+Measured and predicted cor(R, −Y) agree to six digits at both scales.
+
+`metricDefinitions.observedRichness.coverage` records what the `MIN_PATH_M`
+admission rule leaves the observation: cells total and admitted, admitted cells
+holding at least one record and at least one species, and the share of all
+records that fall in excluded cells. Those records never reach the model. Porto:
+30,947 of 119,771 cells admitted (25.8%), 7,340 of them (23.7%) holding any
+record, and 107,161 of 227,110 records (47.2%) in excluded cells.
+
 ## 8. Nature Gap Score
 
 Nature Gap score is computed in `pipeline/05_residuals/residuals.R`, with the
@@ -770,9 +812,17 @@ for `src/lib/utils.ts` and `src/lib/cell-detail.ts`. `SCORE_BREAKS` in
 | `< 10` | `as-expected` |
 | `< 20` | `worse` |
 | `>= 20` | `much-worse` |
+| missing (`NA`) | `not-assessed` |
 
 These breaks were re-verified against the centred distribution and left
 unchanged; they partition Porto 20 / 10 / 35 / 11 / 24.
+
+A missing score — an unsampled cell, or a park with no sampled cell — is
+`not-assessed`: a data state, not a sixth band. `score_status()` used to map it
+to `as-expected`, so the 2026-08-26 Porto export published 3,440 of its 5,254
+parks, every park without usable data, in the same band as parks that were
+measured and found typical. The frontend draws `not-assessed` features grey
+(`UNSAMPLED_FILL_COLOR`) with a legend entry of their own.
 
 **Previously the pipeline's own ladders were inverted.** `score_status()` and
 `score_color()` in `06_export/export.R` tested `score < -20 ~ "much-worse"` and
@@ -1065,6 +1115,12 @@ at export time. As of the current export that is:
   `expectedNorm`, `habitatQualityNorm`, `corridorImportanceNorm`,
   `betweennessNorm`, `treeCoverNorm`, `ndviNorm`, `lstNorm`,
   `disturbanceNorm`, `interventionRankNorm`
+- data state: `isUnsampled`, `true` on unsampled cells and absent otherwise.
+  Those cells carry zeros in the biodiversity-inference fields (§5), and zero is
+  the diverging ramp's midpoint, so without the flag they render as *near
+  expected* — 47,650 of the 67,439 hexes drawn for Porto (70.7%, measured on
+  the 2026-10-01 export). `withUnsampledFallback()` in `src/lib/layer-styles.ts`
+  greys flagged features on the Nature Gap, residual and intervention layers.
 
 The derived ecological network ships separately as
 `connectivity-network-edges.geojson` / `-nodes.geojson`, not in PMTiles.
@@ -1173,6 +1229,9 @@ Every pipeline run should record:
   number, not metadata about it. Also carried in the manifest under
   `metricDefinitions.natureGapScore.scaling`, with the band breaks under
   `bandBreaks`.
+- the residual window at both scales and the observation coverage (§7.1), in the
+  manifest under `metricDefinitions.ecologicalResidual.window` and
+  `metricDefinitions.observedRichness.coverage`, with `RESIDUAL_WINDOW_LAMBDA`.
 - `RESIDUAL_PRESSURE_CUTOFF` (sampled p75 of the residual, used for the
   detail-panel pressure string)
 - `MAX_EXPECTED_RICHNESS` (exported for transparency; scales nothing at either

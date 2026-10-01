@@ -4,7 +4,7 @@ import type { GreenSpace } from './green-spaces';
 
 export type ParkStats = CellStatsFields;
 
-const IMPACT_STATUSES = ['much-worse', 'worse', 'as-expected', 'better', 'much-better'] satisfies ImpactStatus[];
+const IMPACT_STATUSES = ['much-worse', 'worse', 'as-expected', 'better', 'much-better', 'not-assessed'] satisfies ImpactStatus[];
 const HABITAT_POTENTIALS = ['low', 'moderate', 'high'] satisfies HabitatPotential[];
 const SPECIES_TYPES = ['plant', 'bird', 'insect', 'mammal', 'fungi'];
 const INTERVENTION_IMPACTS = ['high', 'medium', 'low'];

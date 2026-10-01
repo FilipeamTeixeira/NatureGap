@@ -22,7 +22,8 @@ export interface MapLayer {
   color: string;
 }
 
-export type ImpactStatus = 'much-worse' | 'worse' | 'as-expected' | 'better' | 'much-better';
+/** 'not-assessed' = no usable data (export.R score_status), never a sixth score band. */
+export type ImpactStatus = 'much-worse' | 'worse' | 'as-expected' | 'better' | 'much-better' | 'not-assessed';
 export type HabitatPotential = 'low' | 'moderate' | 'high';
 export type InterventionCategory = 'canopy' | 'corridor' | 'pollinator' | 'water' | 'ground';
 export type InterventionImpact = 'high' | 'medium' | 'low';

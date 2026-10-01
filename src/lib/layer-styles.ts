@@ -28,6 +28,11 @@ export interface LayerStyleSpec {
   /** Shown under the legend — states what a mark on this layer actually is. */
   note?: string;
   legend: LayerLegendItem[];
+  /**
+   * Swatch for features with no usable data, drawn after the ramp. Kept out of
+   * `legend` because MapView labels ramp items by position.
+   */
+  noData?: LayerLegendItem;
 }
 
 /** Bottom → top draw order when multiple cell layers are enabled. */
@@ -698,6 +703,9 @@ export const UNSAMPLED_FILL_COLOR = '#C9CDC5';
 
 const UNSAMPLED_AWARE_LAYERS = new Set(['impact', 'residual', 'intervention']);
 
+/** Legend swatch for the grey that withUnsampledFallback() draws on those layers. */
+const NO_DATA_LEGEND: LayerLegendItem = { color: UNSAMPLED_FILL_COLOR, label: 'Not assessed (no usable data)' };
+
 /** Render observed-richness-dependent layers as flat grey when the feature is unsampled. */
 function withUnsampledFallback(layerId: string, expression: ExpressionSpecification): ExpressionSpecification {
   if (!UNSAMPLED_AWARE_LAYERS.has(layerId)) return expression;
@@ -935,6 +943,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
       { color: '#73A56D', label: 'Surplus' },
       { color: '#2E6F40', label: 'Strong surplus' },
     ],
+    noData: NO_DATA_LEGEND,
   },
   expected: {
     title: 'Expected Richness',
@@ -960,6 +969,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
       { color: '#73A56D', label: 'More recorded' },
       { color: '#2E6F40', label: 'Far more recorded' },
     ],
+    noData: NO_DATA_LEGEND,
   },
   intervention: {
     title: 'Intervention Ranking',
@@ -972,6 +982,7 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
       { color: '#ab47bc', label: 'Lower' },
       { color: '#d8a7df', label: 'Background' },
     ],
+    noData: NO_DATA_LEGEND,
   },
   habitat: {
     title: 'Habitat Quality',

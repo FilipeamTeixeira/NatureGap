@@ -1,0 +1,170 @@
+<title>The Residual Window</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F4F6F5;
+  --surface:#FFFFFF;
+  --ink:#151A1C;
+  --slate:#33474E;
+  --window:#2E6B4F;
+  --fail:#A32A32;
+  --muted:#6C7C81;
+  --rule:#D6DDDA;
+  --rule-soft:#E6EBE9;
+  --code-bg:#EDF1EF;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --measure:34rem;
+  --wide:52rem;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#101416; --surface:#161B1D; --ink:#E3E9E7; --slate:#9DB4BB;
+    --window:#6FBF93; --fail:#E58080; --muted:#8B9BA0;
+    --rule:#2A3336; --rule-soft:#222A2D; --code-bg:#1C2325;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#101416; --surface:#161B1D; --ink:#E3E9E7; --slate:#9DB4BB;
+  --window:#6FBF93; --fail:#E58080; --muted:#8B9BA0;
+  --rule:#2A3336; --rule-soft:#222A2D; --code-bg:#1C2325;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--serif); font-weight:300;
+  font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  padding:0 1.25rem 6rem;
+}
+.wrap{max-width:var(--wide); margin:0 auto}
+.col{max-width:var(--measure)}
+
+/* ---- masthead ---- */
+.masthead{padding:4.5rem 0 2rem; border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:var(--sans); font-size:.66rem; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--slate);
+  margin:0 0 1.4rem;
+}
+h1{
+  font-family:var(--serif); font-weight:600; font-size:clamp(1.85rem,4.4vw,2.9rem);
+  line-height:1.14; letter-spacing:-.015em; margin:0 0 1.2rem;
+  text-wrap:balance; max-width:22ch;
+}
+.sub{font-size:1.06rem; color:var(--muted); max-width:var(--measure); margin:0 0 2rem; font-style:italic}
+.byline{
+  font-family:var(--sans); font-size:.82rem; color:var(--muted);
+  display:flex; flex-wrap:wrap; gap:.4rem 1.4rem; margin:0;
+}
+.byline b{font-weight:600; color:var(--ink)}
+
+/* ---- lambda strip ---- */
+.lam{margin:2.6rem 0 0; padding:1.5rem 0 1.7rem; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+.lam-eyebrow{
+  font-family:var(--sans); font-size:.68rem; font-weight:600; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--slate); margin:0 0 1.1rem;
+}
+.lam-eyebrow .hat{position:relative}
+.lam-eyebrow .hat::after{content:"^"; position:absolute; left:0; top:-.62em; font-size:.9em}
+.lam-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr)); gap:1.1rem 1.6rem}
+.lam-cell{display:flex; flex-direction:column; gap:.14rem; border-left:2px solid var(--fail); padding-left:.8rem}
+.lam-city{font-family:var(--sans); font-size:.76rem; font-weight:600; letter-spacing:.02em; color:var(--muted)}
+.lam-val{font-family:var(--mono); font-size:1.42rem; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1.2}
+.lam-note{font-family:var(--sans); font-size:.7rem; color:var(--fail)}
+.lam-foot{font-size:.92rem; color:var(--muted); margin:1.3rem 0 0; max-width:var(--measure)}
+
+/* ---- headings ---- */
+h2,h3,h4{font-family:var(--serif); font-weight:600; text-wrap:balance; color:var(--ink)}
+h2{
+  font-size:1.5rem; line-height:1.22; letter-spacing:-.01em;
+  margin:3.4rem 0 1.1rem; padding-top:1.1rem; border-top:1px solid var(--rule);
+  max-width:var(--measure); position:relative;
+}
+h3{font-size:1.12rem; margin:2.5rem 0 .7rem; max-width:var(--measure); position:relative}
+h4{font-family:var(--sans); font-size:.9rem; font-weight:600; margin:1.9rem 0 .5rem; color:var(--slate)}
+.secno{
+  font-family:var(--mono); font-weight:400; font-size:.72em; color:var(--slate);
+  letter-spacing:.02em; margin-right:.6rem;
+}
+@media (min-width:1080px){
+  .secno{position:absolute; right:calc(100% + 1.6rem); top:.34em; margin:0; white-space:nowrap; font-size:.66em}
+  h2 .secno{top:1.5em}
+}
+
+/* ---- body ---- */
+p{max-width:var(--measure); margin:0 0 1.05rem}
+ul,ol{max-width:var(--measure); margin:0 0 1.15rem; padding-left:1.25rem}
+li{margin:0 0 .42rem}
+li::marker{color:var(--slate)}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--window); text-underline-offset:.18em; text-decoration-thickness:.06em}
+a:focus-visible{outline:2px solid var(--window); outline-offset:3px; border-radius:2px}
+hr{border:0; height:1px; background:var(--rule-soft); margin:2.6rem 0; max-width:var(--wide)}
+code{
+  font-family:var(--mono); font-size:.82em; background:var(--code-bg);
+  padding:.1em .34em; border-radius:2px; color:var(--slate);
+}
+pre{
+  font-family:var(--mono); background:var(--surface); border:1px solid var(--rule);
+  border-left:2px solid var(--slate);
+  padding:1rem 1.15rem; overflow-x:auto; font-size:.79rem; line-height:1.62;
+  max-width:var(--wide); margin:0 0 1.4rem; color:var(--ink);
+}
+pre code{background:none; padding:0; font-size:1em; color:inherit}
+
+/* ---- tables ---- */
+.tw{overflow-x:auto; max-width:var(--wide); margin:0 0 1.7rem; border-bottom:1px solid var(--rule)}
+table{border-collapse:collapse; width:100%; font-size:.8rem; font-family:var(--sans)}
+thead th{
+  font-size:.68rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--slate); border-bottom:1px solid var(--slate); border-top:1px solid var(--rule);
+  padding:.62rem .7rem; vertical-align:bottom; white-space:nowrap;
+}
+tbody td{
+  padding:.5rem .7rem; border-bottom:1px solid var(--rule-soft);
+  font-variant-numeric:tabular-nums; vertical-align:top;
+}
+tbody tr:last-child td{border-bottom:0}
+tbody td strong{color:var(--ink)}
+table code{background:none; padding:0; font-size:.9em}
+
+/* ---- figures ---- */
+.fig{margin:2.6rem 0; max-width:var(--wide)}
+.fig img{display:block; width:100%; height:auto; background:#fff; border:1px solid var(--rule); border-radius:2px}
+:root[data-theme="dark"] .fig img,
+:root:not([data-theme="light"]) .fig img{filter:none}
+figcaption{
+  font-family:var(--sans); font-size:.78rem; line-height:1.55; color:var(--muted);
+  margin-top:.7rem; max-width:var(--measure);
+}
+.figlab{font-weight:600; color:var(--slate); letter-spacing:.02em}
+
+/* ---- footer ---- */
+.foot{
+  margin-top:4rem; padding-top:1.4rem; border-top:1px solid var(--rule);
+  font-family:var(--sans); font-size:.76rem; color:var(--muted); max-width:var(--wide);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Manuscript draft &middot; Methods in Ecology &amp; Evolution</p>
+    <h1>The gap is in the data</h1>
+    <p class="sub">Expected-minus-observed biodiversity maps reproduce sampling effort at fine grain, and a variance criterion that detects it.</p>
+    <p class="byline">
+      <span><b>Authors</b> &nbsp;[Filipe A. M. Teixeira], [co-authors]</span>
+      <span><b>Study areas</b> &nbsp;Porto &middot; Amsterdam &middot; Gent &middot; Yokohama</span>
+      <span><b>Data</b> &nbsp;1,044,233 cells &middot; 1,850,703 records</span>
+    </p>
+  </header>
+
+  <!--BODY-->
+
+  <p class="foot">Draft for internal review. Every figure and table is generated from the four published pipeline exports; the analysis scripts that produce them ship alongside this manuscript in <code>paper/analysis/</code>. References are a starter list and are not yet verified.</p>
+</div>

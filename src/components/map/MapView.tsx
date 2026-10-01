@@ -802,6 +802,12 @@ export default function MapView({
                     </div>
                   );
                 })}
+                {legend.noData && (
+                  <div className="flex items-center gap-2.5 mt-1">
+                    <span className="w-2.5 h-2.5 flex-shrink-0 rounded-[3px]" style={{ backgroundColor: legend.noData.color }} />
+                    <span className="text-[10px] text-[#667066] leading-tight">{legend.noData.label}</span>
+                  </div>
+                )}
               </div>
               {legend.note && (
                 <p className="text-[9px] text-[#A8B4A8] leading-snug mt-2.5 max-w-[190px]">

@@ -1,0 +1,130 @@
+{
+ "porto": {
+  "n": 30947,
+  "coef_refit": [
+   -8.3268,
+   3.5434,
+   0.0231,
+   6.2683
+  ],
+  "coef_published": [
+   -8.3269,
+   3.5434,
+   0.0231,
+   6.2684
+  ],
+  "dev_explained_insample": 0.1405,
+  "dev_published": 0.1405,
+  "dispersion_refit": 16.697,
+  "dispersion_published": 16.697,
+  "n_published": 30947,
+  "cv_dev_explained_folds": [
+   0.1541,
+   0.0569,
+   0.1141,
+   0.2129,
+   0.0639
+  ],
+  "cv_dev_explained_mean": 0.1204,
+  "cv_var_ratio_expected_over_observed": 0.04165,
+  "cv_corr_residual_vs_neg_observed": 0.9792,
+  "insample_var_ratio": 0.02804,
+  "insample_corr_resid_negobs": 0.9859
+ },
+ "amsterdam": {
+  "n": 67147,
+  "coef_refit": [
+   -4.6262,
+   0.6613,
+   0.5801,
+   3.1434
+  ],
+  "coef_published": [
+   -4.6264,
+   0.6616,
+   0.58,
+   3.1435
+  ],
+  "dev_explained_insample": 0.0298,
+  "dev_published": 0.0298,
+  "dispersion_refit": 246.287,
+  "dispersion_published": 246.2843,
+  "n_published": 67147,
+  "cv_dev_explained_folds": [
+   -0.0299,
+   0.0285,
+   0.0602,
+   0.0717,
+   0.0023
+  ],
+  "cv_dev_explained_mean": 0.0266,
+  "cv_var_ratio_expected_over_observed": 0.0024,
+  "cv_corr_residual_vs_neg_observed": 0.9988,
+  "insample_var_ratio": 0.00055,
+  "insample_corr_resid_negobs": 0.9997
+ },
+ "yokohama": {
+  "n": 52014,
+  "coef_refit": [
+   -4.0308,
+   0.7591,
+   1.3131,
+   0.1381
+  ],
+  "coef_published": [
+   -4.0306,
+   0.7587,
+   1.3133,
+   0.138
+  ],
+  "dev_explained_insample": 0.0211,
+  "dev_published": 0.0211,
+  "dispersion_refit": 301.495,
+  "dispersion_published": 301.5546,
+  "n_published": 52014,
+  "cv_dev_explained_folds": [
+   0.0384,
+   0.0132,
+   0.0076,
+   0.0776,
+   -0.0954
+  ],
+  "cv_dev_explained_mean": 0.0083,
+  "cv_var_ratio_expected_over_observed": 0.00139,
+  "cv_corr_residual_vs_neg_observed": 0.9993,
+  "insample_var_ratio": 0.00018,
+  "insample_corr_resid_negobs": 0.9999
+ },
+ "gent": {
+  "n": 64875,
+  "coef_refit": [
+   -2.9138,
+   -0.1525,
+   0.2817,
+   2.52
+  ],
+  "coef_published": [
+   -2.9138,
+   -0.1525,
+   0.2817,
+   2.52
+  ],
+  "dev_explained_insample": 0.0088,
+  "dev_published": 0.0088,
+  "dispersion_refit": 102.723,
+  "dispersion_published": 102.7324,
+  "n_published": 64875,
+  "cv_dev_explained_folds": [
+   -0.0016,
+   0.0013,
+   0.0055,
+   -0.0128,
+   0.0117
+  ],
+  "cv_dev_explained_mean": 0.0009,
+  "cv_var_ratio_expected_over_observed": 0.00135,
+  "cv_corr_residual_vs_neg_observed": 0.9993,
+  "insample_var_ratio": 0.0005,
+  "insample_corr_resid_negobs": 0.9998
+ }
+}

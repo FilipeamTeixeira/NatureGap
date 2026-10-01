@@ -1,0 +1,134 @@
+{
+ "porto": {
+  "total": 227110.0,
+  "detail": {
+   "porto-84470": {
+    "n_obs": 34107,
+    "species_richness_raw": 159,
+    "observed_richness": 29.8,
+    "expected_richness": 0.6256138696904808,
+    "ecological_residual": -29.21279053363959,
+    "nature_gap_score": -100.0,
+    "is_unsampled": false,
+    "habitat_quality_index": 0.8632,
+    "survey_effort_units": 5.328703165583983,
+    "path_local_m": 205.17043180321073,
+    "intervention_rank": 85858,
+    "n_survey_dates": 1198,
+    "lon": -8.67987,
+    "lat": 41.1689
+   }
+  }
+ },
+ "amsterdam": {
+  "total": 789554.0,
+  "detail": {
+   "amsterdam-59934": {
+    "n_obs": 149677,
+    "species_richness_raw": 0,
+    "observed_richness": null,
+    "expected_richness": 0.015093539556657378,
+    "ecological_residual": null,
+    "nature_gap_score": null,
+    "is_unsampled": true,
+    "habitat_quality_index": 0.6544,
+    "survey_effort_units": null,
+    "path_local_m": 25.137565492897654,
+    "intervention_rank": 66063,
+    "n_survey_dates": 5617,
+    "lon": 5.00003,
+    "lat": 52.34994
+   },
+   "amsterdam-60365": {
+    "n_obs": 133933,
+    "species_richness_raw": 3403,
+    "observed_richness": 686.2,
+    "expected_richness": 0.1727593772307096,
+    "ecological_residual": -686.0193994438779,
+    "nature_gap_score": -66.1,
+    "is_unsampled": false,
+    "habitat_quality_index": 0.6157,
+    "survey_effort_units": 4.959252238974021,
+    "path_local_m": 141.48720966935085,
+    "intervention_rank": 66459,
+    "n_survey_dates": 6538,
+    "lon": 4.94998,
+    "lat": 52.34992
+   },
+   "amsterdam-61262": {
+    "n_obs": 166475,
+    "species_richness_raw": 0,
+    "observed_richness": null,
+    "expected_richness": 0.018374092602767674,
+    "ecological_residual": null,
+    "nature_gap_score": null,
+    "is_unsampled": true,
+    "habitat_quality_index": 0.6233,
+    "survey_effort_units": null,
+    "path_local_m": 15.291015397389184,
+    "intervention_rank": 67255,
+    "n_survey_dates": 7405,
+    "lon": 4.90008,
+    "lat": 52.35003
+   },
+   "amsterdam-61674": {
+    "n_obs": 119147,
+    "species_richness_raw": 0,
+    "observed_richness": null,
+    "expected_richness": 0.014174346281446893,
+    "ecological_residual": null,
+    "nature_gap_score": null,
+    "is_unsampled": true,
+    "habitat_quality_index": 0.5594,
+    "survey_effort_units": null,
+    "path_local_m": 0.0,
+    "intervention_rank": 67611,
+    "n_survey_dates": 6830,
+    "lon": 4.85003,
+    "lat": 52.34997
+   }
+  }
+ },
+ "yokohama": {
+  "total": 34411.0,
+  "detail": {
+   "yokohama-124476": {
+    "n_obs": 3449,
+    "species_richness_raw": 0,
+    "observed_richness": null,
+    "expected_richness": 0.02259570903796302,
+    "ecological_residual": null,
+    "nature_gap_score": null,
+    "is_unsampled": true,
+    "habitat_quality_index": 0.3171,
+    "survey_effort_units": null,
+    "path_local_m": 2.1401333910024873,
+    "intervention_rank": 129883,
+    "n_survey_dates": 29,
+    "lon": 139.60006,
+    "lat": 35.4
+   }
+  }
+ },
+ "gent": {
+  "total": 799628.0,
+  "detail": {
+   "gent-226024": {
+    "n_obs": 183567,
+    "species_richness_raw": 0,
+    "observed_richness": null,
+    "expected_richness": 0.06201060925539053,
+    "ecological_residual": null,
+    "nature_gap_score": null,
+    "is_unsampled": true,
+    "habitat_quality_index": 0.9227,
+    "survey_effort_units": null,
+    "path_local_m": 0.0,
+    "intervention_rank": 230996,
+    "n_survey_dates": 7584,
+    "lon": 3.67803,
+    "lat": 51.06701
+   }
+  }
+ }
+}
