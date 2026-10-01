@@ -89,6 +89,19 @@ Eligibility rules for app observations before R import:
 - Preserve GPS accuracy.
 - Preserve structured-survey effort and habitat indicators.
 - Preserve the assigned 20 m `cell_id` when available.
+- Export only records that name a species. A record without one (the form's
+  "Unknown species") is stored and moderated but is not a species; it used to
+  export as a placeholder taxon and count once per record.
+- Export surveys only from survey points that are still approved.
+- Export contributors as pseudonyms (`app:` + md5 of the account id), never the
+  account id: observer ids reach public outputs such as
+  `top_interventions.json`.
+- The export and the analysis views behind it are readable by the pipeline's
+  database role only, not by app users.
+- A survey can only be created in its in-progress state, and records can only be
+  added while it is in progress, so neither can skip review.
+  (`supabase/migrations/20261002090000_observation_integrity_privacy.sql`;
+  checks in `scripts/check-observation-integrity.sql`.)
 
 ### 3.1 Observation quality gates
 

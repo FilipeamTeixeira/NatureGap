@@ -628,7 +628,10 @@ calculations.
 
 Implemented workflow:
 
-- PostgreSQL exposes `pipeline_observations_export`.
+- PostgreSQL exposes `pipeline_observations_export`, readable by the pipeline's
+  database role only. It exports identified species only, surveys only from
+  approved survey points, and `observer_id` as a pseudonym (`app:` + md5 of the
+  account id) — never an account id (methodology §3).
 - `pipeline/01_ingest/export_supabase_observations.R` reads that view and
   writes `raw/supabase_observations.gpkg`.
 - `pipeline/02_habitat/process_tile.R` reads this file alongside iNaturalist and
