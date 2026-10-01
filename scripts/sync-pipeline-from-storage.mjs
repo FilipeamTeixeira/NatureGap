@@ -154,6 +154,16 @@ async function stageCityExport(supabaseUrl, city, datasetId, current, withCellAt
       if (typeof path === 'string' && path.length > 0) files.add(path);
     }
   }
+  // A sharded export (SHARD_TILES) writes no hexgrid.pmtiles: its archives are
+  // listed under pmtiles.shards instead, so requiring the single file made
+  // every sharded city (Gent) fail to stage.
+  const shards = Array.isArray(manifest.pmtiles?.shards) ? manifest.pmtiles.shards : [];
+  if (shards.length > 0) {
+    files.delete('hexgrid.pmtiles');
+    for (const shard of shards) {
+      if (typeof shard?.path === 'string' && shard.path.length > 0) files.add(shard.path);
+    }
+  }
 
   for (const file of files) {
     if (file === 'cell_attributes.geojson') continue;

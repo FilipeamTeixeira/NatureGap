@@ -402,7 +402,7 @@ Limitations:
 - In-sample fit, so the residual is not independent of the predictors. Note that
   a log link minimises deviance rather than squared error, so — unlike the earlier
   OLS version — the raw gap is **not** centred on the response scale: it is
-  positive in ~90% of sampled cells (section 7).
+  positive in 82% of Porto's sampled cells (section 7).
 - The response is 89% zeros at 20 m, so much of the variation is unexplained. An
   earlier version of this section reported "roughly 20% of the deviance" as
   explained and concluded the hex-scale gap was "weakly but genuinely
@@ -608,13 +608,18 @@ Because `expected_richness` is the fitted expectation of the same quantity
 **It is not centred on zero.** An earlier version of this fit was OLS, for which
 centring held by construction; the current fit uses a log link and minimises
 deviance rather than squared error, so the raw gap on the response scale is
-positive in **90.2%** of Porto's sampled cells (81.0% of patches). Two things
-depend on that and handle it explicitly rather than assuming symmetry:
+positive in **82.0%** of Porto's sampled cells (83.6% of scored patches; both
+measured on the 2026-10-01 export). What the fit does guarantee is a zero
+**effort-weighted** sum: with an intercept and the log(effort) offset, the
+estimating equations force Σ effort × residual = 0. The unweighted mean is also
+close to zero (−0.0004 in Porto), but only because a long negative tail of
+richly recorded cells balances many small positive gaps; the median sits at
++0.088. Two things depend on that asymmetry and handle it explicitly:
 
 - `nature_gap_score` centres every term itself on the city median
   (`score_scaling.R`, §8), so the score and its bands are unaffected.
 - `underperformance` is floored at the **sampled median residual**, not at zero
-  (§10). A zero floor would exclude almost nothing at 90% positive.
+  (§10). At 82% positive, a zero floor would exclude only 18% of sampled cells.
 
 **The residual is expected minus observed — a gap, not a surplus.** It is signed
 so that the headline metric and the residual point the same way: bigger means
@@ -1041,8 +1046,8 @@ Interpretation:
 - `underperformance` is the residual floored at the **sampled median**, so a cell
   that is no worse than typical for its city contributes nothing rather than a
   negative score. The floor moved off zero when the fit moved to a log link: the
-  raw gap is positive in ~90% of sampled cells (§7), so a zero floor excluded
-  almost nothing. At the median floor, 50.0% of Porto's sampled cells carry a
+  raw gap is positive in 82% of Porto's sampled cells (§7), so a zero floor
+  excluded little. At the median floor, 50.0% of Porto's sampled cells carry a
   positive underperformance, which is what makes the ranking discriminate.
   This floor only became selective once the residual was centred (section 6.1):
   while the residual was positive in 99.99% of sampled cells, flooring at zero

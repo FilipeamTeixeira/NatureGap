@@ -275,7 +275,7 @@ Notes on specific fields:
 - `ecological_residual` is `expected_richness - observed_richness`: positive
   means fewer species recorded than the model predicts. Because expected is a
   fitted value on a log scale, the residual is **not** centred on zero — it is
-  positive in ~90% of sampled cells — and it carries no fixed range. Do not apply
+  positive in 82% of Porto's sampled cells — and it carries no fixed range. Do not apply
   absolute thresholds to it (see docs/methodology.md §7).
 - `nature_gap_score` is **within-city relative**: each of its three terms is
   centred on this city's median and scaled by a percentile half-spread

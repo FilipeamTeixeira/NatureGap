@@ -152,9 +152,9 @@ grid <- grid |>
 
 # Underperformance is floored at the sampled median, not at zero. A log-link fit
 # minimises deviance rather than squared error, so the raw gap is not centred on
-# the response scale: it is positive in ~90% of sampled cells on Porto. A zero
-# floor would therefore exclude almost nothing and the intervention ranking would
-# lose the filter it depends on (docs/methodology.md §10).
+# the response scale: it is positive in 82% of sampled cells on Porto. A zero
+# floor would therefore exclude only 18% of them and the intervention ranking
+# would lose most of the filter it depends on (docs/methodology.md §10).
 residual_median <- stats::median(
   grid$ecological_residual[is.finite(grid$ecological_residual)]
 )

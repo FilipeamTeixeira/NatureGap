@@ -777,13 +777,19 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
   )
 
   manifest_path <- file.path(VERSIONED_EXPORT_DIR, "manifest.json")
+  # digits = NA writes every number at full precision. jsonlite's default (4
+  # decimal places) turned Yokohama's lambda of 0.000177 into 0.0002 and capped
+  # the fitted coefficients at 4 decimals; digits = I(6) would instead round
+  # large values, writing a 46,536,221-byte file size as 4.65362e+07. Values
+  # the pipeline wants rounded are rounded before they get here.
   jsonlite::write_json(
     manifest,
     manifest_path,
     pretty = TRUE,
     auto_unbox = TRUE,
     null = "null",
-    na = "null"
+    na = "null",
+    digits = NA
   )
 
   current <- list(
