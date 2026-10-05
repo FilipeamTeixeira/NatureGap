@@ -76,6 +76,7 @@ suppressMessages(source("config.R"))
 pipeline_fns <- new.env()
 suppressMessages(sys.source(here::here("02_habitat", "process_tile.R"), envir = pipeline_fns))
 classify_taxon_group <- pipeline_fns$classify_taxon_group
+source(here::here("sensitivity", "occupancy_model.R"))
 
 SITE_UNITS    <- strsplit(Sys.getenv("SITE_UNITS", "250,500,park"), ",")[[1]]
 VALIDATE_UNIT <- Sys.getenv("VALIDATE_UNIT", "250")
@@ -86,10 +87,6 @@ CV_FOLDS      <- 5L
 ASSESSED_P    <- 0.8
 FLAG_PSI      <- 0.5
 FLAG_POST     <- 0.2
-# Weakly informative normal penalties on the logit scale (covariates are
-# standardised). They only keep sparse species from running to a boundary.
-PRIOR_SD_INTERCEPT <- 5
-PRIOR_SD_SLOPE     <- 2.5
 SEED <- 20261005L
 
 HABITAT_SET  <- Sys.getenv("HABITAT_SET", "rich")
@@ -126,10 +123,6 @@ PASS_TIME_RATIO <- 0.5
 MIN_TEST_SITES  <- 10L    # sites assessed in both halves for the observer test
 MIN_TEST_PAIRS  <- 20L    # flagged species-site pairs for the time test
 
-# Seen overhead, these say nothing about the site below: swifts, swallows and
-# martins, gulls, cormorant, grey heron.
-AERIAL_BIRDS <- "^(Apus|Tachymarptis|Hirundo|Cecropis|Delichon|Ptyonoprogne|Riparia|Larus|Chroicocephalus|Ichthyaetus)( |$)|^(Phalacrocorax carbo|Ardea cinerea)$"
-
 OUT_DIR <- file.path(DATA_ROOT, "sensitivity")
 dir.create(OUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -165,19 +158,7 @@ cells <- grid |>
   )
 rm(grid, xy); invisible(gc())
 
-records_all <- obs |>
-  transmute(
-    cell_id, taxon_name,
-    group = coalesce(classify_taxon_group(iconic_taxon_name), "other"),
-    date = as.Date(observed_on),
-    observer_id = if_else(is.na(observer_id) | !nzchar(observer_id), NA_character_, observer_id),
-    # A record with no observer cannot be grouped into anyone's list, so it is
-    # a visit of its own.
-    observer_key = coalesce(observer_id, paste0("record-", row_number()))
-  ) |>
-  # Species only: a genus-level name would overlap the species under it.
-  filter(!is.na(taxon_name), grepl(" ", taxon_name), !is.na(date), date >= PERIOD_START) |>
-  filter(!(group == "bird" & grepl(AERIAL_BIRDS, taxon_name)))
+records_all <- prepare_records(obs, PERIOD_START, classify_taxon_group)
 rm(obs); invisible(gc())
 
 # Site of every cell, per unit. Square blocks are keyed on the cell centroid,
@@ -206,93 +187,10 @@ site_table <- function(unit) {
 }
 
 build_visits <- function(records, unit) {
-  site_lookup <- setNames(site_of_cells(unit), cells$cell_id)
-  r <- records |>
-    mutate(site = unname(site_lookup[cell_id])) |>
-    filter(!is.na(site)) |>
-    distinct(group, site, observer_key, date, taxon_name)
-  visits <- r |>
-    group_by(group, site, observer_key, date) |>
-    summarise(list_length = n(), .groups = "drop") |>
-    mutate(visit_id = row_number(),
-           doy = as.integer(format(date, "%j")))
-  det <- r |>
-    inner_join(visits |> select(group, site, observer_key, date, visit_id),
-               by = c("group", "site", "observer_key", "date")) |>
-    select(group, site, taxon_name, visit_id)
-  list(visits = visits, det = det)
+  build_site_visits(records, setNames(site_of_cells(unit), cells$cell_id))
 }
 
-# ── 1c. Occupancy model ─────────────────────────────────────────────────────
-
-softplus <- function(z) pmax(z, 0) + log1p(exp(-abs(z)))
-logsumexp2 <- function(a, b) { m <- pmax(a, b); m + log1p(exp(-abs(a - b))) }
-
-# Negative penalised log-likelihood and its gradient. With w_s the posterior
-# probability that site s is occupied (1 where the species was recorded), the
-# gradients reduce to X'(w - psi) for occupancy and Z'(y - p w) for detection.
-occ_fn <- function(par, X, Z, site, y, detected, prior_sd) {
-  kb <- ncol(X)
-  eta <- drop(X %*% par[seq_len(kb)])
-  zeta <- drop(Z %*% par[-seq_len(kb)])
-  log_q <- -softplus(zeta)                       # log(1 - p)
-  ll_visit <- ifelse(y == 1, -softplus(-zeta), log_q)
-  S <- rowsum(ll_visit, site, reorder = TRUE)[, 1]
-  log_psi <- -softplus(-eta)
-  log_1m_psi <- -softplus(eta)
-  ll_absent <- logsumexp2(log_psi + S, log_1m_psi)
-  ll <- ifelse(detected, log_psi + S, ll_absent)
-  w <- ifelse(detected, 1, exp(log_psi + S - ll_absent))
-  psi <- exp(log_psi)
-  p <- exp(-softplus(-zeta))
-  g <- c(crossprod(X, w - psi), crossprod(Z, y - p * w[site]))
-  list(value = -sum(ll) + sum(par^2 / (2 * prior_sd^2)),
-       gradient = -g + par / prior_sd^2)
-}
-
-fit_occupancy <- function(X, Z, site, y, detected) {
-  prior_sd <- c(PRIOR_SD_INTERCEPT, rep(PRIOR_SD_SLOPE, ncol(X) - 1L),
-                PRIOR_SD_INTERCEPT, rep(PRIOR_SD_SLOPE, ncol(Z) - 1L))
-  start <- c(qlogis(min(0.95, max(0.05, mean(detected)))), rep(0, ncol(X) - 1L),
-             qlogis(min(0.5, max(1e-3, mean(y)))), rep(0, ncol(Z) - 1L))
-  # Value and gradient come from one pass; reuse it when optim asks for both
-  # at the same parameters.
-  last_par <- NULL
-  last <- NULL
-  at <- function(par) {
-    if (!identical(par, last_par)) {
-      last <<- occ_fn(par, X, Z, site, y, detected, prior_sd)
-      last_par <<- par
-    }
-    last
-  }
-  o <- optim(start, function(p) at(p)$value, function(p) at(p)$gradient,
-             method = "BFGS", control = list(maxit = 500))
-  list(par = o$par, converged = o$convergence == 0L, kb = ncol(X))
-}
-
-# Expected occupancy, posterior occupancy, and P(recorded at least once | present)
-# at held-out sites, from a fit that did not see them.
-predict_sites <- function(fit, X, Z, site, y) {
-  kb <- fit$kb
-  eta <- drop(X %*% fit$par[seq_len(kb)])
-  zeta <- drop(Z %*% fit$par[-seq_len(kb)])
-  log_q <- -softplus(zeta)
-  A <- rowsum(log_q, site, reorder = TRUE)[, 1]
-  detected <- rowsum(y, site, reorder = TRUE)[, 1] > 0
-  log_psi <- -softplus(-eta)
-  post <- ifelse(detected, 1, exp(log_psi + A - logsumexp2(log_psi + A, -softplus(eta))))
-  data.frame(psi = exp(log_psi), post = post, detected = detected, pstar = 1 - exp(A))
-}
-
-detection_design <- function(v) {
-  cbind(1, log(v$list_length), sin(2 * pi * v$doy / 365.25), cos(2 * pi * v$doy / 365.25))
-}
-
-site_folds <- function(sites) {
-  set.seed(SEED)
-  setNames(sample(rep(seq_len(CV_FOLDS), length.out = length(sites))), sites)
-}
+site_folds <- function(sites) assign_folds(sites, CV_FOLDS, SEED)
 
 # ── 1b–1d. One full analysis: species, fits, per-site scores ────────────────
 
