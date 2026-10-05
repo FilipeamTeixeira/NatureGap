@@ -743,7 +743,11 @@ SPECIES_AREA_C <- 12
 # A city adds optional sources (canopy height, PlanetScope) through
 # RASTER_DOWNLOADERS_EXTRA in its own file.
 
-AUTO_DOWNLOAD_RASTER_INPUTS <- TRUE
+# AUTO_DOWNLOAD_RASTER_INPUTS=0 on the command line turns this off for a run
+# that only refreshes observations. Ingest's raster sections then reuse the
+# city's existing raw rasters and skip any shared source that is absent, rather
+# than fetching it (Porto's ortho NDVI is 28 WMS tiles from DGT).
+AUTO_DOWNLOAD_RASTER_INPUTS <- !identical(Sys.getenv("AUTO_DOWNLOAD_RASTER_INPUTS", "1"), "0")
 
 if (!exists("RASTER_DOWNLOADERS_EXTRA")) RASTER_DOWNLOADERS_EXTRA <- character(0)
 

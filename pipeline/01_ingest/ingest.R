@@ -433,6 +433,23 @@ parse_inat_location <- function(loc) {
   c(lat = as.numeric(parts[1]), lon = as.numeric(parts[2]))
 }
 
+# Observers are pseudonymised before they are written: observer ids reach public
+# outputs such as top_interventions.json (docs/methodology.md §3), and an
+# iNaturalist user id is a public profile. A plain hash of a sequential id is
+# reversed by hashing every id, so the hash is keyed with a random secret drawn
+# once per run and never stored. One person's records share a pseudonym within
+# a run — which is what groups them into visits — and pseudonyms change between
+# runs, which costs nothing because every run refetches the whole bbox.
+INAT_OBSERVER_KEY <- openssl::rand_bytes(32)
+
+inat_observer_pseudonym <- function(user_id) {
+  id <- ifelse(is.na(user_id), NA_character_, format(user_id, scientific = FALSE, trim = TRUE))
+  out <- rep(NA_character_, length(id))
+  ok <- !is.na(id) & nzchar(id)
+  out[ok] <- paste0("inat:", substr(as.character(openssl::sha256(id[ok], key = INAT_OBSERVER_KEY)), 1, 32))
+  out
+}
+
 normalize_inat_results <- function(df) {
   coords <- lapply(df$location, parse_inat_location)
   common <- if ("taxon.preferred_common_name" %in% names(df)) {
@@ -470,7 +487,8 @@ normalize_inat_results <- function(df) {
     positional_accuracy = accuracy,
     geoprivacy        = as.character(col("geoprivacy", NA_character_)),
     taxon_geoprivacy  = as.character(col("taxon_geoprivacy", NA_character_)),
-    obscured          = as.logical(col("obscured", NA))
+    obscured          = as.logical(col("obscured", NA)),
+    observer_id       = inat_observer_pseudonym(col("user.id", NA))
   )
 }
 

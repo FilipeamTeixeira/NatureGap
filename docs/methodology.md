@@ -80,6 +80,13 @@ Current implementation note:
   reach no model output. See docs/pipeline-runbook.md.
 - Weights applied at import: `structured_survey` = 3, `quick_sighting` = 0,
   anything else = 1.
+- iNaturalist observers enter as pseudonyms: `inat:` + an HMAC-SHA256 of the
+  iNaturalist user id, keyed with a random secret drawn once per ingest run and
+  never stored (`01_ingest/ingest.R`). One person's records share a pseudonym
+  within a run, which is what lets them be grouped into visits; a plain hash
+  would not do, because user ids are sequential and public. Archives fetched
+  before 2026-10-05 carry no iNaturalist observer at all. GBIF's `recordedBy` is
+  not yet pseudonymised.
 
 Eligibility rules for app observations before R import:
 

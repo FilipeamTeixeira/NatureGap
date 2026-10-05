@@ -1067,7 +1067,9 @@ load_obs_for_tiling <- function(crs_local) {
 
   inat_std <- read_std(RAW_INAT, "inat", function(raw) {
     if (!"common_name" %in% names(raw)) raw$common_name <- rep(NA_character_, nrow(raw))
-    if (!"user.login" %in% names(raw)) raw[["user.login"]] <- rep(NA_character_, nrow(raw))
+    # ingest.R writes a pseudonym here (inat: + keyed hash), never the login.
+    # Archives fetched before it did have no observer at all.
+    if (!"observer_id" %in% names(raw)) raw$observer_id <- rep(NA_character_, nrow(raw))
     # Absent in archives fetched before ingest.R captured them. Defaulting to NA
     # rather than to a passing value means an un-refreshed archive is treated as
     # unknown-precision and downweighted, not waved through.
@@ -1083,7 +1085,7 @@ load_obs_for_tiling <- function(crs_local) {
         common_label = as.character(common_name),
         observation_source = "inat",
         observation_weight = 1,
-        observer_id = as.character(.data[["user.login"]]),
+        observer_id = as.character(observer_id),
         accuracy_m = suppressWarnings(as.numeric(positional_accuracy)),
         # Either flag obscures the coordinates: geoprivacy is the observer's own
         # choice, taxon_geoprivacy iNaturalist's automatic protection of a
