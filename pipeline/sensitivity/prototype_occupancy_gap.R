@@ -101,8 +101,23 @@ HABITAT_COVARIATES <- switch(
             "canopy_height", "veg_fraction", "water_proximity", "corridor"),
   stop("HABITAT_SET must be 'basic' or 'rich'", call. = FALSE)
 )
+# OBS_MAX_ACCURACY_M=<metres>, with OBS_FROM_RAW=1, replaces the pipeline's GPS
+# gate for this run only. config.R sets 30 m because the analytical cell is 20 m
+# across; a record placed to within half a block is still evidence about the
+# block, and at 30 m the gate drops half of Porto's iNaturalist records (median
+# stated accuracy 31 m). load_obs_for_tiling() reads the global, so assigning it
+# here is enough.
+ACCURACY_OVERRIDE <- suppressWarnings(as.numeric(Sys.getenv("OBS_MAX_ACCURACY_M", "")))
+if (is.finite(ACCURACY_OVERRIDE)) {
+  if (!OBS_FROM_RAW) {
+    stop("OBS_MAX_ACCURACY_M needs OBS_FROM_RAW=1: the processed observations are already gated.",
+         call. = FALSE)
+  }
+  OBS_MAX_ACCURACY_M <- ACCURACY_OVERRIDE
+}
 # Output names carry the run's options, so runs do not overwrite each other.
-RUN_TAG <- paste0(HABITAT_SET, if (OBS_FROM_RAW) "_raw" else "")
+RUN_TAG <- paste0(HABITAT_SET, if (OBS_FROM_RAW) "_raw" else "",
+                  if (is.finite(ACCURACY_OVERRIDE)) sprintf("_acc%g", ACCURACY_OVERRIDE) else "")
 
 PASS_OBSERVER_R <- 0.5
 PASS_EFFORT_RHO <- 0.2
@@ -574,6 +589,9 @@ fmt <- function(df) { df[] <- lapply(df, function(v) if (is.numeric(v)) signif(v
 
 cat(sprintf("\n== %s == occupancy gap prototype (%s), %s to %s\n", CITY_ID, RUN_TAG, PERIOD_START, max(records_all$date)))
 cat(sprintf("habitat covariates: %s\n", paste(HABITAT_COVARIATES, collapse = ", ")))
+cat(sprintf("observations: %s, GPS gate %s m\n",
+            if (OBS_FROM_RAW) "rebuilt from raw" else "processed tiled_obs_all.rds",
+            if (OBS_FROM_RAW) format(OBS_MAX_ACCURACY_M) else "as processed"))
 cat(sprintf("records with an observer: %s\n", paste(sprintf("%s %.0f%%", names(tapply(!is.na(records_all$observer_id), records_all$group, mean)), 100 * tapply(!is.na(records_all$observer_id), records_all$group, mean)), collapse = ", ")))
 for (u in SITE_UNITS) {
   m <- main[[u]]
