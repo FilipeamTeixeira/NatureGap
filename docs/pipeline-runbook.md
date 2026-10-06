@@ -43,6 +43,29 @@ yokohama/20260627T120000Z/hexgrid.pmtiles
 
 Do not include another leading `pipeline-export/` folder inside the bucket.
 
+## Preview an export locally before publishing
+
+Export with the database import off, so nothing leaves the machine:
+
+```bash
+cd pipeline && NATUREGAP_CITY=porto POSTGRES_IMPORT_ENABLED=0 POSTGRES_IMPORT_REQUIRED=0 Rscript --vanilla 06_export/export.R
+```
+
+The export still rewrites `pipeline-export/<city>/current.json` on disk; copy
+the previous one back if it should keep matching what is published. Then:
+
+```bash
+npm run dev:local-export
+```
+
+`next dev` with `NEXT_PUBLIC_PIPELINE_LOCAL_EXPORT=1`: every pipeline file —
+pointers, manifests, tiles, cell details, park stats — is read from
+`pipeline-export/` through `/api/local-pipeline` instead of Storage, and each
+city opens on its **newest local dataset folder**, whatever `current.json`
+says. Cities with no local folder simply do not appear. Accounts, wards, events
+and layer statistics still come from Supabase. A production build ignores the
+variable and the route answers 404 (`src/lib/local-pipeline.ts`).
+
 ## Manual publish workflow (safe)
 
 There are **two separate stores**:
@@ -259,7 +282,8 @@ cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 01_ingest/introduced_speci
 When its outputs are present, `06_export/export.R` adds every cell outside the
 render filter to the tiles as `opportunityOnly` (methodology §11, data contract
 `hexgrid.pmtiles`). **Do not publish such an export until the deployed frontend
-filters `opportunityOnly` cells out of every other layer** — an older frontend
+filters `opportunityOnly` cells out of every other layer** (the Nature gap
+layer, `hexLayerFilter()` in `src/lib/layer-styles.ts`) — an older frontend
 paints them in all layers. That is also why Porto, Amsterdam, Gent and Yokohama
 now set `SHARD_TILES` (2, 3, 4 and 4 archives): the larger tileset is split to
 stay under the 45 MB upload cap at zoom 18. If an export log shows `over the 45

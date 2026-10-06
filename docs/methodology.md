@@ -1512,7 +1512,7 @@ the prototype, and the stage reproduces them to the 4th decimal.
 | Insects | **mismatch** (0.05) | checked (0.42) | insufficient | insufficient |
 | Fungi | insufficient | insufficient | insufficient | insufficient |
 | Other invertebrates | insufficient | checked (0.32) | insufficient | insufficient |
-| Share of the citywide gap from checked groups | 39% | 95% | — (net gap below zero) | — |
+| Checked groups' share of all change (gains and losses) | 37% | 96% | 24% | 6% |
 | Signal: median AUC (null 97.5%) | 0.610 (0.516) | 0.628 (0.510) | 0.588 (0.513) | 0.640 (0.544) |
 | Direction checks right | 8 of 9 | 7 of 8 | 8 of 9 | 0 of 0 |
 | Opportunity gap per cell: median / p90 | 2.9 / 12.4 | 2.3 / 27.6 | 0.0 / 13.1 | 0.0 / 1.9 |
@@ -1564,3 +1564,18 @@ European, none of which occur there.
 - Effort is corrected with visits and list length, not path density (AGENTS.md
   records the exception). App records enter as visits like any other; a
   structured survey's complete-list status is not used yet.
+
+### 15.6 On the map
+
+The opportunity gap is the **Nature gap** layer, first in the list and open by
+default. Gains shade from pale to deep green up to the city's 90th-percentile
+gap; gaps between −1 and +0.5 read as "no clear gain"; at or below −1 a blue
+reads "already richer than greener places like it"; cells without a comparison
+are grey. A legend switch draws `opportunityGap` (all groups, the default) or
+`opportunityGapChecked` (checked groups only), and the legend states the
+city's checked share of the change. The panel gives expected species, the gap,
+its checked part, every group with its label and top species, and the rare
+species found nearby; `opportunityOnly` cells show this alone. Every other layer
+leaves `opportunityOnly` cells out. The record-based Nature Gap score (§8) and
+the ecological residual layer are out of the layer list while every city's
+residual window is observation-dominated (§8.4).

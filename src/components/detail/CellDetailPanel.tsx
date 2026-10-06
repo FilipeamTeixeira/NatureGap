@@ -7,6 +7,7 @@ import { cityMeta } from '@/lib/config';
 import type { CellData } from '@/lib/types';
 import type { HexLayerId } from '@/lib/layer-styles';
 import type { CommunityEvent, TakeAction } from '@/lib/data';
+import type { OpportunityGapInfo } from '@/lib/opportunity-gap';
 import {
   gapMapUnsupported,
   residualWindowReason,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/residual-window';
 import ScoreGauge from './ScoreGauge';
 import InterventionCard from './InterventionCard';
+import NatureGapCard, { opportunityHeadline } from './NatureGapCard';
 
 type Tab = 'overview' | 'biodiversity' | 'habitat' | 'actions' | 'community';
 
@@ -61,6 +63,10 @@ interface CellDetailPanelProps {
    * residual figures, as the map does (docs/methodology.md §8.4).
    */
   residualWindow?: ResidualWindowScale | null;
+  /** This city's Nature gap from its manifest — group labels and species counted. */
+  opportunityInfo?: OpportunityGapInfo | null;
+  /** A hex cell, or a whole park (whose figures are means over its cells). */
+  scale?: 'hex' | 'patch';
   activeLayer: HexLayerId;
   /** True while species, interventions, and other Storage-backed fields are loading. */
   detailLoading?: boolean;
@@ -274,6 +280,8 @@ function ObservedRichnessExplainer({ cell }: { cell: CellData }) {
 export default function CellDetailPanel({
   cell,
   residualWindow = null,
+  opportunityInfo = null,
+  scale = 'hex',
   activeLayer,
   detailLoading = false,
   events = [],
@@ -292,6 +300,12 @@ export default function CellDetailPanel({
     ? residualWindowReason(cityName, residualWindow)
     : null;
   const gapWithheldTitle = `Not shown for ${cityName}`;
+  // The Nature gap leads wherever the export has one. opportunityOnly cells
+  // carry nothing else, so they show that alone.
+  const headline = cell.opportunity ? opportunityHeadline(cell.opportunity.gap) : null;
+  const opportunityOnly = cell.opportunityOnly === true;
+  const isPark = scale === 'patch';
+  const tabs = opportunityOnly ? TABS.filter((t) => t.id !== 'biodiversity' && t.id !== 'habitat') : TABS;
 
   return (
     <div className="h-full bg-[#F7F8F5] flex flex-col overflow-hidden">
@@ -321,6 +335,11 @@ export default function CellDetailPanel({
         </div>
 
         <div className="flex items-center gap-2 mb-4">
+          {headline ? (
+            <span className={cn('text-[11px] font-semibold px-3 py-1 rounded-full inline-block', headline.className)}>
+              {headline.text}
+            </span>
+          ) : (
           <span
             className={cn(
               'text-[11px] font-semibold px-3 py-1 rounded-full inline-block',
@@ -333,6 +352,8 @@ export default function CellDetailPanel({
           >
             {gapReason ? 'Gap not assessed' : cell.isUnsampled ? 'Not enough data yet' : ecologicalStatus(cell.impactScore)}
           </span>
+          )}
+          {!opportunityOnly && (
           <span
             className={cn(
               'text-[11px] font-medium px-2.5 py-1 rounded-full',
@@ -345,10 +366,11 @@ export default function CellDetailPanel({
           >
             {cell.habitatPotential.charAt(0).toUpperCase() + cell.habitatPotential.slice(1)} potential
           </span>
+          )}
         </div>
 
         <div className="flex -mx-6 px-6 overflow-x-auto">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -421,6 +443,16 @@ export default function CellDetailPanel({
                   </>
                 )}
               </Card>
+            ) : cell.opportunity ? (
+              <NatureGapCard
+                cell={cell}
+                info={opportunityInfo}
+                cityName={cityName}
+                isPark={isPark}
+                detailLoading={detailLoading}
+                onSeeActions={() => setTab('actions')}
+                onViewInsidePark={opportunityOnly ? undefined : onViewInsidePark}
+              />
             ) : (
               <Card>
                 <CardTitle>Nature Gap</CardTitle>
@@ -487,6 +519,14 @@ export default function CellDetailPanel({
               </Card>
             )}
 
+            {opportunityOnly && (
+              <UnsampledNotice
+                title="Only the Nature gap covers this place"
+                detail="It lies outside the area the other layers analyse — mostly built-up ground, where the Nature gap still shows what greening could add."
+              />
+            )}
+
+            {!opportunityOnly && (<>
             <Card>
               <CardTitle>Biodiversity</CardTitle>
               <CardSubtitle>Observed vs expected (effort-corrected index)</CardSubtitle>
@@ -601,6 +641,7 @@ export default function CellDetailPanel({
                 )}
               </Card>
             )}
+            </>)}
           </div>
         )}
 

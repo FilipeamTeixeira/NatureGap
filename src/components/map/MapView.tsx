@@ -11,6 +11,10 @@ import {
   type ResidualWindow,
 } from '@/lib/residual-window';
 import type { RenderCellProperties } from '@/lib/cell-detail';
+import {
+  type OpportunityGapInfo,
+  type OpportunityMode,
+} from '@/lib/opportunity-gap';
 import type { MapLayer } from '@/lib/types';
 import {
   CORRIDOR_LINES_LAYER_ID,
@@ -32,7 +36,10 @@ import {
   hexFillColorExpression,
   hexFillOpacityForLayer,
   getEnabledLayerIds,
+  EXISTING_CELLS_FILTER,
   GAP_LAYERS,
+  hexLayerFilter,
+  opportunityLegend,
   UNSAMPLED_FILL_COLOR,
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
@@ -67,6 +74,7 @@ import {
   hexOutlineLayerId,
   hexSelectedLayerId,
   refreshHexLayers,
+  setMapOpportunityMode,
   setMapResidualWindows,
   cityIdForViewport,
   cityIdFromHexLayerId,
@@ -96,6 +104,8 @@ interface MapViewProps {
   onViewCityChange?: (cityId: string | undefined) => void;
   /** Fires once the datasets load, with each city's residual window (null when its manifest predates it). */
   onResidualWindows?: (windows: Record<string, ResidualWindow | null>) => void;
+  /** Fires once the datasets load, with each city's Nature gap (null when its export has none). */
+  onOpportunityInfo?: (info: Record<string, OpportunityGapInfo | null>) => void;
 }
 
 // Must match --minimum-zoom in pipeline/06_export/export.R and HEX_REGIME.far
@@ -119,6 +129,7 @@ export default function MapView({
   onSurveyPointSelect,
   onViewCityChange,
   onResidualWindows,
+  onOpportunityInfo,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -133,10 +144,15 @@ export default function MapView({
   const displayCityIdRef = useRef(displayCityId ?? CITY.id);
   const onViewCityChangeRef = useRef(onViewCityChange);
   const onResidualWindowsRef = useRef(onResidualWindows);
+  const onOpportunityInfoRef = useRef(onOpportunityInfo);
+  const opportunityModeRef = useRef<OpportunityMode>('all');
   const viewCityIdRef = useRef<string | undefined>(undefined);
   const pendingCityFocusRef = useRef<string | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState<number>(MAP_CONFIG.zoom);
   const [residualWindows, setResidualWindows] = useState<Record<string, ResidualWindow | null>>({});
+  // null until the manifests load, so the legend does not flash "not computed".
+  const [opportunityInfo, setOpportunityInfo] = useState<Record<string, OpportunityGapInfo | null> | null>(null);
+  const [opportunityMode, setOpportunityMode] = useState<OpportunityMode>('all');
   // The city under the view centre, as reported to the page. Kept as state so
   // the legend follows the map rather than a selection left open elsewhere.
   const [viewportCityId, setViewportCityId] = useState<string | undefined>(undefined);
@@ -152,11 +168,24 @@ export default function MapView({
   const legendGapReason = gapMapUnsupported(legendWindowScale) && legendWindowScale
     ? residualWindowReason(cityMeta(legendCityId).name, legendWindowScale)
     : null;
-  const enabledLegends = enabledLayerIds.map((id: HexLayerId) => ({
-    ...LAYER_STYLE_SPECS[id],
+  const legendOpportunity = opportunityInfo?.[legendCityId] ?? null;
+  const enabledLegends = enabledLayerIds.map((id: HexLayerId) => {
+    if (id === 'opportunity') {
+      const withheld = opportunityInfo !== null && legendOpportunity === null;
+      return {
+        id,
+        ...LAYER_STYLE_SPECS[id],
+        legend: opportunityLegend(legendOpportunity),
+        withheld,
+        withheldReason: withheld
+          ? `This export has no Nature gap for ${cityMeta(legendCityId).name}; the other layers still apply.`
+          : null,
+      };
+    }
     // A gap layer drawn grey for this city must not show a ramp it isn't using.
-    withheld: GAP_LAYERS.has(id) && legendGapReason !== null,
-  }));
+    const withheld = GAP_LAYERS.has(id) && legendGapReason !== null;
+    return { id, ...LAYER_STYLE_SPECS[id], withheld, withheldReason: withheld ? legendGapReason : null };
+  });
 
   useEffect(() => {
     onClickRef.current = onHexClick;
@@ -185,6 +214,18 @@ export default function MapView({
   useEffect(() => {
     onResidualWindowsRef.current = onResidualWindows;
   }, [onResidualWindows]);
+
+  useEffect(() => {
+    onOpportunityInfoRef.current = onOpportunityInfo;
+  }, [onOpportunityInfo]);
+
+  useEffect(() => {
+    opportunityModeRef.current = opportunityMode;
+    const map = mapRef.current;
+    if (!map) return;
+    setMapOpportunityMode(map, opportunityMode);
+    if (layersAddedRef.current) applyLayerPaintExpressions(map);
+  }, [opportunityMode]);
 
   useEffect(() => {
     structuredSurveysRef.current = structuredSurveysGeoJSON;
@@ -283,8 +324,14 @@ export default function MapView({
       refreshHexLayers(map, layersRef.current);
 
       void (async () => {
-        const { datasets: pmtilesDatasets, residualWindows: windows } = await pmtilesDatasetsPromise;
+        const {
+          datasets: pmtilesDatasets,
+          residualWindows: windows,
+          opportunity,
+        } = await pmtilesDatasetsPromise;
         if (mapRef.current !== map) return;
+        setOpportunityInfo(opportunity);
+        onOpportunityInfoRef.current?.(opportunity);
         // Published before the archives are checked: the verdicts come from the
         // manifests, and parks and panels need them even if no tiles load.
         // The map object holds them for paint; React state for the legend; the
@@ -312,15 +359,24 @@ export default function MapView({
 
           for (const layerId of LAYER_DRAW_ORDER) {
             if (!hasHexOverlay(layerId)) continue;
+            const filter = hexLayerFilter(layerId);
             map.addLayer({
               id: hexFillLayerIdForDataset(dataset.sourceId, layerId),
               type: 'fill',
               source: dataset.sourceId,
               'source-layer': dataset.sourceLayer,
               minzoom: DETAIL_ZOOM,
+              // Every layer but the Nature gap leaves out the opportunityOnly
+              // cells, which carry nothing else (layer-styles.ts).
+              ...(filter ? { filter } : {}),
               layout: { visibility: 'none' },
               paint: {
-                'fill-color': hexFillColorExpression(layerId, getCityLayerStats(dataset.cityId), gapUnsupported),
+                'fill-color': hexFillColorExpression(
+                  layerId,
+                  getCityLayerStats(dataset.cityId),
+                  gapUnsupported,
+                  { info: dataset.opportunity, mode: opportunityModeRef.current },
+                ),
                 'fill-opacity': hexFillOpacityForLayer(layerId),
                 // See HEX_REGIME in layer-styles.ts. These two properties are the
                 // whole zoom progression: antialiasing off at city zoom removes
@@ -342,6 +398,7 @@ export default function MapView({
             source: dataset.sourceId,
             'source-layer': dataset.sourceLayer,
             minzoom: DETAIL_ZOOM,
+            filter: EXISTING_CELLS_FILTER,
             layout: { visibility: 'none' },
             paint: hexOutlineOverlayPaint(),
           });
@@ -574,9 +631,13 @@ export default function MapView({
         if (!props) return;
         const numericScore = Number(props.natureGapScore);
         const hoveredCityId = cityIdFromHexLayerId(map, f.layer.id);
-        const hoveredWindow = getHexDatasets(map).find((d) => d.cityId === hoveredCityId)?.residualWindow;
-        const impactOn = getEnabledLayerIds(layersRef.current).includes('impact')
+        const hoveredDataset = getHexDatasets(map).find((d) => d.cityId === hoveredCityId);
+        const hoveredWindow = hoveredDataset?.residualWindow;
+        const enabledIds = getEnabledLayerIds(layersRef.current);
+        const impactOn = enabledIds.includes('impact')
           && !gapMapUnsupported(hoveredWindow?.hex);
+        const opportunityOn = enabledIds[0] === 'opportunity' && Boolean(hoveredDataset?.opportunity);
+        const checkedOnly = opportunityModeRef.current === 'checked';
 
         popupRef.current?.remove();
         popupRef.current = new maplibregl.Popup({
@@ -584,9 +645,16 @@ export default function MapView({
         })
           .setLngLat(e.lngLat)
           .setDOMContent(createPopupContent({
-            parkName: props.parkName,
+            // opportunityOnly cells have no park and are not "city-green".
+            parkName: props.opportunityOnly ? undefined : props.parkName,
             score: numericScore,
             showScore: impactOn && !Number.isNaN(numericScore),
+            opportunity: opportunityOn
+              ? {
+                  gap: checkedOnly ? props.opportunityGapChecked ?? null : props.opportunityGap ?? null,
+                  checkedOnly,
+                }
+              : undefined,
           }))
           .addTo(map);
       });
@@ -860,9 +928,33 @@ export default function MapView({
                   </div>
                 )}
               </div>
-              {(legend.withheld ? legendGapReason : legend.note) && (
+              {legend.id === 'opportunity' && !legend.withheld && (
+                <div className="mt-3 flex rounded-full border border-[#E4E7E1] p-0.5 text-[10px] font-medium" role="group" aria-label="Species groups shown">
+                  {([['all', 'All groups'], ['checked', 'Checked groups only']] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setOpportunityMode(mode)}
+                      aria-pressed={opportunityMode === mode}
+                      className={opportunityMode === mode
+                        ? 'flex-1 rounded-full bg-[#2E6F40] px-2.5 py-1 text-white'
+                        : 'flex-1 rounded-full px-2.5 py-1 text-[#667066] hover:text-[#1F2A1F]'}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(legend.withheld ? legend.withheldReason : legend.note) && (
                 <p className="text-[9px] text-[#A8B4A8] leading-snug mt-2.5 max-w-[190px]">
-                  {legend.withheld ? legendGapReason : legend.note}
+                  {legend.withheld ? legend.withheldReason : legend.note}
+                  {legend.id === 'opportunity' && !legend.withheld && legendOpportunity?.checkedShare != null && (
+                    <>
+                      {' '}{Math.round(legendOpportunity.checkedShare * 100)}% of the change in{' '}
+                      {cityMeta(legendCityId).name} comes from species groups whose predictions matched the records
+                      {opportunityMode === 'checked' ? '; only those are shown.' : '.'}
+                    </>
+                  )}
                 </p>
               )}
             </div>

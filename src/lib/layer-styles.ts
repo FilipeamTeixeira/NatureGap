@@ -1,8 +1,16 @@
 import type {
   ExpressionSpecification,
+  FilterSpecification,
   LineLayerSpecification,
 } from 'maplibre-gl';
 import type { CityLayerStats } from './data';
+import {
+  OPPORTUNITY_GAIN_AT,
+  OPPORTUNITY_LOSS_AT,
+  formatSpeciesChange,
+  type OpportunityGapInfo,
+  type OpportunityMode,
+} from './opportunity-gap';
 import type { LayerId } from './types';
 
 /**
@@ -37,6 +45,7 @@ export interface LayerStyleSpec {
 
 /** Bottom → top draw order when multiple cell layers are enabled. */
 export const LAYER_DRAW_ORDER = [
+  'opportunity',
   'impact',
   'expected',
   'residual',
@@ -228,6 +237,7 @@ export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
 export type PatchFillLayerId = HexLayerId;
 
 export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
+  opportunity: 'opportunity-gap-patch-fill',
   impact: 'nature-gap-patch-fill',
   expected: 'expected-richness-patch-fill',
   residual: 'ecological-residual-patch-fill',
@@ -243,6 +253,7 @@ export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
 };
 
 export const HEX_FILL_LAYER_IDS: Record<HexLayerId, string> = {
+  opportunity: 'opportunity-gap-hex-fill',
   impact: 'nature-gap-hex-fill',
   expected: 'expected-richness-hex-fill',
   residual: 'ecological-residual-hex-fill',
@@ -402,7 +413,7 @@ export function getEnabledLayerIds(layers: { id: LayerId; enabled: boolean }[]):
 
 /** First enabled layer — used for default legend focus. */
 export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): HexLayerId {
-  return getEnabledLayerIds(layers)[0] ?? 'impact';
+  return getEnabledLayerIds(layers)[0] ?? 'opportunity';
 }
 
 // Both diverging metrics (nature_gap_score, ecological_residual) are built from
@@ -417,7 +428,7 @@ const DIVERGING_STOPS: [number, string][] = [
 ];
 
 /** Saturated ramps — even low values stay visible on the light basemap. */
-const LAYER_RAMPS: Record<Exclude<HexLayerId, 'impact' | 'residual' | 'landuse'>, [number, string][]> = {
+const LAYER_RAMPS: Record<Exclude<HexLayerId, 'opportunity' | 'impact' | 'residual' | 'landuse'>, [number, string][]> = {
   expected:     [[0, '#deebf7'], [0.25, '#9ecae1'], [0.5, '#4292c6'], [0.75, '#08519c'], [1, '#08306b']],
   intervention: [[0, '#d8a7df'], [0.3, '#ab47bc'], [0.6, '#8e24aa'], [0.8, '#6a1b9a'], [1, '#4a148c']],
   habitat:      [[0, '#8ecf9a'], [0.25, '#52a868'], [0.5, '#3d8b57'], [0.75, '#2E6F40'], [1, '#1a4a28']],
@@ -717,6 +728,73 @@ export const GAP_LAYERS: ReadonlySet<string> = new Set(['impact', 'residual']);
 
 const GAP_WITHHELD_FILL: ExpressionSpecification = ['literal', UNSAMPLED_FILL_COLOR] as ExpressionSpecification;
 
+/**
+ * Nature gap (lib/opportunity-gap.ts). Gains shade from pale to deep green up
+ * to the city's 90th-percentile gap, so each city uses its whole ramp; no clear
+ * gain is a pale neutral; and a loss — greener places like this one hold fewer
+ * of its species — gets its own blue, not a red, because it is a finding about
+ * the place rather than damage to it.
+ */
+export const OPPORTUNITY_COLORS = {
+  gain: ['#D9ECC8', '#A3D18C', '#5BA35E', '#1F6B3A'],
+  same: '#ECEEE6',
+  loss: '#6F80B8',
+} as const;
+
+/** Top of the gain ramp: the city's p90, at least 2 species so the stops stay ordered. */
+export function opportunityRampTop(info: OpportunityGapInfo | null | undefined): number {
+  const p90 = info?.gapP90;
+  return typeof p90 === 'number' && Number.isFinite(p90) ? Math.max(2, p90) : 10;
+}
+
+export function opportunityTileProperty(mode: OpportunityMode): string {
+  return mode === 'checked' ? 'opportunityGapChecked' : 'opportunityGap';
+}
+
+function buildOpportunityExpression(property: string, top: number): ExpressionSpecification {
+  const value: ExpressionSpecification = ['to-number', ['get', property]];
+  const [g0, g1, g2, g3] = OPPORTUNITY_COLORS.gain;
+  return [
+    'case',
+    ['!', hasNumber(property)], UNSAMPLED_FILL_COLOR,
+    ['<=', value, OPPORTUNITY_LOSS_AT], OPPORTUNITY_COLORS.loss,
+    ['<', value, OPPORTUNITY_GAIN_AT], OPPORTUNITY_COLORS.same,
+    [
+      'interpolate', ['linear'], value,
+      OPPORTUNITY_GAIN_AT, g0,
+      top / 3, g1,
+      (2 * top) / 3, g2,
+      top, g3,
+    ],
+  ] as ExpressionSpecification;
+}
+
+/** Legend rows for the Nature gap, numbered from the city's own ramp. */
+export function opportunityLegend(info: OpportunityGapInfo | null | undefined): LayerLegendItem[] {
+  const top = opportunityRampTop(info);
+  const [g0, g1, g2, g3] = OPPORTUNITY_COLORS.gain;
+  return [
+    { color: g3, label: `${formatSpeciesChange(top)} or more native species` },
+    { color: g2, label: formatSpeciesChange((2 * top) / 3) },
+    { color: g1, label: formatSpeciesChange(top / 3) },
+    { color: g0, label: formatSpeciesChange(OPPORTUNITY_GAIN_AT) },
+    { color: OPPORTUNITY_COLORS.same, label: 'No clear gain' },
+    { color: OPPORTUNITY_COLORS.loss, label: 'Already richer than greener places like it' },
+  ];
+}
+
+/**
+ * Cells in the tiles only for the Nature gap (`opportunityOnly`: mostly built
+ * ground outside the render filter) carry no other field, so every other hex
+ * layer, and the grid overlay, leaves them out. The property is absent on every
+ * other cell, which `!=` lets through.
+ */
+export const EXISTING_CELLS_FILTER: FilterSpecification = ['!=', ['get', 'opportunityOnly'], true];
+
+export function hexLayerFilter(layerId: HexLayerId): FilterSpecification | null {
+  return layerId === 'opportunity' ? null : EXISTING_CELLS_FILTER;
+}
+
 /** Render observed-richness-dependent layers as flat grey when the feature is unsampled. */
 function withUnsampledFallback(layerId: string, expression: ExpressionSpecification): ExpressionSpecification {
   if (!UNSAMPLED_AWARE_LAYERS.has(layerId)) return expression;
@@ -752,6 +830,10 @@ export function patchFillColorExpression(
   const stat = statForMetric(cityStats, spec.rawMetric);
 
   switch (layerId) {
+    case 'opportunity':
+      // Parks carry their mean gap; no city ramp is known here, and patch
+      // fills are off (HAS_PATCH_OVERVIEW), so a fixed top is enough.
+      return buildOpportunityExpression('opportunityGap', 10);
     case 'impact':
       return withUnsampledFallback(layerId, buildDivergingExpression('natureGapScoreNorm', 'natureGapScore', stat));
     case 'residual':
@@ -832,13 +914,25 @@ function patchFillColorForCities(
 
 /**
  * Hex-level fill colour (zoom ≥ 14). Hex sources are per dataset, so the caller
- * passes that dataset's city verdict: `gapUnsupported` greys the GAP_LAYERS.
+ * passes that dataset's city verdict: `gapUnsupported` greys the GAP_LAYERS,
+ * and `opportunity` carries the city's Nature gap and which field to draw.
  */
 export function hexFillColorExpression(
   layerId: HexLayerId,
   cityStats: CityLayerStats[] = [],
   gapUnsupported = false,
+  opportunity: { info?: OpportunityGapInfo | null; mode?: OpportunityMode } = {},
 ): ExpressionSpecification {
+  if (layerId === 'opportunity') {
+    // A city whose export has no opportunity gap draws flat grey, as a
+    // withheld gap layer does; the legend says it was not computed.
+    if (!opportunity.info) return GAP_WITHHELD_FILL;
+    return buildOpportunityExpression(
+      opportunityTileProperty(opportunity.mode ?? 'all'),
+      opportunityRampTop(opportunity.info),
+    );
+  }
+
   if (gapUnsupported && GAP_LAYERS.has(layerId)) return GAP_WITHHELD_FILL;
 
   if (layerId === 'impact') {
@@ -917,8 +1011,8 @@ export function hexFillColorExpression(
   ));
 }
 
-/** Nature gap is the default layer and sits lighter so the basemap stays readable. */
-const HEX_FILL_OPACITY: Partial<Record<HexLayerId, number>> = { impact: 0.5 };
+/** The default layer sits lighter so the basemap stays readable. */
+const HEX_FILL_OPACITY: Partial<Record<HexLayerId, number>> = { opportunity: 0.66, impact: 0.5 };
 const HEX_FILL_OPACITY_DEFAULT = 0.78;
 
 /**
@@ -968,6 +1062,15 @@ export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | 
 }
 
 export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
+  opportunity: {
+    title: 'Nature gap',
+    property: 'opportunityGap',
+    // Deliberately no rawMetric: the legend is numbered from the manifest's
+    // gap p90 (opportunityLegend), not from city_layer_stats.
+    note: 'Native species the city’s models expect in greener places like this one — same land use, similar water, traffic, noise and light — minus those expected here.',
+    legend: opportunityLegend(null),
+    noData: { color: UNSAMPLED_FILL_COLOR, label: 'Not computed' },
+  },
   impact: {
     title: 'Nature Gap',
     property: 'natureGapScoreNorm',
@@ -1143,7 +1246,9 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
 export const THEMATIC_LAYER_GROUPS = [
   {
     title: 'Overview',
-    ids: ['impact', 'residual', 'intervention'] as const satisfies readonly HexLayerId[],
+    // 'impact' and 'residual' are out while every city withholds them — see
+    // MAP_LAYERS in mock-data.ts.
+    ids: ['opportunity', 'intervention'] as const satisfies readonly HexLayerId[],
   },
   {
     title: 'Biodiversity',

@@ -1,5 +1,7 @@
 import { PMTiles } from 'pmtiles';
 import { STORAGE } from './config';
+import { LOCAL_PIPELINE_EXPORT, localPipelineUrl } from './local-pipeline';
+import type { OpportunityGapInfo } from './opportunity-gap';
 import { listActivePipelineDatasets, resolveHexgridPaths } from './pipeline-manifest';
 import type { ResidualWindow } from './residual-window';
 import { supabase } from './supabase';
@@ -16,6 +18,8 @@ export type HexPmtilesDataset = {
   maxZoom: number;
   /** The city's residual window, repeated on every shard of a sharded city. */
   residualWindow: ResidualWindow | null;
+  /** The city's Nature gap, likewise repeated on every shard. */
+  opportunity: OpportunityGapInfo | null;
 };
 
 function sourceId(datasetId: string): string {
@@ -53,17 +57,25 @@ export async function listHexPmtilesDatasets(): Promise<HexPmtilesDataset[]> {
 export async function listHexPmtilesDatasetsWithWindows(): Promise<{
   datasets: HexPmtilesDataset[];
   residualWindows: Record<string, ResidualWindow | null>;
+  opportunity: Record<string, OpportunityGapInfo | null>;
 }> {
-  if (!supabase) return { datasets: [], residualWindows: {} };
+  if (!supabase && !LOCAL_PIPELINE_EXPORT) return { datasets: [], residualWindows: {}, opportunity: {} };
   const client = supabase;
+  const publicUrl = (objectPath: string): string | null => {
+    if (LOCAL_PIPELINE_EXPORT) return localPipelineUrl(objectPath);
+    return client?.storage.from(STORAGE.PIPELINE_BUCKET).getPublicUrl(objectPath).data.publicUrl ?? null;
+  };
 
   const datasets = await listActivePipelineDatasets();
   const residualWindows = Object.fromEntries(
     datasets.map((dataset) => [dataset.cityId, dataset.residualWindow] as const),
   );
+  const opportunity = Object.fromEntries(
+    datasets.map((dataset) => [dataset.cityId, dataset.opportunity] as const),
+  );
   if (datasets.length === 0) {
     console.warn('[pmtiles-storage] No active PMTiles datasets found in Supabase Storage.');
-    return { datasets: [], residualWindows };
+    return { datasets: [], residualWindows, opportunity };
   }
 
   // A city that sets SHARD_TILES publishes its tileset as several archives, so
@@ -84,12 +96,11 @@ export async function listHexPmtilesDatasetsWithWindows(): Promise<{
   });
 
   const readable = await Promise.all(shardedDatasets.map(async ({ dataset, objectPath, datasetId }) => {
-    const { data } = client.storage
-      .from(STORAGE.PIPELINE_BUCKET)
-      .getPublicUrl(objectPath);
+    const url = publicUrl(objectPath);
+    if (!url) return null;
 
     try {
-      const header = await new PMTiles(data.publicUrl).getHeader();
+      const header = await new PMTiles(url).getHeader();
       if (![header.minLon, header.minLat, header.maxLon, header.maxLat].every(Number.isFinite)
         || header.minLon >= header.maxLon
         || header.minLat >= header.maxLat) {
@@ -102,12 +113,13 @@ export async function listHexPmtilesDatasetsWithWindows(): Promise<{
         cityId: dataset.cityId,
         dataVersion: dataset.dataVersion,
         storagePath: `${STORAGE.PIPELINE_BUCKET}/${objectPath}`,
-        publicUrl: data.publicUrl,
+        publicUrl: url,
         sourceId: sourceId(datasetId),
         sourceLayer: dataset.sourceLayer,
         bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat] as [number, number, number, number],
         maxZoom: header.maxZoom,
         residualWindow: dataset.residualWindow,
+        opportunity: dataset.opportunity,
       };
     } catch (error) {
       console.warn('[pmtiles-storage] Skipping unreadable PMTiles archive for', objectPath, error);
@@ -118,5 +130,6 @@ export async function listHexPmtilesDatasetsWithWindows(): Promise<{
   return {
     datasets: readable.filter((dataset): dataset is HexPmtilesDataset => dataset !== null),
     residualWindows,
+    opportunity,
   };
 }

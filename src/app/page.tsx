@@ -18,9 +18,10 @@ import {
   fetchParkDetail,
   type RenderCellProperties,
 } from '@/lib/cell-detail';
-import { HAS_PATCH_OVERVIEW, THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
+import { THEMATIC_LAYER_IDS, type HexLayerId } from '@/lib/layer-styles';
 import { CITY, isRegisteredCityId } from '@/lib/config';
-import { gapMapUnsupported, type ResidualWindow } from '@/lib/residual-window';
+import type { OpportunityGapInfo } from '@/lib/opportunity-gap';
+import type { ResidualWindow } from '@/lib/residual-window';
 import type { CellData, MapLayer, WardFeature } from '@/lib/types';
 import {
   fetchCurrentRole,
@@ -65,6 +66,8 @@ export default function Page() {
   // Residual-window verdicts per city (lib/residual-window.ts), set once the
   // map's datasets load; null until then.
   const [residualWindows, setResidualWindows] = useState<Record<string, ResidualWindow | null> | null>(null);
+  // Each city's Nature gap from its manifest (lib/opportunity-gap.ts); null until loaded.
+  const [opportunityInfo, setOpportunityInfo] = useState<Record<string, OpportunityGapInfo | null> | null>(null);
   // Which verdict the open panel uses: a hex cell or a whole park.
   const [selectedScale, setSelectedScale] = useState<'hex' | 'patch'>('hex');
   // An explicit thematic choice is never overridden by the default below, and
@@ -76,7 +79,7 @@ export default function Page() {
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
   const structuredSurveysFc = useMemo(() => structuredSurveysGeoJSON(structuredSurveys), [structuredSurveys]);
   const activeLayer = useMemo<HexLayerId>(
-    () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'impact',
+    () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'opportunity',
     [layers],
   );
   // Selection wins; otherwise follow the map, so panning to another city
@@ -84,24 +87,20 @@ export default function Page() {
   const currentCityId = selectedCell?.cityId ?? selectedWard?.cityId ?? viewCityId ?? CITY.id;
   const router = useRouter();
 
-  // Where a city's records can't support a gap map (methodology §8.4), the
-  // Nature Gap layer is all grey, so open on Habitat quality instead — a
-  // measured layer that covers every cell. Initial state stays MAP_LAYERS so the
-  // server render matches; this runs when the verdicts arrive and whenever the
-  // city in view changes, from those events rather than from an effect.
-  const residualWindowsRef = useRef<Record<string, ResidualWindow | null> | null>(null);
+  // Where a city's export has no Nature gap (methodology §15), that layer is
+  // all grey, so open on Habitat quality instead — a measured layer that covers
+  // every cell. Initial state stays MAP_LAYERS so the server render matches;
+  // this runs when the manifests arrive and whenever the city in view changes,
+  // from those events rather than from an effect.
+  const opportunityInfoRef = useRef<Record<string, OpportunityGapInfo | null> | null>(null);
   const viewCityIdRef = useRef<string | null>(null);
   const applyDefaultLayer = useCallback((cityId: string) => {
-    const windows = residualWindowsRef.current;
-    if (!windows || userPickedLayerRef.current) return;
-    // Hex cells are the only gap map drawn while park fills are off at
-    // overview zoom (HAS_PATCH_OVERVIEW); with them on, a withheld park
-    // verdict would grey the opening view too.
-    const unsupported = gapMapUnsupported(windows[cityId]?.hex)
-      || (HAS_PATCH_OVERVIEW && gapMapUnsupported(windows[cityId]?.patch));
+    const info = opportunityInfoRef.current;
+    if (!info || userPickedLayerRef.current) return;
+    const unsupported = !info[cityId];
     const target: HexLayerId | null = unsupported
       ? 'habitat'
-      : autoHabitatRef.current ? 'impact' : null;
+      : autoHabitatRef.current ? 'opportunity' : null;
     if (!target) return;
     autoHabitatRef.current = unsupported;
     setLayers((prev) => {
@@ -119,8 +118,12 @@ export default function Page() {
   }, [applyDefaultLayer]);
 
   const handleResidualWindows = useCallback((windows: Record<string, ResidualWindow | null>) => {
-    residualWindowsRef.current = windows;
     setResidualWindows(windows);
+  }, []);
+
+  const handleOpportunityInfo = useCallback((info: Record<string, OpportunityGapInfo | null>) => {
+    opportunityInfoRef.current = info;
+    setOpportunityInfo(info);
     applyDefaultLayer(viewCityIdRef.current ?? CITY.id);
   }, [applyDefaultLayer]);
 
@@ -302,6 +305,7 @@ export default function Page() {
             onSurveyPointSelect={handleSurveyPointSelect}
             onViewCityChange={handleViewCityChange}
             onResidualWindows={handleResidualWindows}
+            onOpportunityInfo={handleOpportunityInfo}
           />
         </div>
 
@@ -313,6 +317,8 @@ export default function Page() {
             <CellDetailPanel
               cell={selectedCell}
               residualWindow={residualWindows?.[selectedCell.cityId]?.[selectedScale] ?? null}
+              opportunityInfo={opportunityInfo?.[selectedCell.cityId] ?? null}
+              scale={selectedScale}
               activeLayer={activeLayer}
               detailLoading={cellDetailLoading}
               events={events}

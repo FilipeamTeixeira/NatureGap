@@ -1,4 +1,7 @@
+import type { CellOpportunity } from './opportunity-gap';
+
 export type LayerId =
+  | 'opportunity'
   | 'impact'
   | 'expected'
   | 'residual'
@@ -104,6 +107,13 @@ export interface CellStatsFields {
   interventionRankNorm?: number;
   pressures: string[];
   interventions: Intervention[];
+  /** Nature gap (lib/opportunity-gap.ts): per cell with groups, per park as means. */
+  opportunity?: CellOpportunity | null;
+  /**
+   * A cell outside the render filter, in the tiles only for the Nature gap
+   * layer — every other field is empty, so the panel shows that alone.
+   */
+  opportunityOnly?: boolean;
 }
 
 export interface CellData extends CellStatsFields {

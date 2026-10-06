@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local-export": "NEXT_PUBLIC_PIPELINE_LOCAL_EXPORT=1 next dev",
     "build": "next build",
     "start": "next start",
     "stage:pipeline-export": "node scripts/stage-pipeline-export.mjs",

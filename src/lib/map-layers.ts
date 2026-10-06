@@ -8,6 +8,7 @@
 import maplibregl from 'maplibre-gl';
 import { getCityLayerStats } from '@/lib/data';
 import { CITY, MAP_CONFIG } from '@/lib/config';
+import type { OpportunityMode } from '@/lib/opportunity-gap';
 import type { HexPmtilesDataset } from '@/lib/pmtiles-storage';
 import { gapMapUnsupported, type ResidualWindow } from '@/lib/residual-window';
 import type { MapLayer } from '@/lib/types';
@@ -22,7 +23,9 @@ import {
   INTERVENTION_RANK_BADGES_LAYER_ID,
   INTERVENTION_RANK_LABELS_LAYER_ID,
   HAS_PATCH_OVERVIEW,
+  EXISTING_CELLS_FILTER,
   hexFillAntialias,
+  hexLayerFilter,
   hexFillOutlineColor,
   hexOutlineOverlayPaint,
   LAYER_DRAW_ORDER,
@@ -44,7 +47,7 @@ export function setMapLayerVisibility(map: maplibregl.Map, layerId: string, visi
 }
 
 export function activeThematicLayerId(layers: MapLayer[]): HexLayerId {
-  return THEMATIC_LAYER_IDS.find((id) => layerEnabled(layers, id)) ?? 'impact';
+  return THEMATIC_LAYER_IDS.find((id) => layerEnabled(layers, id)) ?? 'opportunity';
 }
 
 export function applyLayerPaintExpressions(map: maplibregl.Map) {
@@ -63,6 +66,7 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
       );
     }
 
+    const opportunityMode = getMapOpportunityMode(map);
     for (const dataset of getHexDatasets(map)) {
       const cityStats = getCityLayerStats(dataset.cityId);
       const gapUnsupported = gapMapUnsupported(dataset.residualWindow?.hex);
@@ -70,7 +74,13 @@ export function applyLayerPaintExpressions(map: maplibregl.Map) {
         if (!hasHexOverlay(layerId)) continue;
         const mlId = hexFillLayerIdForDataset(dataset.sourceId, layerId);
         if (!map.getLayer(mlId)) continue;
-        map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(layerId, cityStats, gapUnsupported));
+        map.setPaintProperty(mlId, 'fill-color', hexFillColorExpression(
+          layerId, cityStats, gapUnsupported, { info: dataset.opportunity, mode: opportunityMode },
+        ));
+        // Re-asserted for the same reason as the two paint properties below:
+        // a layer created before the opportunityOnly cells existed must still
+        // leave them out.
+        map.setFilter(mlId, hexLayerFilter(layerId));
         // Re-asserted here, not just at addLayer time. These two carry the whole
         // zoom regime (see HEX_REGIME), and a layer created before this code
         // existed — a hot reload in dev, or any path that recreates the style
@@ -119,6 +129,7 @@ export function setLayerVisibility(map: maplibregl.Map, activeLayerId: HexLayerI
     try {
       const outlineLayerId = hexOutlineLayerId(dataset.sourceId);
       if (map.getLayer(outlineLayerId)) {
+        map.setFilter(outlineLayerId, EXISTING_CELLS_FILTER);
         map.setLayoutProperty(
           outlineLayerId,
           'visibility',
@@ -157,6 +168,17 @@ export function getHexDatasets(map: maplibregl.Map): HexPmtilesDataset[] {
 
 export function setHexDatasets(map: maplibregl.Map, datasets: HexPmtilesDataset[]) {
   (map as unknown as { __naturegapHexDatasets?: HexPmtilesDataset[] }).__naturegapHexDatasets = datasets;
+}
+
+type MapWithOpportunityMode = { __naturegapOpportunityMode?: OpportunityMode };
+
+/** Which field the Nature gap layer draws — every group, or only checked ones. */
+export function getMapOpportunityMode(map: maplibregl.Map): OpportunityMode {
+  return (map as unknown as MapWithOpportunityMode).__naturegapOpportunityMode ?? 'all';
+}
+
+export function setMapOpportunityMode(map: maplibregl.Map, mode: OpportunityMode) {
+  (map as unknown as MapWithOpportunityMode).__naturegapOpportunityMode = mode;
 }
 
 type MapWithWindows = { __naturegapResidualWindows?: Record<string, ResidualWindow | null> };

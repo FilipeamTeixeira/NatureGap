@@ -1,4 +1,6 @@
 import { isRegisteredCityId, STORAGE } from './config';
+import { LOCAL_PIPELINE_EXPORT, localPipelineUrl } from './local-pipeline';
+import { opportunityGapFromManifest, type OpportunityGapInfo } from './opportunity-gap';
 import { residualWindowFromManifest, type ResidualWindow } from './residual-window';
 import { supabase } from './supabase';
 
@@ -14,6 +16,8 @@ export type ActivePipelineDataset = {
   files: Record<string, string>;
   /** The manifest's residual window; null for datasets exported before it existed. */
   residualWindow: ResidualWindow | null;
+  /** The city's Nature gap (opportunity gap); null when its export has none. */
+  opportunity: OpportunityGapInfo | null;
 };
 
 type CurrentPointer = {
@@ -94,7 +98,18 @@ async function readStorageText(blob: Blob, path: string): Promise<string> {
   return new Response(stream).text();
 }
 
+async function fetchLocalPipelineJson(path: string): Promise<unknown | null> {
+  try {
+    const response = await fetch(localPipelineUrl(path), { cache: 'no-store' });
+    if (!response.ok) return null;
+    return JSON.parse(await readStorageText(await response.blob(), path));
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchStorageJson(path: string): Promise<unknown | null> {
+  if (LOCAL_PIPELINE_EXPORT) return fetchLocalPipelineJson(path);
   if (!supabase) return null;
   const { data, error } = await supabase.storage
     .from(STORAGE.PIPELINE_BUCKET)
@@ -204,6 +219,7 @@ function datasetFromPointers(
     hexgridShardPaths: shardPathsFromPointers(cityFolder, basePath, current, manifest),
     files,
     residualWindow: residualWindowFromManifest(manifest),
+    opportunity: opportunityGapFromManifest(manifest),
   };
 }
 
@@ -249,6 +265,7 @@ async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
       hexgridShardPaths: shardPathsFromPointers(basePath, basePath, null, manifest),
       files,
       residualWindow: residualWindowFromManifest(manifest),
+      opportunity: opportunityGapFromManifest(manifest),
     };
   }));
 
@@ -291,6 +308,11 @@ async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
 }
 
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
+  // The local preview reads only the pointers on disk: the registry describes
+  // what is published, which is exactly what the preview is meant to bypass.
+  if (LOCAL_PIPELINE_EXPORT) {
+    return (await listStoragePointerDatasets()).filter((dataset) => isRegisteredCityId(dataset.cityId));
+  }
   if (!supabase) return [];
   return loadActivePipelineDatasets();
 }

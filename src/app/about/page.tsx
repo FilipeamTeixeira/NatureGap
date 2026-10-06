@@ -54,8 +54,8 @@ const STEPS = [
     body: 'Wildlife records cluster along footpaths, because that is where people walk. Each cell’s species count is therefore adjusted for how easily it can be searched. Cells that almost nobody can reach are set aside, rather than recorded as having no wildlife.',
   },
   {
-    title: 'Compare what was found with what was expected',
-    body: 'A statistical model learns how species richness relates to habitat, connectivity and access across the whole city, then predicts what each cell should hold. Expected minus observed is the gap.',
+    title: 'Compare with greener places like it',
+    body: 'Models learn, across the whole city, which surroundings each native species is found in, allowing for how hard people looked. Each place is then compared with similar places in the same city that are greener. How many more native species those are expected to hold is the Nature gap.',
   },
   {
     title: 'Rank where to look next',
@@ -84,6 +84,10 @@ const DATA_SOURCES = [
 
 const METRICS = [
   {
+    title: 'Nature gap',
+    body: 'How many more native species a place could support, judged by real places in the same city that are like it but greener. For every native species recorded often enough to model — birds, plants, insects, fungi and every other group — a model learns which surroundings it is found in, allowing for how hard people looked. Each place is compared with the 25 most similar places of the same land use, with similar water, traffic, noise and light nearby, among the greener quarter of the city; the gap is how many more of these species those places are expected to hold. Where they hold fewer — often open, rough or wet ground whose species would lose out to trees — the map shows it in blue. Each species group is checked against what people actually recorded and labelled checked, didn’t match the records, or too few records to check, and the map can show all groups or only the checked ones. Rare species, seen too seldom to model, are listed where they were found rather than predicted.',
+  },
+  {
     title: 'Habitat quality',
     body: 'How suitable a cell is as habitat, scored from 0 to 1. Vegetation contributes half of it. Coolness contributes roughly 29 per cent, measured as surface temperature and inverted, so shaded and planted ground scores above bare asphalt. Freedom from human activity contributes roughly 21 per cent, judged from nearby footpaths and amenities. Noise, lighting, water, tree height and sealed surface are all measured and shown on the map, but they are not part of this score.',
   },
@@ -100,8 +104,8 @@ const METRICS = [
     body: 'Expected richness minus observed richness. A positive figure means fewer species were recorded than habitat and connectivity predict; a negative figure means more. Because most cells hold few or no records, the figure mostly reflects how much has been recorded: in Porto it shares 97 per cent of its variation with the observed richness it is calculated from. This is what the model could not explain, not a measure of ecological loss.',
   },
   {
-    title: 'Nature Gap score',
-    body: 'The composite score. The ecological residual supplies half of it. Weak habitat quality supplies 30 per cent, and weak connectivity the remaining 20 per cent. Each part is measured against the typical cell in the same city, so zero means ordinary for that city rather than adequate in any absolute sense. The point of comparison is recalculated on every run, which makes a score meaningful within one city and one analysis, and nowhere else. Because half of it is the residual, the map shows it only for cities whose records can support a gap map. Elsewhere the map opens on habitat quality, the legend says why, and the two inputs stay available on their own: expected richness as a layer, recorded observations as the Observed biodiversity layer, and both side by side in each place’s Biodiversity tab.',
+    title: 'Record-based gap score (not on the map)',
+    body: 'Not shown on the map at present: in all four cities there are too few records for it to say more than where people recorded. The composite score. The ecological residual supplies half of it. Weak habitat quality supplies 30 per cent, and weak connectivity the remaining 20 per cent. Each part is measured against the typical cell in the same city, so zero means ordinary for that city rather than adequate in any absolute sense. The point of comparison is recalculated on every run, which makes a score meaningful within one city and one analysis, and nowhere else. Because half of it is the residual, the map shows it only for cities whose records can support a gap map. Elsewhere the map opens on habitat quality, the legend says why, and the two inputs stay available on their own: expected richness as a layer, recorded observations as the Observed biodiversity layer, and both side by side in each place’s Biodiversity tab.',
   },
   {
     title: 'Corridor importance',
@@ -238,7 +242,7 @@ export default function AboutPage() {
             style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
           >
             <h3 className="text-[13px] font-semibold text-[#1F2A1F] mb-1">
-              Reading the Nature Gap score
+              Reading the record-based gap score
             </h3>
             <p className="text-[12px] text-[#667066] leading-relaxed mb-4">
               Scores run from −100 to +100. A higher score means the cell falls further

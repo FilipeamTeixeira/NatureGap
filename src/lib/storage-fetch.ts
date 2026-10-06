@@ -6,6 +6,7 @@ import {
   listActivePipelineDatasets,
   resolveDatasetFile,
 } from './pipeline-manifest';
+import { LOCAL_PIPELINE_EXPORT } from './local-pipeline';
 import { supabase } from './supabase';
 
 type ChunkManifest = { version?: number; chunks?: string[] };
@@ -58,7 +59,7 @@ export async function fetchPipelineJson(
   manifestName: string | null,
   mergeChunks?: (parts: unknown[]) => unknown,
 ): Promise<unknown | null> {
-  if (!supabase) return null;
+  if (!supabase && !LOCAL_PIPELINE_EXPORT) return null;
 
   const datasets = await listActivePipelineDatasets();
   const parts: unknown[] = [];

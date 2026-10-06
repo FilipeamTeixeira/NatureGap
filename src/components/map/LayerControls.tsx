@@ -22,6 +22,7 @@ type SearchResult =
   | { kind: 'geocode'; result: GeocodingSearchResult };
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
+  opportunity:  'Native species a place could gain if it were as green as similar places in its city.',
   impact:       'How much nature is this park missing?',
   residual:     'Are more or fewer species being recorded here than the habitat suggests?',
   intervention: 'Cells ranked for restoration action.',

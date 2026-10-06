@@ -485,6 +485,11 @@ opportunity_run <- function() {
 
   # The labels are what the map uses; pass is kept as a summary only: every
   # tested group checked, and both citywide diagnostics passed.
+  # gapShare: the group's part of all change, gains and losses alike (absolute
+  # per-cell group gaps), so it stays within 0-1 when groups pull in opposite
+  # directions — a share of the net gap does not (Amsterdam's checked share
+  # was -138%: the birds gain, the untested plants lose more).
+  change_total <- sum(abs(gap_g))
   labels <- setNames(lapply(OPPORTUNITY_GROUPS, function(g) {
     r <- records_by_group[[g]]
     label <- if (is.null(r) || !r$tested) "insufficient" else if (r$pass) "checked" else "mismatch"
@@ -494,7 +499,7 @@ opportunity_run <- function() {
          wellRecordedBlocks = if (is.null(r)) 0L else r$blocks,
          rho = if (is.null(r)) NA_real_ else r$rho,
          p = if (is.null(r)) NA_real_ else r$p,
-         gapShare = if (sum(gap_g) != 0) sum(gap_g[, g]) / sum(gap_g) else NA_real_)
+         gapShare = if (change_total > 0) sum(abs(gap_g[, g])) / change_total else NA_real_)
   }), OPPORTUNITY_GROUPS)
 
   validation <- list(
@@ -584,7 +589,7 @@ if (!is.null(opportunity_result)) {
             if (is.finite(l$rho)) sprintf(", rho %.2f", l$rho) else "")
   }, character(1)), collapse = "; "), "\n", sep = "")
   cat(sprintf(
-    "  checked share of the gap %.0f%%; signal AUC %.3f vs %.3f (%s); direction %d of %d (%s); rare species listed: %d (%d records)\n",
+    "  checked share of the change %.0f%%; signal AUC %.3f vs %.3f (%s); direction %d of %d (%s); rare species listed: %d (%d records)\n",
     100 * rec$summary$checkedGapShare,
     v$signal$medianAuc, v$signal$nullQ975, if (v$signal$pass) "pass" else "fail",
     sum(v$direction$checks$right), nrow(v$direction$checks), if (v$direction$pass) "pass" else "fail",

@@ -1,5 +1,6 @@
 import { MAX_EXPECTED_RICHNESS, CITY, CITIES, SCORE_THRESHOLDS, STORAGE } from './config';
 import { getParkStats, getParks } from './green-spaces';
+import { opportunityFromRender, parseCellOpportunity } from './opportunity-gap';
 import {
   basename,
   dirname,
@@ -85,6 +86,11 @@ export type RenderCellProperties = {
   nObs?: number;
   speciesRichnessRaw?: number;
   isUnsampled?: boolean;
+  /** Nature gap tile fields (lib/opportunity-gap.ts). */
+  expectedSpecies?: number | null;
+  opportunityGap?: number | null;
+  opportunityGapChecked?: number | null;
+  opportunityOnly?: boolean;
 };
 
 type CellAttributeRow = {
@@ -130,6 +136,8 @@ type CellAttributeRow = {
   intervention_rank_norm: number | null;
   pressures: unknown;
   interventions: unknown;
+  /** JSON string, like species; absent before 05_opportunity existed. */
+  opportunity?: unknown;
 };
 
 type CellDetailManifest = {
@@ -297,9 +305,13 @@ function detailFromRow(
   const landUseClass = row?.land_use_class ?? render.landUseClass ?? 'unknown';
   const habitatPotentialValue = row?.habitat_potential;
   const isUnsampled = row?.is_unsampled ?? render.isUnsampled ?? undefined;
-  const displayName = render.parkName && render.parkName !== 'city-green'
-    ? render.parkName
-    : 'Green area';
+  // opportunityOnly cells lie outside the render filter, which keeps green
+  // cells, so they are not a green area of any kind.
+  const displayName = render.opportunityOnly
+    ? 'Built-up area'
+    : render.parkName && render.parkName !== 'city-green'
+      ? render.parkName
+      : 'Green area';
 
   const species = speciesArray(row?.species);
   const pressures = stringArray(row?.pressures);
@@ -358,6 +370,8 @@ function detailFromRow(
     natureGapScoreNorm: row?.nature_gap_score_norm ?? render.natureGapScoreNorm ?? undefined,
     interventionRank: row?.intervention_rank ?? render.interventionRank ?? undefined,
     interventionRankNorm: row?.intervention_rank_norm ?? render.interventionRankNorm ?? undefined,
+    opportunity: parseCellOpportunity(row?.opportunity) ?? opportunityFromRender(render),
+    opportunityOnly: render.opportunityOnly === true,
   };
 }
 
@@ -407,5 +421,7 @@ export async function fetchParkDetail(
     species: stats.species ?? [],
     pressures: stats.pressures ?? [],
     interventions: stats.interventions ?? [],
+    // park-stats.json carries the park's means as a plain object.
+    opportunity: parseCellOpportunity(stats.opportunity),
   };
 }
