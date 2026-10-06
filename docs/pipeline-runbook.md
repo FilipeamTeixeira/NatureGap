@@ -245,6 +245,8 @@ Regenerating it is cheap when the tile caches (`tiled_combined.rds`,
   with `load_obs_for_tiling()` and its own 125 m GPS gate
   (`OPPORTUNITY_MAX_ACCURACY_M`), not from `tiled_obs_all.rds`, which is gated at
   30 m for the 20 m cell.
+- the R package `FNN` (nearest neighbours for the greener-places comparison;
+  in the README install list).
 - the introduced-species caches written by `01_ingest/introduced_species.R`:
   `data/raw/griis/*.csv` (shared) and `data/<city>/raw/inat_introduced.csv`. The
   stage never fetches; run the ingest step once per city, or after deleting a

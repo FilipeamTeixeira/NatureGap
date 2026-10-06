@@ -1,8 +1,8 @@
 # NatureGap — Step 05: Opportunity gap
 #
-# How many more native species each 20 m cell's surroundings would support with
-# the tree and vegetation cover that places of the same land use in this city
-# already reach. docs/methodology.md §15.
+# How many more native species the models expect in real places of this city
+# that are like each 20 m cell's surroundings but greener. docs/methodology.md
+# §15.
 #
 # Why not a measured gap: Porto's and Gent's records say what is present, not
 # reliably what is missing — every per-place test of absence failed
@@ -22,14 +22,25 @@
 #   2. Each cell reads those covariates averaged within OPPORTUNITY_WINDOW_M.
 #      Expected species = sum of psi over the counted species, per group and in
 #      total.
-#   3. Opportunity gap = expected species with trees, grass/shrub, canopy height
-#      and 0.5 m vegetation raised to OPPORTUNITY_HABITAT_Q of cells whose
-#      window has the same land use (06_export/export.R land_use_class()) —
-#      gains in tree and grass/shrub cover come out of built cover, never water
-#      — minus expected species now. Pressures stay in the models but are not a
-#      lever: across blocks they cannot be told apart (noise and traffic r >
-#      0.8), and lowering them gave fewer species in places, which is roads'
-#      verge habitat showing through, not harm undone.
+#   3. Opportunity gap = mean expected species over the OPPORTUNITY_MATCH_K
+#      windows most like this one (OPPORTUNITY_MATCH_VARS: water, water
+#      proximity, noise, traffic, light, window size) among the greener quarter
+#      of windows with the same land use (06_export/export.R land_use_class();
+#      greenness = mean of the four standardised OPPORTUNITY_HABITAT_LEVER
+#      measures, at or above OPPORTUNITY_HABITAT_Q), minus expected species
+#      here. Windows already in the greener quarter have no gap. What comes
+#      with greener places is left free to differ: the four measures, built
+#      cover, heat and corridor importance. A negative gap means greener places
+#      like this one hold fewer of the species expected here — in Gent, open
+#      and rough ground whose species would lose out to trees.
+#      Why matching, not raising each measure: the four move together (tree
+#      cover and canopy height r = 0.84 in Porto), so raising them one at a
+#      time built places that do not exist, where the models' partial effects
+#      ran backwards — woodland birds lost species when trees were added, and
+#      15% of Porto's cells and 32% of Gent's came out below -1. Pressures are
+#      matched, not a lever: across blocks they cannot be told apart (noise and
+#      traffic r > 0.8), and lowering them gave fewer species in places, which
+#      is roads' verge habitat showing through, not harm undone.
 #   4. Every recorded native species too rare to model is listed per cell as
 #      found within the window, rarest first — a fact, not a prediction.
 #
@@ -66,7 +77,8 @@
 #                           gap_<g>, top_<g>; rare_species_n, rare_species
 #   PROC_OPPORTUNITY_MODEL  settings, data window, species counted, introduced
 #                           species left out and why, group labels, rare
-#                           species summary, lever quantiles, standardisation,
+#                           species summary, greener-quarter thresholds and
+#                           match diagnostics, standardisation,
 #                           coefficients, validation
 
 if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
@@ -99,6 +111,7 @@ OPPORTUNITY_COVARIATES <- c(OPPORTUNITY_HABITAT, OPPORTUNITY_PRESSURE, "log_cell
 opportunity_run <- function() {
   t_start <- Sys.time()
   if (!exists("land_use_class")) stop("land_use_class() not found in 06_export/export.R")
+  if (!requireNamespace("FNN", quietly = TRUE)) stop("package FNN is required: install.packages(\"FNN\")")
   # Fail fast, before any fitting, if the introduced-species caches are absent.
   intro <- introduced_species(CITY_COUNTRY, BBOX_FETCH, fetch = FALSE)
 
@@ -276,24 +289,40 @@ opportunity_run <- function() {
   W$log_cells <- log(pmax(window_n, 1) * OPPORTUNITY_BLOCK_M^2 / (pi * OPPORTUNITY_WINDOW_M^2))
   W$land_use <- land_use_class(W$tree, W$shrub, W$grass, W$water, W$built)
 
-  # ── 3. The trees-and-vegetation lever ──────────────────────────────────────
-  lever_q <- W |>
-    group_by(land_use) |>
-    summarise(across(all_of(OPPORTUNITY_HABITAT_LEVER),
-                     \(v) quantile(v, OPPORTUNITY_HABITAT_Q, na.rm = TRUE)),
-              cells = n(), .groups = "drop")
-  Q <- lever_q[match(W$land_use, lever_q$land_use), ]
-  W_lever <- W
-  for (v in OPPORTUNITY_HABITAT_LEVER) W_lever[[v]] <- pmax(W[[v]], Q[[v]])
-  gain <- (W_lever$tree - W$tree) + (W_lever$grass_shrub - W$grass_shrub)
-  f <- ifelse(gain > W$built & gain > 0, W$built / gain, 1)
-  W_lever$tree <- W$tree + (W_lever$tree - W$tree) * f
-  W_lever$grass_shrub <- W$grass_shrub + (W_lever$grass_shrub - W$grass_shrub) * f
-  W_lever$built <- W$built - gain * f
-
+  # ── 3. Greener places like this one ────────────────────────────────────────
+  # Matched on the models' standardised scale, so one unit is one block
+  # standard deviation in every covariate.
   X_now <- design(W)
-  X_lever <- design(W_lever)
   n_cells <- nrow(cells)
+  green <- rowMeans(X_now[, OPPORTUNITY_HABITAT_LEVER, drop = FALSE])
+  green_q <- tapply(green, W$land_use, quantile, OPPORTUNITY_HABITAT_Q, names = FALSE)
+  green_cut <- unname(green_q[W$land_use])
+  below <- !is.na(green_cut) & green < green_cut
+  match_idx <- matrix(NA_integer_, n_cells, OPPORTUNITY_MATCH_K)
+  match_dist <- rep(NA_real_, n_cells)
+  for (lu in names(green_q)) {
+    q <- which(W$land_use == lu & below)
+    donors <- which(W$land_use == lu & !below)
+    if (length(q) == 0L || length(donors) < OPPORTUNITY_MATCH_K) next
+    nn <- FNN::get.knnx(X_now[donors, OPPORTUNITY_MATCH_VARS, drop = FALSE],
+                        X_now[q, OPPORTUNITY_MATCH_VARS, drop = FALSE],
+                        k = OPPORTUNITY_MATCH_K)
+    match_idx[q, ] <- donors[nn$nn.index]
+    match_dist[q] <- rowMeans(nn$nn.dist)
+  }
+  matched <- !is.na(match_idx[, 1])
+  # Below the greener quarter but with too few greener windows of its land use
+  # to compare with: the gap is unknown, not zero.
+  no_match <- below & !matched
+  greener_quarter <- list(
+    measures = OPPORTUNITY_HABITAT_LEVER, quantile = OPPORTUNITY_HABITAT_Q,
+    thresholds = as.list(green_q), matchK = OPPORTUNITY_MATCH_K,
+    matchedOn = OPPORTUNITY_MATCH_VARS,
+    cellsCompared = sum(matched), cellsAlreadyGreener = sum(!below),
+    cellsWithoutMatch = sum(no_match),
+    matchDistanceMedian = if (any(matched)) median(match_dist, na.rm = TRUE) else NA_real_,
+    matchDistanceP95 = if (any(matched)) unname(quantile(match_dist, 0.95, na.rm = TRUE)) else NA_real_
+  )
   sp_group <- species_tab$group[match(rownames(beta), species_tab$taxon_name)]
   expected_g <- matrix(0, n_cells, length(OPPORTUNITY_GROUPS), dimnames = list(NULL, OPPORTUNITY_GROUPS))
   gap_g <- expected_g
@@ -329,7 +358,9 @@ opportunity_run <- function() {
   for (s in seq_len(nrow(beta))) {
     g <- sp_group[s]
     p_now <- plogis(drop(X_now %*% beta[s, ]))
-    d <- plogis(drop(X_lever %*% beta[s, ])) - p_now
+    d <- numeric(n_cells)
+    d[matched] <- rowMeans(matrix(p_now[match_idx[matched, ]], ncol = OPPORTUNITY_MATCH_K)) -
+      p_now[matched]
     expected_g[, g] <- expected_g[, g] + p_now
     gap_g[, g] <- gap_g[, g] + d
     mean_gain[s] <- mean(d)
@@ -341,17 +372,17 @@ opportunity_run <- function() {
     cell_id = cells$cell_id,
     land_use_window = W$land_use,
     expected_species = round(rowSums(expected_g), 4),
-    opportunity_gap = round(rowSums(gap_g), 4),
+    opportunity_gap = round(replace(rowSums(gap_g), no_match, NA), 4),
     top_species = top_names(top_all)
   )
   # Every configured group gets its columns, zero where it has no species, so
   # the file's shape does not depend on the city.
   for (g in OPPORTUNITY_GROUPS) {
     cells_out[[paste0("expected_", g)]] <- round(expected_g[, g], 4)
-    cells_out[[paste0("gap_", g)]] <- round(gap_g[, g], 4)
+    cells_out[[paste0("gap_", g)]] <- round(replace(gap_g[, g], no_match, NA), 4)
     cells_out[[paste0("top_", g)]] <- top_names(top_g[[g]])
   }
-  rm(top_all, top_g, X_now, X_lever); invisible(gc())
+  rm(top_all, top_g, X_now, match_idx); invisible(gc())
 
   # ── Rare species recorded nearby ───────────────────────────────────────────
   # Every recorded native species the models do not count — too rarely recorded
@@ -444,7 +475,7 @@ opportunity_run <- function() {
   woodland_in <- intersect(OPPORTUNITY_WOODLAND, rownames(beta))
   built_in <- intersect(OPPORTUNITY_BUILT_UP, rownames(beta))
   direction <- rbind(
-    data.frame(taxon_name = woodland_in, expect = rep("gains with trees/vegetation", length(woodland_in)),
+    data.frame(taxon_name = woodland_in, expect = rep("gains in greener places like it", length(woodland_in)),
                value = unname(mean_gain[woodland_in])),
     data.frame(taxon_name = built_in, expect = rep("positive built-cover coefficient", length(built_in)),
                value = unname(beta[built_in, "built"]))
@@ -483,7 +514,8 @@ opportunity_run <- function() {
       maxAccuracyM = OPPORTUNITY_MAX_ACCURACY_M, periodStart = format(OPPORTUNITY_PERIOD_START),
       minSites = OPPORTUNITY_MIN_SITES, cvFolds = OPPORTUNITY_CV_FOLDS, seed = OPPORTUNITY_SEED,
       groups = OPPORTUNITY_GROUPS, habitatLever = OPPORTUNITY_HABITAT_LEVER,
-      habitatQuantile = OPPORTUNITY_HABITAT_Q, covariates = OPPORTUNITY_COVARIATES
+      habitatQuantile = OPPORTUNITY_HABITAT_Q, matchK = OPPORTUNITY_MATCH_K,
+      matchVars = OPPORTUNITY_MATCH_VARS, covariates = OPPORTUNITY_COVARIATES
     ),
     data = list(
       periodEnd = format(max(records$date)),
@@ -504,14 +536,15 @@ opportunity_run <- function() {
       cellsWithAny = sum(rare_n > 0L),
       listedPerCell = OPPORTUNITY_RARE_LISTED
     ),
-    leverQuantiles = lever_q,
+    greenerQuarter = greener_quarter,
     standardisation = list(mean = as.list(scale_mu), sd = as.list(scale_sd)),
     coefficients = lapply(split(beta, seq_len(nrow(beta))), function(b) as.list(setNames(b, colnames(beta)))) |>
       setNames(rownames(beta)),
     summary = list(
       expectedMedian = median(cells_out$expected_species),
-      gapMedian = median(cells_out$opportunity_gap),
-      gapP90 = unname(quantile(cells_out$opportunity_gap, 0.9)),
+      gapMedian = median(cells_out$opportunity_gap, na.rm = TRUE),
+      gapP90 = unname(quantile(cells_out$opportunity_gap, 0.9, na.rm = TRUE)),
+      gapNegativeShare = mean(cells_out$opportunity_gap < 0, na.rm = TRUE),
       checkedGapShare = sum(vapply(labels, function(l) if (l$label == "checked") l$gapShare else 0, numeric(1)), na.rm = TRUE)
     ),
     validation = validation,
@@ -557,8 +590,14 @@ if (!is.null(opportunity_result)) {
     sum(v$direction$checks$right), nrow(v$direction$checks), if (v$direction$pass) "pass" else "fail",
     rec$rare$species, rec$rare$records
   ))
+  gq <- rec$greenerQuarter
+  cat(sprintf(
+    "  greener places: %d cells compared (median match distance %.2f sd, p95 %.2f), %d already in the greener quarter, %d without a match; gap below zero in %.0f%%\n",
+    gq$cellsCompared, gq$matchDistanceMedian, gq$matchDistanceP95, gq$cellsAlreadyGreener,
+    gq$cellsWithoutMatch, 100 * rec$summary$gapNegativeShare
+  ))
   cat(sprintf("Written: %s, %s (%.1f min)\n", basename(PROC_OPPORTUNITY),
               basename(PROC_OPPORTUNITY_MODEL), rec$runtimeMin))
-  rm(rec, v)
+  rm(rec, v, gq)
 }
 rm(opportunity_result); invisible(gc())

@@ -763,8 +763,15 @@ OPPORTUNITY_SEED           <- 20261005L
 # are listed per cell as recorded instead (OPPORTUNITY_RARE_LISTED).
 OPPORTUNITY_GROUPS         <- c("bird", "mammal", "plant", "insect", "fungi", "other")
 OPPORTUNITY_RARE_LISTED    <- 10L    # rare species named per cell, rarest first
+# The gap compares each window with real windows that are alike but greener:
+# greenness is the mean of these four measures (standardised as in the
+# models); "greener" is the top quarter of windows with the same land use;
+# "alike" is the OPPORTUNITY_MATCH_K nearest of those in the covariates
+# greening does not change.
 OPPORTUNITY_HABITAT_LEVER  <- c("tree", "grass_shrub", "canopy_height", "veg_fraction")
-OPPORTUNITY_HABITAT_Q      <- 0.75   # "attainable": this quantile of the same land use
+OPPORTUNITY_HABITAT_Q      <- 0.75   # greener quarter: at or above this quantile of the same land use
+OPPORTUNITY_MATCH_K        <- 25L
+OPPORTUNITY_MATCH_VARS     <- c("water", "water_proximity", "noise", "traffic", "light", "log_cells")
 # Validation, rerun every time (pass/fail recorded in PROC_OPPORTUNITY_MODEL).
 OPPORTUNITY_WELL_RECORDED_P <- 0.5   # P(recorded at least once | present) for a well-recorded block
 OPPORTUNITY_N_PERM         <- 200L

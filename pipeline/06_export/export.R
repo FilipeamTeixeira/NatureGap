@@ -654,9 +654,11 @@ opportunity_manifest <- function(record, opportunity_only_cells) {
     computed = TRUE,
     definition = paste(
       "Expected native species each cell's surroundings support now, and how many",
-      "more with the tree and vegetation cover that cells of the same land use in",
-      "this city reach (75th percentile). Summed occupancy probabilities over the",
-      "city's commonly recorded native species — not a census, not a deficit.",
+      "more the same models expect in real places of this city that are alike",
+      "(same land use; similar water, noise, traffic and light) but in the greener",
+      "quarter. Negative where those greener places hold fewer of the species",
+      "expected here. Summed occupancy probabilities over the city's commonly",
+      "recorded native species — not a census, not a deficit.",
       "Every group counts; each carries a per-city label from its own records test:",
       "checked, mismatch (tested, did not match the records) or insufficient",
       "(too few well-recorded blocks to test)."
@@ -684,7 +686,9 @@ opportunity_manifest <- function(record, opportunity_only_cells) {
         pass = record$validation$direction$pass,
         right = sum(vapply(checks, function(x) isTRUE(x$right), logical(1))),
         total = length(checks)
-      )
+      ),
+      greenerPlaces = record$greenerQuarter[c("cellsCompared", "cellsAlreadyGreener", "cellsWithoutMatch",
+                                              "matchDistanceMedian", "matchDistanceP95")]
     ),
     generatedAt = record$generatedAt
   )

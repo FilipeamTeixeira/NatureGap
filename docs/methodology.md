@@ -1229,7 +1229,7 @@ every other cell also enters the tiles, flagged `opportunityOnly` and carrying
 only the opportunity fields. The filter keeps green cells because the other
 layers describe what is there; the opportunity gap describes what greening
 would add, and the built-up cells the filter drops hold about half of Porto's
-gap (median 3.1 species against 1.2 in rendered cells). Every other layer filters
+gap (46%; median 3.7 species against 2.0 in rendered cells). Every other layer filters
 those cells out, so they change nothing else on the map. The larger tileset is
 kept under the upload cap by sharding (`SHARD_TILES`), not by lowering the
 maximum zoom.
@@ -1353,9 +1353,10 @@ Every pipeline run should record:
 - `CONN_*` and `NET_*` (connectivity and derived-network constants)
 - the opportunity gap record (§15), `opportunity_model.json`: settings
   (`OPPORTUNITY_*`), data window and record counts, species counted, the
-  introduced species left out with their evidence, the lever quantiles per
-  land use, the standardisation, every species' coefficients, and the
-  validation with pass/fail
+  introduced species left out with their evidence, the greener-quarter
+  thresholds per land use with how close the matches were, the
+  standardisation, every species' coefficients, and the validation with
+  pass/fail
 - source data dates or versions
 - PMTiles source-layer name
 - exported `cell_id` count
@@ -1429,18 +1430,33 @@ opportunity gap uses only that: not what a place lacks, but what it would gain.
   125 m — about one block's area, the scale the models were fitted at — with the
   window's cell count rescaled to block units for the size term. Expected
   species = the sum of occupancy probabilities over the counted species.
-- **Lever.** Trees, grass/shrub, canopy height and 0.5 m vegetation are raised to
-  the 75th percentile of cells whose window has the same land use
-  (`land_use_class()`, as the Land use layer), where below it. Gains in tree and
-  grass/shrub cover come out of built cover, never water, so a road is not turned
-  into a forest. Opportunity gap = expected species after the change − expected
-  species now, with the three species gaining most named where each gains at
-  least 0.01 in occupancy probability.
-- **Pressures are covariates, not a lever.** Heat, light, noise and traffic
+- **Greener places like it.** Each window's greenness is the mean of its trees,
+  grass/shrub, canopy height and 0.5 m vegetation, standardised as in the
+  models. A window below the 75th percentile of greenness among windows with the
+  same land use (`land_use_class()`, as the Land use layer) is compared with the
+  25 windows of that land use's greener quarter most like it in water, water
+  proximity, noise, traffic, light and window size (nearest neighbours on the
+  models' standardised scale, `FNN`). Opportunity gap = the mean of their
+  expected species − expected species here, per species and summed per group,
+  with the three species gaining most named where each gains at least 0.01 in
+  occupancy probability. A window already in the greener quarter has no gap; one
+  whose land use has fewer than 25 greener windows has none computed (8 cells in
+  Porto). What comes with greener places in the city is left free to differ:
+  the four measures together, built cover, heat and corridor importance.
+- **Why matching, not raising each measure.** The first version (2026-10-06)
+  raised each of the four measures to the 75th percentile separately, taking
+  the gain from built cover. They move together in the data (tree cover and
+  canopy height r 0.84 in Porto), so that built places that do not exist, where
+  the models' partial effects ran backwards: woodland birds lost species when
+  trees were added, and 15% of Porto's cells and 32% of Gent's came out below
+  −1. Comparing with real places keeps every comparison where the models were
+  fitted and tested; it halved those shares.
+- **Pressures are matched, not a lever.** Heat, light, noise and traffic
   cannot be told apart across blocks (noise–traffic r 0.83 in Porto, 0.86 in
   Gent; variance inflation up to 6.2), and lowering them gave *fewer* species in
   places — verge-dwelling species along road corridors showing through, not harm
-  undone.
+  undone. Light, noise and traffic are held alike by the matching; heat is not,
+  because greener places are cooler.
 
 ### 15.3 Introduced species
 
@@ -1479,8 +1495,8 @@ Every run re-tests each group and labels it; nothing is withheld:
 Two citywide diagnostics are recorded beside the labels: *signal* (in
 well-recorded blocks, cross-validated occupancy separates recorded from
 unrecorded species better than occupancy permuted within species, 200
-permutations; also per group) and *direction* (woodland birds gain under the
-lever, built-up birds have a positive built-cover coefficient). Before the
+permutations; also per group) and *direction* (woodland birds gain in greener
+places like theirs, built-up birds have a positive built-cover coefficient). Before the
 labels, Porto and Gent passed all three tests for birds and other vertebrates in
 the prototype, and the stage reproduces them to the 4th decimal.
 
@@ -1496,10 +1512,12 @@ the prototype, and the stage reproduces them to the 4th decimal.
 | Insects | **mismatch** (0.05) | checked (0.42) | insufficient | insufficient |
 | Fungi | insufficient | insufficient | insufficient | insufficient |
 | Other invertebrates | insufficient | checked (0.32) | insufficient | insufficient |
-| Share of the citywide gap from checked groups | 26% | 88% | 29% | — |
+| Share of the citywide gap from checked groups | 39% | 95% | — (net gap below zero) | — |
 | Signal: median AUC (null 97.5%) | 0.610 (0.516) | 0.628 (0.510) | 0.588 (0.513) | 0.640 (0.544) |
-| Direction checks right | 7 of 9 | 6 of 8 | 8 of 9 | 0 of 0 |
-| Opportunity gap per cell: median / p90 | 2.1 / 10.3 | 1.2 / 26.1 | 1.2 / 11.3 | 0.0 / 1.4 |
+| Direction checks right | 8 of 9 | 7 of 8 | 8 of 9 | 0 of 0 |
+| Opportunity gap per cell: median / p90 | 2.9 / 12.4 | 2.3 / 27.6 | 0.0 / 13.1 | 0.0 / 1.9 |
+| Cells with a gap below zero / below −1 | 11% / 8% | 18% / 16% | 39% / 36% | 6% / 2% |
+| Same, first version (raising each measure) | 28% / 16% | 40% / 32% | 36% / 30% | 5% / 1% |
 | Rare native species listed (records) | 1,875 (8,301) | 2,255 (9,003) | 2,818 (13,224) | 1,586 (5,487) |
 
 Gent's plant and insect records come largely from naturalists who log many
@@ -1517,8 +1535,19 @@ European, none of which occur there.
 - It covers the common species of each city (those recorded at 10 or more
   blocks); rare species are listed where found, which reflects where people
   looked as much as where they live.
-- It is an opportunity, not a deficit. Zero means the place already has the tree
-  and vegetation cover similar places reach — not that nothing is missing there.
+- It is an opportunity, not a deficit. Zero means the place is already in the
+  greener quarter of its land use — not that nothing is missing there.
+- A negative gap means greener places like this one hold fewer of the species
+  expected here. In Gent these are mostly species-rich open, rough or wet
+  ground — grasshopper and marsh warblers, coltsfoot, peacock butterfly — whose
+  species would lose out to trees; in Porto, species of pavements and walls. In
+  Amsterdam the plants (*insufficient* there) lose species of open ground, walls
+  and verges — common stork's-bill, oxeye daisy, wall lichen — more than the
+  birds gain, so the city's net gap is below zero while its checked groups gain
+  (birds: median +1.7, below zero in 11% of cells).
+- It compares places, it does not predict the effect of planting: greener
+  places differ from this one in everything that comes with greenness in the
+  city, and in anything the covariates do not measure.
 - Gains are expected species (summed occupancy probabilities), not species that
   will arrive.
 - Habitat-based and correlational: it cannot see a place degraded for other
@@ -1526,8 +1555,11 @@ European, none of which occur there.
   experiments.
 - Neighbouring cells share most of their window, so the surface is smooth by
   design; per-cell values are indicative, area summaries firmer.
-- "Attainable" is the 75th percentile of the same land use — a choice, not a
-  calibration.
+- "Greener" is the top quarter of greenness within the same land use, and
+  "alike" the 25 nearest in six covariates — choices, not calibrations. Gaps
+  barely depend on the number matched (cell ranks agree at ρ 0.97 for 10 and
+  0.98 for 50 in Porto); comparing with places just at the 75th percentile
+  instead of the whole greener quarter gives smaller gaps (Porto median 0.3).
 - Assumes each block's community is stable over the record window.
 - Effort is corrected with visits and list length, not path density (AGENTS.md
   records the exception). App records enter as visits like any other; a

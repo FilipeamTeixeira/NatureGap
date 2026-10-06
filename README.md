@@ -78,7 +78,7 @@ install.packages(c(
   "sf", "terra", "igraph", "vegan",
   "rgbif", "osmdata", "rstac", "openeo", "httr2", "aws.s3", "arrow",
   "tidyverse", "lubridate", "here", "jsonlite", "furrr",
-  "DBI", "RPostgres"
+  "DBI", "RPostgres", "FNN"
 ))
 # forestdata (canopy height) is only needed for cities that enable it
 ```
