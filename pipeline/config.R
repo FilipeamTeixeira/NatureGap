@@ -756,7 +756,7 @@ OPPORTUNITY_CV_FOLDS       <- 5L
 OPPORTUNITY_SEED           <- 20261005L
 # Every group counts. classify_taxon_group() labels; "mammal" there is every
 # vertebrate but birds (mammals, reptiles, amphibians, fish) and "other" is
-# what it leaves unclassified (molluscs, crustaceans, ...). Each group is
+# what it leaves unclassified (molluscs, crustaceans, myriapods, worms, ...). Each group is
 # labelled per city by its own records test rather than left out: "checked",
 # "mismatch" (tested, did not match the records) or "insufficient" (too few
 # well-recorded blocks to test). Native species too rarely recorded to model

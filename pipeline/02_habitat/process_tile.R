@@ -143,16 +143,27 @@ polygon_area_by_cell <- function(polygons, grid) {
     summarise(area_m2 = sum(area_m2), .groups = "drop")
 }
 
+# Labels are iNaturalist iconic taxa or GBIF classes. "mammal" is every
+# vertebrate but birds. iNaturalist's iconic "Animalia" is every animal its
+# other iconic taxa leave out — crustaceans, myriapods, worms — so it is left
+# unclassified with molluscs, not counted as a vertebrate (it had put woodlice
+# and centipedes among Porto's vertebrates). GBIF splits reptiles and fish
+# into several classes, names every plant class -opsida (mosses and
+# liverworts too) and every fungus class -mycetes; slime moulds and water
+# moulds share that suffix but are not fungi.
 classify_taxon_group <- function(label) {
   x <- tolower(as.character(label))
   dplyr::case_when(
     is.na(x) | x == "" ~ NA_character_,
     x %in% c("plantae", "chromista") ~ "plant",
-    grepl("^(plant|magnoli|pinopsida|liliopsida|polypodi)", x) ~ "plant",
+    grepl("^(plant|magnoli|pinopsida|liliopsida|polypodi)", x) | grepl("opsida$", x) ~ "plant",
     x == "aves" | grepl("bird", x) ~ "bird",
     x %in% c("insecta", "arachnida") | grepl("insect|spider|arthropod", x) ~ "insect",
-    x %in% c("mammalia", "amphibia", "reptilia", "actinopterygii", "animalia") ~ "mammal",
+    x %in% c("mammalia", "amphibia", "reptilia", "squamata", "testudines", "crocodylia",
+             "actinopterygii", "sarcopterygii", "elasmobranchii", "holocephali",
+             "petromyzonti", "myxini") ~ "mammal",
     x == "fungi" | grepl("fung", x) ~ "fungi",
+    grepl("mycetes$", x) & !x %in% c("myxomycetes", "oomycetes", "hyphochytriomycetes") ~ "fungi",
     TRUE ~ NA_character_
   )
 }

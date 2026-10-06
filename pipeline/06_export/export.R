@@ -1851,6 +1851,9 @@ cell_taxa_lookup <- read_cell_taxa()
 # Top interventions with park attribution. Full intervention descriptions are
 # stored in PostgreSQL for click-time detail, not in PMTiles.
 top <- read_csv(PROC_TOP_INTER, show_col_types = FALSE) |>
+  # Who recorded what, and when, stays in the pipeline: top_interventions.json
+  # goes to a public bucket, and a GBIF observer id is the recordedBy name.
+  select(-any_of(c("observer_ids_json", "observed_dates_json"))) |>
   mutate(cell_id = paste0(CITY_ID, "-", cell_id)) |>
   left_join(grid_df |> select(cell_id, park_id), by = "cell_id")
 

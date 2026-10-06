@@ -24,14 +24,18 @@ export const OPPORTUNITY_GROUP_ORDER: readonly OpportunityGroupId[] = [
   'bird', 'mammal', 'plant', 'insect', 'fungi', 'other',
 ];
 
-/** classify_taxon_group() names; "mammal" there is every vertebrate but birds. */
+/**
+ * classify_taxon_group() names: "mammal" there is every vertebrate but birds,
+ * "plant" includes mosses, and "other" is what it leaves unclassified —
+ * snails, woodlice, centipedes, worms, algae and the like.
+ */
 export const OPPORTUNITY_GROUP_NAMES: Record<OpportunityGroupId, string> = {
   bird: 'Birds',
   mammal: 'Mammals, amphibians, reptiles & fish',
-  plant: 'Plants',
+  plant: 'Plants & mosses',
   insect: 'Insects & spiders',
-  fungi: 'Fungi',
-  other: 'Snails & other invertebrates',
+  fungi: 'Fungi & lichens',
+  other: 'Snails, woodlice & other species',
 };
 
 export const OPPORTUNITY_LABEL_TEXT: Record<OpportunityGroupLabel, string> = {

@@ -384,7 +384,8 @@ cell-details shards only, not to `cell_attributes.geojson` or the database:
 
 - `groups[].group`: `bird | mammal | plant | insect | fungi | other` —
   `classify_taxon_group()` labels; `mammal` is every vertebrate but birds,
-  `other` what it leaves unclassified (mostly molluscs and crustaceans).
+  `plant` includes mosses and liverworts, `fungi` lichens, and `other` is what
+  it leaves unclassified (molluscs, crustaceans, myriapods, worms, algae).
 - `groups[].label`: `checked | mismatch | insufficient`, the group's per-city
   label (methodology §15.4), the same for every cell of the city.
 - `gap` and the groups' `gap` can be negative (greener places like this one

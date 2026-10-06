@@ -1414,8 +1414,15 @@ opportunity gap uses only that: not what a place lacks, but what it would gain.
   boundary. Fitted by maximum penalised likelihood with an analytic gradient.
 - **Groups.** Every group counts: birds, other vertebrates
   (`classify_taxon_group()` labels mammals, reptiles, amphibians and fish
-  together as "mammal"), plants, insects (with spiders), fungi, and "other" —
-  what the classifier leaves unclassified, mostly molluscs and crustaceans.
+  together as "mammal"), plants (with mosses and liverworts), insects (with
+  spiders), fungi (with lichens), and "other" — what the classifier leaves
+  unclassified: molluscs, crustaceans, myriapods, worms, algae. Until 2026-10-06
+  the classifier counted iNaturalist's catch-all "Animalia" (woodlice,
+  centipedes, crabs) as vertebrates — 6 of Porto's 16 — and left GBIF's fungus,
+  moss, reptile and cartilaginous-fish classes unclassified (about 33,000
+  records across the four cities); both are fixed. The per-group species counts
+  in cell details come from the habitat tiles and follow at the next full
+  re-tile (`run_tiled_processing(force = TRUE)`).
   Each group carries a per-city label from its own records test (§15.4), so the
   map can say how much of each number has been checked against what people
   actually found.
@@ -1500,25 +1507,32 @@ places like theirs, built-up birds have a positive built-cover coefficient). Bef
 labels, Porto and Gent passed all three tests for birds and other vertebrates in
 the prototype, and the stage reproduces them to the 4th decimal.
 
-2026-10-06 runs (ρ in brackets):
+2026-10-06 runs, with the corrected taxon groups (ρ in brackets):
 
 | | Porto | Gent | Amsterdam | Yokohama |
 | --- | --- | --- | --- | --- |
-| Native species counted | 262 | 501 | 480 | 44 |
-| Introduced species left out | 75 | 489 | 108 | 11 |
+| Native species counted | 255 | 498 | 484 | 44 |
+| Introduced species left out | 75 | 488 | 106 | 11 |
 | Birds | checked (0.41) | checked (0.49) | checked (0.38) | **mismatch** (−0.04) |
-| Other vertebrates | checked (0.53) | checked (0.31) | checked (0.56) | checked (0.43, 1 species) |
-| Plants | **mismatch** (−0.27) | checked (0.39) | insufficient | insufficient |
+| Other vertebrates | checked (0.34) | checked (0.28) | checked (0.56) | insufficient (none modelled) |
+| Plants | **mismatch** (−0.28) | checked (0.39) | insufficient | insufficient |
 | Insects | **mismatch** (0.05) | checked (0.42) | insufficient | insufficient |
-| Fungi | insufficient | insufficient | insufficient | insufficient |
-| Other invertebrates | insufficient | checked (0.32) | insufficient | insufficient |
-| Checked groups' share of all change (gains and losses) | 37% | 96% | 24% | 6% |
-| Signal: median AUC (null 97.5%) | 0.610 (0.516) | 0.628 (0.510) | 0.588 (0.513) | 0.640 (0.544) |
+| Fungi | **mismatch** (0.34) | **mismatch** (0.02) | insufficient | insufficient |
+| Other invertebrates | checked (0.25) | **mismatch** (0.26) | insufficient | insufficient |
+| Checked groups' share of all change (gains and losses) | 41% | 93% | 23% | 0% |
+| Signal: median AUC (null 97.5%) | 0.608 (0.514) | 0.626 (0.510) | 0.588 (0.515) | 0.640 (0.549) |
 | Direction checks right | 8 of 9 | 7 of 8 | 8 of 9 | 0 of 0 |
-| Opportunity gap per cell: median / p90 | 2.9 / 12.4 | 2.3 / 27.6 | 0.0 / 13.1 | 0.0 / 1.9 |
-| Cells with a gap below zero / below −1 | 11% / 8% | 18% / 16% | 39% / 36% | 6% / 2% |
+| Opportunity gap per cell: median / p90 | 3.3 / 11.6 | 2.2 / 27.5 | 0.0 / 12.9 | 0.0 / 2.0 |
+| Cells with a gap below zero / below −1 | 10% / 7% | 19% / 16% | 40% / 37% | 5% / 2% |
 | Same, first version (raising each measure) | 28% / 16% | 40% / 32% | 36% / 30% | 5% / 1% |
-| Rare native species listed (records) | 1,875 (8,301) | 2,255 (9,003) | 2,818 (13,224) | 1,586 (5,487) |
+| Rare native species listed (records) | 1,874 (8,267) | 2,255 (9,003) | 2,808 (12,844) | 1,586 (5,487) |
+
+Correcting the groups also removed double counts: a fungus recorded through
+both iNaturalist (Fungi) and GBIF (its class, then unclassified) had been
+modelled once in each group (Porto 262 → 255 species). Yokohama's one
+"vertebrate" was an invertebrate, which leaves it no checked group. A *mismatch*
+with ρ ≥ 0.2, as for Porto's fungi, failed on p ≥ 0.05: too few well-recorded
+blocks to be sure.
 
 Gent's plant and insect records come largely from naturalists who log many
 species per outing, and behave like surveys; Porto's are mostly single photos.
@@ -1568,10 +1582,11 @@ European, none of which occur there.
 ### 15.6 On the map
 
 The opportunity gap is the **Nature gap** layer, first in the list and open by
-default. Gains shade from pale to deep green up to the city's 90th-percentile
-gap; gaps between −1 and +0.5 read as "no clear gain"; at or below −1 a blue
-reads "already richer than greener places like it"; cells without a comparison
-are grey. A legend switch draws `opportunityGap` (all groups, the default) or
+default, drawn as a viridis-style heatmap: gains run from soft yellow through
+green to deep teal up to the city's 90th-percentile gap (no red, which reads as
+harm); gaps between −1 and +0.5 read as "no clear gain"; at or below −1 a
+purple reads "already richer than greener places like it"; cells without a
+comparison are grey. A legend switch draws `opportunityGap` (all groups, the default) or
 `opportunityGapChecked` (checked groups only), and the legend states the
 city's checked share of the change. The panel gives expected species, the gap,
 its checked part, every group with its label and top species, and the rare

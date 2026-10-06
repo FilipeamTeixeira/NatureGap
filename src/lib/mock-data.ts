@@ -9,7 +9,7 @@ import type { MapLayer } from './types';
 // everywhere (lib/residual-window.ts). Their styles stay in layer-styles.ts;
 // adding the two rows back here and to THEMATIC_LAYER_GROUPS restores them.
 export const MAP_LAYERS: MapLayer[] = [
-  { id: 'opportunity',  label: 'Nature gap',              enabled: true,  color: '#4F9E57' },
+  { id: 'opportunity',  label: 'Nature gap',              enabled: true,  color: '#3FAE6F' },
   { id: 'expected',     label: 'Expected richness',       enabled: false, color: '#0d47a1' },
   { id: 'intervention', label: 'Where to look next',      enabled: false, color: '#7b1fa2' },
   { id: 'habitat',      label: 'Habitat quality',         enabled: false, color: '#2E6F40' },

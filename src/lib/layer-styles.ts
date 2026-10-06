@@ -729,16 +729,18 @@ export const GAP_LAYERS: ReadonlySet<string> = new Set(['impact', 'residual']);
 const GAP_WITHHELD_FILL: ExpressionSpecification = ['literal', UNSAMPLED_FILL_COLOR] as ExpressionSpecification;
 
 /**
- * Nature gap (lib/opportunity-gap.ts). Gains shade from pale to deep green up
- * to the city's 90th-percentile gap, so each city uses its whole ramp; no clear
- * gain is a pale neutral; and a loss — greener places like this one hold fewer
- * of its species — gets its own blue, not a red, because it is a finding about
- * the place rather than damage to it.
+ * Nature gap (lib/opportunity-gap.ts), drawn as a viridis-style heatmap kept to
+ * its yellow-green-teal stretch: gains run from soft yellow through green to
+ * deep teal up to the city's 90th-percentile gap, darkest where most is
+ * missing, which reads on the light basemap where viridis's bright end would
+ * not. No red: it reads as harm. No clear gain is a pale neutral; a loss —
+ * greener places like this one hold fewer of its species — takes viridis's
+ * purple end, its own colour rather than a step on the ramp.
  */
 export const OPPORTUNITY_COLORS = {
-  gain: ['#D9ECC8', '#A3D18C', '#5BA35E', '#1F6B3A'],
+  gain: ['#EFE67A', '#9CD25A', '#3FAE6F', '#1D6F63'],
   same: '#ECEEE6',
-  loss: '#6F80B8',
+  loss: '#8C6BB1',
 } as const;
 
 /** Top of the gain ramp: the city's p90, at least 2 species so the stops stay ordered. */
