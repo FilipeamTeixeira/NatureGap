@@ -729,24 +729,23 @@ export const GAP_LAYERS: ReadonlySet<string> = new Set(['impact', 'residual']);
 const GAP_WITHHELD_FILL: ExpressionSpecification = ['literal', UNSAMPLED_FILL_COLOR] as ExpressionSpecification;
 
 /**
- * Nature gap (lib/opportunity-gap.ts), drawn as a viridis-style heatmap kept to
- * its yellow-green-teal stretch: gains run from soft yellow through green to
- * deep teal up to the city's 90th-percentile gap, darkest where most is
- * missing, which reads on the light basemap where viridis's bright end would
- * not. No red: it reads as harm. No clear gain is a pale neutral; a loss —
- * greener places like this one hold fewer of its species — takes viridis's
- * purple end, its own colour rather than a step on the ramp.
+ * Nature gap (lib/opportunity-gap.ts), drawn as a heatmap that sweeps from
+ * yellow through orange, magenta and purple to blue up to the city's
+ * 90th-percentile gap — light where little is missing, darkest where most is.
+ * No clear gain is a pale neutral; a loss — greener places like this one hold
+ * fewer of its species — is a warm taupe, neutral and off the ramp's hue
+ * sweep, so it reads as its own category rather than a size of gain.
  */
 export const OPPORTUNITY_COLORS = {
-  gain: ['#EFE67A', '#9CD25A', '#3FAE6F', '#1D6F63'],
+  gain: ['#F2D34A', '#F49A3A', '#B45A9C', '#7050A8', '#1472AC'],
   same: '#ECEEE6',
-  loss: '#8C6BB1',
+  loss: '#9A8F85',
 } as const;
 
-/** Top of the gain ramp: the city's p90, at least 2 species so the stops stay ordered. */
+/** Top of the gain ramp: the city's p90, at least 3 species so the stops stay ordered. */
 export function opportunityRampTop(info: OpportunityGapInfo | null | undefined): number {
   const p90 = info?.gapP90;
-  return typeof p90 === 'number' && Number.isFinite(p90) ? Math.max(2, p90) : 10;
+  return typeof p90 === 'number' && Number.isFinite(p90) ? Math.max(3, p90) : 10;
 }
 
 export function opportunityTileProperty(mode: OpportunityMode): string {
@@ -755,7 +754,7 @@ export function opportunityTileProperty(mode: OpportunityMode): string {
 
 function buildOpportunityExpression(property: string, top: number): ExpressionSpecification {
   const value: ExpressionSpecification = ['to-number', ['get', property]];
-  const [g0, g1, g2, g3] = OPPORTUNITY_COLORS.gain;
+  const [g0, g1, g2, g3, g4] = OPPORTUNITY_COLORS.gain;
   return [
     'case',
     ['!', hasNumber(property)], UNSAMPLED_FILL_COLOR,
@@ -764,9 +763,10 @@ function buildOpportunityExpression(property: string, top: number): ExpressionSp
     [
       'interpolate', ['linear'], value,
       OPPORTUNITY_GAIN_AT, g0,
-      top / 3, g1,
-      (2 * top) / 3, g2,
-      top, g3,
+      top / 4, g1,
+      top / 2, g2,
+      (3 * top) / 4, g3,
+      top, g4,
     ],
   ] as ExpressionSpecification;
 }
@@ -774,11 +774,12 @@ function buildOpportunityExpression(property: string, top: number): ExpressionSp
 /** Legend rows for the Nature gap, numbered from the city's own ramp. */
 export function opportunityLegend(info: OpportunityGapInfo | null | undefined): LayerLegendItem[] {
   const top = opportunityRampTop(info);
-  const [g0, g1, g2, g3] = OPPORTUNITY_COLORS.gain;
+  const [g0, g1, g2, g3, g4] = OPPORTUNITY_COLORS.gain;
   return [
-    { color: g3, label: `${formatSpeciesChange(top)} or more native species` },
-    { color: g2, label: formatSpeciesChange((2 * top) / 3) },
-    { color: g1, label: formatSpeciesChange(top / 3) },
+    { color: g4, label: `${formatSpeciesChange(top)} or more native species` },
+    { color: g3, label: formatSpeciesChange((3 * top) / 4) },
+    { color: g2, label: formatSpeciesChange(top / 2) },
+    { color: g1, label: formatSpeciesChange(top / 4) },
     { color: g0, label: formatSpeciesChange(OPPORTUNITY_GAIN_AT) },
     { color: OPPORTUNITY_COLORS.same, label: 'No clear gain' },
     { color: OPPORTUNITY_COLORS.loss, label: 'Already richer than greener places like it' },

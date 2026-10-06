@@ -14,9 +14,10 @@ function opportunityLines(gap: number | null, checkedOnly: boolean): { label: st
   const label = checkedOnly ? 'Nature gap · checked groups' : 'Nature gap';
   switch (opportunityBand(gap)) {
     case 'gain':
-      return { label, value: `${formatSpeciesChange(gap as number)} native species`, color: OPPORTUNITY_COLORS.gain[3] };
+      return { label, value: `${formatSpeciesChange(gap as number)} native species`, color: OPPORTUNITY_COLORS.gain[4] };
     case 'loss':
-      return { label, value: 'Already richer than greener places like it', color: OPPORTUNITY_COLORS.loss };
+      // The map's taupe is too light for text on white; same hue, darker.
+      return { label, value: 'Already richer than greener places like it', color: '#5E564F' };
     case 'same':
       return { label, value: 'No clear gain', color: '#667066' };
     default:

@@ -1011,7 +1011,9 @@ PROC_HEX_CELLS <- file.path(DATA_PROC, "hex_cells.gpkg")
 PROC_HEX_CELLS_DISPLAY <- file.path(DATA_PROC, "hex_cells_display.gpkg")
 PROC_GREEN_SPACES <- file.path(DATA_PROC, "green_spaces.gpkg")
 PROC_GRID_HABITAT <- file.path(DATA_PROC, "grid_habitat.gpkg")
-PROC_GRID_OBS     <- file.path(DATA_PROC, "grid_observations.gpkg")
+# Steps 02 and 03 both write get_tiled_results(), which carries habitat and
+# observation columns together, so they share one file instead of two copies.
+PROC_GRID_OBS     <- PROC_GRID_HABITAT
 PROC_GRID_CONN    <- file.path(DATA_PROC, "grid_connectivity.gpkg")
 PROC_CONNECTIVITY_GRAPH <- file.path(DATA_PROC, "connectivity_graph.rds")
 PROC_NETWORK_NODES <- file.path(DATA_PROC, "connectivity_network_nodes.gpkg")

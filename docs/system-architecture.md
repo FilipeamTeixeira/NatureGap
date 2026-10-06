@@ -100,7 +100,7 @@ R pipeline:
 - `pipeline/02_habitat/habitat_model.R`: drives the tiled pass, writes
   `grid_habitat.gpkg` and `habitat_quality.tif`
 - `pipeline/03_observations/observation_layer.R`: observed-richness contract
-  checks, `grid_observations.gpkg`, per-cell taxa JSON
+  checks, rewrites `grid_habitat.gpkg`, per-cell taxa JSON
 - `pipeline/04_connectivity/connectivity.R`: graph connectivity metrics
 - `pipeline/04_connectivity/network_derive.R`: derived node/corridor network
 - `pipeline/05_residuals/residuals.R`: expected richness, residuals, Nature Gap
@@ -371,7 +371,7 @@ records and records with pending or confirmed quality flags are excluded.
 - Enforces the observed-richness contract: a sampled cell must carry
   `survey_effort_units` and `observed_richness`; an unsampled cell must carry
   neither. Violations stop the run.
-- Writes `grid_observations.gpkg` and `cell_taxa.json`
+- Writes `grid_habitat.gpkg` (shared with step 02; `PROC_GRID_OBS` points at it) and `cell_taxa.json`
 
 `pipeline/04_connectivity/connectivity.R`
 

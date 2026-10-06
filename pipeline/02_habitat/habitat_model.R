@@ -36,9 +36,9 @@ cat(sprintf(
   max(grid$habitat_quality, na.rm = TRUE)
 ))
 
-st_write(grid, PROC_HEX_CELLS, delete_dsn = TRUE)
+# hex_cells.gpkg stays as the base grid from 02_spatial/spatial_base.R; the
+# tiled grid only goes to grid_habitat.gpkg.
 st_write(grid, PROC_GRID_HABITAT, delete_dsn = TRUE)
-cat(sprintf("Written: %s\n", PROC_HEX_CELLS))
 cat(sprintf("Written: %s\n", PROC_GRID_HABITAT))
 
 hab_rast <- terra::rasterize(

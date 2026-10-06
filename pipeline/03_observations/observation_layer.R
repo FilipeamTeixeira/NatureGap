@@ -37,4 +37,4 @@ cell_taxa_out <- build_cell_taxa_json(grid_obs, get_tiled_obs())
 cat(sprintf("Written: %s (%d cells with taxa)\n", PROC_CELL_TAXA, length(cell_taxa_out)))
 
 st_write(grid_obs, PROC_GRID_OBS, delete_dsn = TRUE)
-cat(sprintf("Written: grid_observations.gpkg (%d cells)\n", nrow(grid_obs)))
+cat(sprintf("Written: %s (%d cells)\n", PROC_GRID_OBS, nrow(grid_obs)))
