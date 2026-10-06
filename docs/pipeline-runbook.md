@@ -259,7 +259,7 @@ It never breaks a run: with an input missing or on any error it warns
 previous run's `opportunity_gap.csv` and `opportunity_model.json` so a stale gap
 cannot be exported against a rebuilt grid. A city that fails its own validation
 still gets both files, with `validation.pass = false` in the JSON. To run it
-alone (about 1.5 min for Porto, 3.5 min and 3 GB for Gent):
+alone (about 2 min for Porto; 6–12 min and up to 3.3 GB for Amsterdam and Gent):
 
 ```bash
 cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 05_opportunity/opportunity_gap.R

@@ -1401,12 +1401,20 @@ opportunity gap uses only that: not what a place lacks, but what it would gain.
   block size, heat anomaly, artificial light, noise, traffic. Weak normal
   penalties (sd 5 on intercepts, 2.5 on slopes) keep sparse species off the
   boundary. Fitted by maximum penalised likelihood with an analytic gradient.
-- **Groups.** Birds and every other vertebrate (`classify_taxon_group()` labels
-  mammals, reptiles, amphibians and fish together as "mammal"). Plants and
-  insects are left out: their expected richness does not predict their recorded
-  richness beyond effort (Porto partial ρ −0.18 and −0.13) — their records
-  follow photographers and gardens, not habitat; the plant models reward
-  planted ornamentals such as *Pittosporum tobira*.
+- **Groups.** Every group counts: birds, other vertebrates
+  (`classify_taxon_group()` labels mammals, reptiles, amphibians and fish
+  together as "mammal"), plants, insects (with spiders), fungi, and "other" —
+  what the classifier leaves unclassified, mostly molluscs and crustaceans.
+  Each group carries a per-city label from its own records test (§15.4), so the
+  map can say how much of each number has been checked against what people
+  actually found.
+- **Rare species.** A species recorded at fewer than 10 blocks cannot be
+  modelled — one or two sightings do not say where else it lives. In Porto
+  that is 88% of native species, though only 6% of records. Instead of being
+  dropped, every recorded native species the models do not count is listed per
+  cell where it was found within the window (up to 10 names, rarest first, from
+  every record passing the §3.1 gates, not only the model's window). A fact, not
+  a prediction.
 - **Per cell.** Each 20 m cell reads the covariates averaged over the cells within
   125 m — about one block's area, the scale the models were fitted at — with the
   window's cell count rescaled to block units for the size term. Expected
@@ -1426,8 +1434,9 @@ opportunity gap uses only that: not what a place lacks, but what it would gain.
 
 ### 15.3 Introduced species
 
-Fitted (their records still lengthen the lists that measure everyone's
-detection) but never counted. `introduced_species.R` takes the Global Register of
+Never fitted and never counted — their records still lengthen the lists that
+measure everyone else's detection, because visits are built from every record
+first. `introduced_species.R` takes the Global Register of
 Introduced and Invasive Species checklist of the city's country as the
 authority, and fills it from species iNaturalist flags as introduced inside the
 city only where another country's register also lists them — iNaturalist alone
@@ -1442,43 +1451,62 @@ Japan's register lists the Japanese white-eye, native to mainland Japan, most
 likely for the Ogasawara Islands; Japan needs the same island correction before
 Yokohama can be assessed (§15.4).
 
-### 15.4 Validation
+### 15.4 Labels and validation
 
-Every run re-tests itself; a city that fails is withheld. Pass requires all three:
+Every run re-tests each group and labels it; nothing is withheld:
 
-- **Signal.** In blocks where a present species would have been recorded at
-  least once with probability ≥ 0.5, cross-validated (5-fold by block) occupancy
-  separates recorded from unrecorded per species: the median within-species AUC
-  exceeds the 97.5% quantile of the same median with occupancy permuted within
-  species (200 permutations).
-- **Records.** Per block, expected species predict species recorded beyond
-  effort: partial Spearman ρ ≥ 0.2 with p < 0.05 after removing log visits, in
-  every group with 20 or more well-recorded blocks.
-- **Direction.** Woodland species (robin, great tit, blue tit, blackcap,
-  short-toed treecreeper, long-tailed tit, woodpigeon) gain under the lever on
-  average, and built-up species (house sparrow, feral pigeon) have a positive
-  built-cover coefficient, for more than half of those counted.
+- **checked** — per well-recorded block (a present species would have been
+  recorded at least once with probability ≥ 0.5, median over the group's
+  species), the group's expected species predict its recorded species beyond
+  effort: partial Spearman ρ ≥ 0.2 with p < 0.05 after removing log visits,
+  expectations cross-validated 5-fold by block.
+- **mismatch** — tested on 20 or more well-recorded blocks and did not match.
+  Not a lack of data: Porto's plants have about 10,000 records, but they pile up
+  where botanists and gardens are; whether the model or the records are wrong
+  there, this data cannot say.
+- **insufficient** — fewer than 20 well-recorded blocks: too few records to test.
 
-2026-10-06 runs:
+Two citywide diagnostics are recorded beside the labels: *signal* (in
+well-recorded blocks, cross-validated occupancy separates recorded from
+unrecorded species better than occupancy permuted within species, 200
+permutations; also per group) and *direction* (woodland birds gain under the
+lever, built-up birds have a positive built-cover coefficient). Before the
+labels, Porto and Gent passed all three tests for birds and other vertebrates in
+the prototype, and the stage reproduces them to the 4th decimal.
+
+2026-10-06 runs (ρ in brackets):
 
 | | Porto | Gent | Amsterdam | Yokohama |
 | --- | --- | --- | --- | --- |
-| Native species counted (birds + other vertebrates) | 87 (71 + 16) | 137 (127 + 10) | 105 (98 + 7) | 31 (30 + 1) |
-| Introduced species left out | 10 | 30 | 17 | 6 |
-| Signal: median AUC (null 97.5%) | 0.642 (0.520) | 0.696 (0.516) | 0.601 (0.518) | 0.651 (0.544) |
-| Records: partial ρ, birds / other vertebrates (blocks) | 0.41 (70) / 0.53 (48) | 0.49 (88) / 0.31 (162) | 0.38 (40) / 0.56 (66) | **−0.04** (23) / 0.43 (68) |
-| Direction checks right | 7 of 9 | 6 of 8 | 8 of 9 | **0 of 0** |
-| Result | pass | pass | pass | **fail** |
-| Opportunity gap per cell: median / p90 (species) | 0.83 / 3.3 | 1.39 / 7.2 | 0.35 / 2.5 | — |
+| Native species counted | 262 | 501 | 480 | 44 |
+| Introduced species left out | 75 | 489 | 108 | 11 |
+| Birds | checked (0.41) | checked (0.49) | checked (0.38) | **mismatch** (−0.04) |
+| Other vertebrates | checked (0.53) | checked (0.31) | checked (0.56) | checked (0.43, 1 species) |
+| Plants | **mismatch** (−0.27) | checked (0.39) | insufficient | insufficient |
+| Insects | **mismatch** (0.05) | checked (0.42) | insufficient | insufficient |
+| Fungi | insufficient | insufficient | insufficient | insufficient |
+| Other invertebrates | insufficient | checked (0.32) | insufficient | insufficient |
+| Share of the citywide gap from checked groups | 26% | 88% | 29% | — |
+| Signal: median AUC (null 97.5%) | 0.610 (0.516) | 0.628 (0.510) | 0.588 (0.513) | 0.640 (0.544) |
+| Direction checks right | 7 of 9 | 6 of 8 | 8 of 9 | 0 of 0 |
+| Opportunity gap per cell: median / p90 | 2.1 / 10.3 | 1.2 / 26.1 | 1.2 / 11.3 | 0.0 / 1.4 |
+| Rare native species listed (records) | 1,875 (8,301) | 2,255 (9,003) | 2,818 (13,224) | 1,586 (5,487) |
 
-Porto and Gent passed in the prototype before the stage existed, and the stage
-reproduces them to the 4th decimal; Amsterdam and Yokohama were first tested by
-the stage itself. Yokohama has 3,630 bird records in the window and its direction
-species are European, none of which occur there: it needs a regional species list
-as well as more records.
+Gent's plant and insect records come largely from naturalists who log many
+species per outing, and behave like surveys; Porto's are mostly single photos.
+Amsterdam loses most of its records to the 125 m GPS gate (698,000 of 1.17
+million), leaving too few well-recorded blocks to test plants and insects.
+Yokohama has 3,630 bird records in the window, and its direction species are
+European, none of which occur there.
 
 ### 15.5 Interpretation and limits
 
+- The parts labelled mismatch or insufficient are shown, not checked: the map
+  must say which share of a number is which, and a city's figure is only as
+  firm as its checked share.
+- It covers the common species of each city (those recorded at 10 or more
+  blocks); rare species are listed where found, which reflects where people
+  looked as much as where they live.
 - It is an opportunity, not a deficit. Zero means the place already has the tree
   and vegetation cover similar places reach — not that nothing is missing there.
 - Gains are expected species (summed occupancy probabilities), not species that

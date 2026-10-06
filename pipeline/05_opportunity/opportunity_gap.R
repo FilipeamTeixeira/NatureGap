@@ -34,9 +34,11 @@
 #      found within the window, rarest first — a fact, not a prediction.
 #
 # Introduced species (introduced_species.R, cached by
-# 01_ingest/introduced_species.R) are fitted — their records still lengthen the
-# lists that measure everyone's detection — but left out of every sum, gap,
-# test and list.
+# 01_ingest/introduced_species.R) are not fitted and are left out of every sum,
+# gap, test and list. Their records still count towards each visit's list
+# length, which measures everyone else's detection: visits are built from all
+# records before any species is set aside. (Fitting them changed nothing and
+# cost most of the run: 402 of Gent's 587 qualifying plants are introduced.)
 #
 # Every group counts. Each is labelled per city by its own records test, rerun
 # every time, and the labels travel with the numbers (PROC_OPPORTUNITY_MODEL):
@@ -182,9 +184,12 @@ opportunity_run <- function() {
   fit_group <- function(grp) {
     v <- vis$visits[vis$visits$group == grp, ]
     det <- vis$det[vis$det$group == grp, ]
-    species <- det |> distinct(site, taxon_name) |> count(taxon_name) |>
+    qualifying <- det |> distinct(site, taxon_name) |> count(taxon_name) |>
       filter(n >= OPPORTUNITY_MIN_SITES) |> pull(taxon_name)
-    if (length(species) == 0L) return(NULL)
+    is_intro <- binomial(qualifying) %in% intro$taxon_name
+    species <- qualifying[!is_intro]
+    introduced_q <- data.frame(taxon_name = qualifying[is_intro], group = rep(grp, sum(is_intro)))
+    if (length(species) == 0L) return(list(introduced = introduced_q))
 
     sites <- sort(unique(v$site))
     site_idx_all <- match(v$site, sites)
@@ -225,12 +230,16 @@ opportunity_run <- function() {
       beta = do.call(rbind, lapply(per_species, `[[`, "beta")),
       species = data.frame(taxon_name = species, group = grp,
                            converged = vapply(per_species, `[[`, logical(1), "converged")),
-      visits = v |> count(site, name = "n_visits") |> rename(block = site) |> mutate(group = grp)
+      visits = v |> count(site, name = "n_visits") |> rename(block = site) |> mutate(group = grp),
+      introduced = introduced_q
     )
   }
 
-  fits <- Filter(Negate(is.null), lapply(sort(unique(vis$visits$group)), fit_group))
-  if (length(fits) == 0L) stop("no species recorded at ", OPPORTUNITY_MIN_SITES, " or more blocks")
+  fitted <- lapply(sort(unique(vis$visits$group)), fit_group)
+  excluded <- do.call(rbind, lapply(fitted, `[[`, "introduced"))
+  excluded$source <- intro$source[match(binomial(excluded$taxon_name), intro$taxon_name)]
+  fits <- Filter(function(f) !is.null(f$beta), fitted)
+  if (length(fits) == 0L) stop("no native species recorded at ", OPPORTUNITY_MIN_SITES, " or more blocks")
   site_species <- do.call(rbind, lapply(fits, `[[`, "cv"))
   beta <- do.call(rbind, lapply(fits, `[[`, "beta"))
   colnames(beta) <- c("intercept", OPPORTUNITY_COVARIATES)
@@ -238,16 +247,7 @@ opportunity_run <- function() {
   block_visits <- do.call(rbind, lapply(fits, `[[`, "visits"))
   rownames(beta) <- species_tab$taxon_name
 
-  # Introduced species: fitted, never counted.
-  src <- intro$source[match(binomial(species_tab$taxon_name), intro$taxon_name)]
-  is_intro <- !is.na(src)
-  excluded <- data.frame(taxon_name = species_tab$taxon_name[is_intro],
-                         group = species_tab$group[is_intro], source = src[is_intro])
   island_kept <- species_tab$taxon_name[binomial(species_tab$taxon_name) %in% attr(intro, "island_only")]
-  beta <- beta[!is_intro, , drop = FALSE]
-  species_tab <- species_tab[!is_intro, ]
-  site_species <- site_species[!site_species$taxon_name %in% excluded$taxon_name, ]
-  if (nrow(species_tab) == 0L) stop("no native species to count")
 
   # ── 2. Each cell's window ──────────────────────────────────────────────────
   # Window means through a 20 m raster: each raster cell holds the sum of its
