@@ -3,6 +3,11 @@
 # Lists objects under pipeline-export/<city_id>/ in Supabase Storage and deletes
 # every object whose path does not belong to the active dataset's storage_prefix
 # (plus the city's current.json pointer).
+#
+# PIPELINE_STORAGE_PRUNE=0 skips it, so a promotion can be checked on the live
+# site while the previous dataset still exists to promote back to
+# (public.promote_pipeline_dataset). Prune afterwards by promoting again
+# without it. docs/pipeline-runbook.md, "Manual publish workflow".
 
 PIPELINE_EXPORT_BUCKET <- "pipeline-export"
 
@@ -227,6 +232,13 @@ prune_stale_pipeline_storage <- function(city_id, con) {
 }
 
 run_storage_prune_after_promotion <- function(city_id, con) {
+  if (identical(Sys.getenv("PIPELINE_STORAGE_PRUNE", unset = "1"), "0")) {
+    message(sprintf(
+      "Skipping Storage prune for %s: PIPELINE_STORAGE_PRUNE=0. Earlier datasets stay in Storage until a promotion without it.",
+      city_id
+    ))
+    return(invisible(NULL))
+  }
   required <- identical(Sys.getenv("PIPELINE_STORAGE_PRUNE_REQUIRED", unset = "0"), "1")
   skip <- function(msg) {
     if (required) stop(msg, call. = FALSE)

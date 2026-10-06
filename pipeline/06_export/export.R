@@ -288,7 +288,7 @@ write_geojson_chunked <- function(value, output_path) {
   ))
 }
 
-validate_pmtiles_contract <- function(output_path) {
+validate_pmtiles_contract <- function(output_path, required_fields = PMTILES_REQUIRED_FIELDS) {
   node <- Sys.getenv("NODE_BIN", unset = "")
   if (!nzchar(node)) node <- Sys.which("node")
   if (node == "") {
@@ -304,7 +304,7 @@ validate_pmtiles_contract <- function(output_path) {
     normalizePath(validator, winslash = "/", mustWork = TRUE),
     normalizePath(output_path, winslash = "/", mustWork = TRUE),
     PMTILES_SOURCE_LAYER,
-    PMTILES_REQUIRED_FIELDS
+    required_fields
   ))
   result <- system2(node, args = args, stdout = TRUE, stderr = TRUE)
   status <- attr(result, "status")
@@ -320,7 +320,7 @@ validate_pmtiles_contract <- function(output_path) {
     "Validated: %s (source-layer: %s; fields: %s)\n",
     output_path,
     PMTILES_SOURCE_LAYER,
-    paste(PMTILES_REQUIRED_FIELDS, collapse = ", ")
+    paste(required_fields, collapse = ", ")
   ))
   jsonlite::fromJSON(paste(result, collapse = "\n"))
 }
@@ -547,7 +547,17 @@ write_hexgrid_pmtiles <- function(value, output_path) {
   if (!file.copy(tmp_pmtiles, output_path, overwrite = TRUE)) {
     stop(sprintf("Failed to copy generated PMTiles to %s", output_path))
   }
-  validate_pmtiles_contract(output_path)
+  # A shard holding only opportunityOnly cells — in the tiles for the Nature
+  # gap alone, every other field empty, so tippecanoe records none of them — is
+  # checked for what it carries. Yokohama's eastern shard is all built ground.
+  opportunity_only <- "opportunityOnly" %in% names(value) && nrow(value) > 0L &&
+    all(value$opportunityOnly %in% TRUE)
+  validation <- validate_pmtiles_contract(
+    output_path,
+    if (opportunity_only) c("cellId", "opportunityGap", "opportunityOnly") else PMTILES_REQUIRED_FIELDS
+  )
+  validation$opportunityOnly <- opportunity_only
+  validation
 }
 
 # Fitted expected-richness model record written by 05_residuals / 05_patch.
@@ -2074,7 +2084,9 @@ if (!is.null(opportunity)) {
 OPPORTUNITY_MANIFEST <- opportunity_manifest(OPPORTUNITY_RECORD, opportunity_only_count)
 
 hexgrid_tilesets <- write_hexgrid_tilesets(hexgrid_tiles, DATA_EXPORT)
-pmtiles_validation <- hexgrid_tilesets$validations[[1L]]
+# The first archive with the full render contract describes the tileset.
+full_validations <- Filter(function(v) !isTRUE(v$opportunityOnly), hexgrid_tilesets$validations)
+pmtiles_validation <- if (length(full_validations)) full_validations[[1L]] else hexgrid_tilesets$validations[[1L]]
 for (tileset_file in hexgrid_tilesets$files) {
   cat(sprintf("Written: %s (source-layer: %s)\n",
               file.path(DATA_EXPORT, tileset_file), PMTILES_SOURCE_LAYER))

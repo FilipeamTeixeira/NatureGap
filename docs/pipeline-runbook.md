@@ -80,20 +80,21 @@ Uploading to Storage alone is safe and correct for map rendering, but
 
 ### Step 1 — Upload to Storage (manual, safe)
 
-Upload the versioned folder plus the city pointer:
+Upload the whole versioned folder, then the city pointer:
 
 ```text
-<city-id>/current.json
-<city-id>/<dataset-id>/manifest.json
-<city-id>/<dataset-id>/hexgrid.pmtiles
-<city-id>/<dataset-id>/cell_attributes.geojson.gz   (or chunked parts + manifest)
-<city-id>/<dataset-id>/parks.geojson.gz
-<city-id>/<dataset-id>/park-stats.json
-<city-id>/<dataset-id>/cell-details.manifest.json
+<city-id>/<dataset-id>/…                             (every file the export staged)
+<city-id>/<dataset-id>/hexgrid.pmtiles               (or hexgrid-shard-NN.pmtiles when SHARD_TILES is on)
 <city-id>/<dataset-id>/cell-details/cell-details-NNN.json.gz
+<city-id>/current.json                               (last: it is what the site follows)
 ```
 
-The bucket is public-read. No database credentials are involved.
+The `current.json` to upload is the one the export wrote. If it was restored to
+the published copy after a local check, write it back from the dataset folder
+(`datasetId`, `manifest`, `hexgridShards`). The bucket is public-read, so every
+file is public: `top_interventions.json` carries no observer ids or dates since
+2026-10-06 (06_export/export.R drops them). No database credentials are
+involved.
 
 ### Step 2 — Apply pending migrations
 
@@ -134,6 +135,21 @@ order by generated_at desc;
 ```
 
 `dataset_id` and `generated_at` should match the `current.json` you uploaded.
+
+### Promote a sharded city, and keep a way back
+
+`sync:pipeline-from-storage` cannot stage sharded tilesets. Promote from the
+local export instead — it reads the export folder and never touches the tiles:
+
+```bash
+cd pipeline && NATUREGAP_CITY=porto POSTGRES_IMPORT_ENABLED=1 PIPELINE_STORAGE_PRUNE=0 NATUREGAP_DATA_VERSION=<dataset-id> Rscript --vanilla 07_import/import_to_postgres.R
+```
+
+`PIPELINE_STORAGE_PRUNE=0` leaves the previous dataset in Storage, so if the
+live site is wrong the old one can be promoted back
+(`select public.promote_pipeline_dataset('<city>', '<old-id>')` and its
+`current.json` re-uploaded). Once the site is right, run the same command
+without `PIPELINE_STORAGE_PRUNE=0` to delete the earlier datasets.
 
 ### Optional — promote without auto-activate
 

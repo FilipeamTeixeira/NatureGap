@@ -1,4 +1,4 @@
-import { isRegisteredCityId, STORAGE } from './config';
+import { CITIES, isRegisteredCityId, STORAGE } from './config';
 import { LOCAL_PIPELINE_EXPORT, localPipelineUrl } from './local-pipeline';
 import { opportunityGapFromManifest, type OpportunityGapInfo } from './opportunity-gap';
 import { residualWindowFromManifest, type ResidualWindow } from './residual-window';
@@ -272,8 +272,10 @@ async function listDatabaseActiveDatasets(): Promise<ActivePipelineDataset[]> {
   return datasets.filter((dataset): dataset is ActivePipelineDataset => dataset !== null);
 }
 
-async function listStoragePointerDatasets(): Promise<ActivePipelineDataset[]> {
-  const cityFolders = uniqueStrings([...STORAGE.PIPELINE_CITY_IDS]);
+async function listStoragePointerDatasets(
+  cityIds: readonly string[] = STORAGE.PIPELINE_CITY_IDS,
+): Promise<ActivePipelineDataset[]> {
+  const cityFolders = uniqueStrings([...cityIds]);
   const datasets = await Promise.all(cityFolders.map(async (cityFolder) => {
     const currentValue = await fetchStorageJson(`${cityFolder}/current.json`);
     const current = asObject(currentValue) as CurrentPointer | null;
@@ -310,8 +312,11 @@ async function loadActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
 export async function listActivePipelineDatasets(): Promise<ActivePipelineDataset[]> {
   // The local preview reads only the pointers on disk: the registry describes
   // what is published, which is exactly what the preview is meant to bypass.
+  // Every registered city, as the registry lists them in production; a city
+  // without a local dataset folder answers 404 and drops out.
   if (LOCAL_PIPELINE_EXPORT) {
-    return (await listStoragePointerDatasets()).filter((dataset) => isRegisteredCityId(dataset.cityId));
+    return (await listStoragePointerDatasets(Object.keys(CITIES)))
+      .filter((dataset) => isRegisteredCityId(dataset.cityId));
   }
   if (!supabase) return [];
   return loadActivePipelineDatasets();
