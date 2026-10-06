@@ -254,6 +254,16 @@ Regenerating it is cheap when the tile caches (`tiled_combined.rds`,
 cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 01_ingest/introduced_species.R
 ```
 
+When its outputs are present, `06_export/export.R` adds every cell outside the
+render filter to the tiles as `opportunityOnly` (methodology §11, data contract
+`hexgrid.pmtiles`). **Do not publish such an export until the deployed frontend
+filters `opportunityOnly` cells out of every other layer** — an older frontend
+paints them in all layers. That is also why Porto, Amsterdam, Gent and Yokohama
+now set `SHARD_TILES` (2, 3, 4 and 4 archives): the larger tileset is split to
+stay under the 45 MB upload cap at zoom 18. If an export log shows `over the 45
+MB upload cap — retiling at zoom 11-17`, raise that city's `SHARD_TILES_N`
+rather than accept the lower zoom.
+
 It never breaks a run: with an input missing or on any error it warns
 (`Opportunity gap skipped for <city>: …`), writes nothing, and removes the
 previous run's `opportunity_gap.csv` and `opportunity_model.json` so a stale gap

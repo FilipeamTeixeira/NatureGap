@@ -41,8 +41,11 @@ relation_id <- c(2689447L, 2689464L, 2689468L, 2689452L)                # Yokoha
 # zoom floor. Analysis is unaffected — one AOI, one hex lattice, one
 # connectivity graph, one set of legend percentiles; only the published tiles
 # are split, by cell centroid, into equal-count contiguous blocks.
-SHARD_TILES   <- "no"
-# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+SHARD_TILES   <- "yes"
+# Sharded since 2026-10-06: with every cell in the tiles for the opportunity gap (methodology §11) the
+# tileset grows from 46k to 383k cells, projected at ~120 MB; four keep each
+# under the 45 MB cap at zoom 18.
+SHARD_TILES_N <- 4
 
 # ── Optional raster sources ───────────────────────────────────────────────────
 RASTER_DOWNLOADERS_EXTRA <- c(

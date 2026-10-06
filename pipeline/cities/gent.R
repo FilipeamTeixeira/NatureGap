@@ -36,7 +36,10 @@ aoi_file  <- "data/boundaries/custom/gent.geojson"   # set aoi_mode <- "file" to
 # connectivity graph, one set of legend percentiles; only the published tiles
 # are split, by cell centroid, into equal-count contiguous blocks.
 SHARD_TILES   <- "yes"
-# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+# Sharded since 2026-10-06: with every cell in the tiles for the opportunity gap (methodology §11) the
+# tileset is projected at ~130 MB (two shards were already 42 and 45 MB);
+# four keep each under the 45 MB cap at zoom 18.
+SHARD_TILES_N <- 4
 
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.

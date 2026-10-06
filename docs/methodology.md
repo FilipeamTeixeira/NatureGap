@@ -1224,6 +1224,16 @@ at export time. As of the current export that is:
 The derived ecological network ships separately as
 `connectivity-network-edges.geojson` / `-nodes.geojson`, not in PMTiles.
 
+One exception to the render filter above: when the opportunity gap (§15) ran,
+every other cell also enters the tiles, flagged `opportunityOnly` and carrying
+only the opportunity fields. The filter keeps green cells because the other
+layers describe what is there; the opportunity gap describes what greening
+would add, and the built-up cells the filter drops hold about half of Porto's
+gap (median 3.1 species against 1.2 in rendered cells). Every other layer filters
+those cells out, so they change nothing else on the map. The larger tileset is
+kept under the upload cap by sharding (`SHARD_TILES`), not by lowering the
+maximum zoom.
+
 PMTiles must not include:
 
 - raw observations

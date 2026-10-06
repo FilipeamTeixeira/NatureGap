@@ -33,8 +33,11 @@ relation_id <- 3372453L                      # Porto
 # zoom floor. Analysis is unaffected — one AOI, one hex lattice, one
 # connectivity graph, one set of legend percentiles; only the published tiles
 # are split, by cell centroid, into equal-count contiguous blocks.
-SHARD_TILES   <- "no"
-# SHARD_TILES_N <- 2                           # archives to split into (default 2)
+SHARD_TILES   <- "yes"
+# Sharded since 2026-10-06: with every cell in the tiles for the opportunity gap (methodology §11) the
+# single archive measured 48.6 MB at zoom 18 (2026-10-06), over the 45 MB cap;
+# the zoom ladder would have cut every layer to zoom 17.
+SHARD_TILES_N <- 2
 
 # ── Analysis extent (WGS84) ───────────────────────────────────────────────────
 # Optional: without this, config.R derives BBOX_CITY from the AOI extent.

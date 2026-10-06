@@ -591,6 +591,105 @@ expected_model_record <- function(path = PROC_EXPECTED_MODEL) {
   )
 }
 
+# Opportunity gap (05_opportunity/opportunity_gap.R, docs/methodology.md §15):
+# per-cell values and the run's record. Both are absent when the stage was
+# skipped; the export then runs exactly as before and the manifest says so.
+opportunity_record <- function(path = PROC_OPPORTUNITY_MODEL) {
+  if (!exists("PROC_OPPORTUNITY_MODEL") || !file.exists(path)) return(NULL)
+  tryCatch(
+    jsonlite::read_json(path, simplifyVector = FALSE),
+    error = function(e) {
+      warning(sprintf("Unreadable opportunity record: %s", conditionMessage(e)), call. = FALSE)
+      NULL
+    }
+  )
+}
+
+opportunity_cells <- function(path = PROC_OPPORTUNITY) {
+  if (!exists("PROC_OPPORTUNITY") || !file.exists(path)) return(NULL)
+  as.data.frame(data.table::fread(path, colClasses = list(character = "cell_id")))
+}
+
+# "a; b" -> ["a","b"]. Names come from taxon names, which carry no quotes or
+# backslashes, but they are stripped so the JSON can never break.
+opportunity_json_names <- function(x) {
+  x <- gsub('["\\\\]', "", ifelse(is.na(x), "", x))
+  ifelse(nzchar(x), paste0('["', gsub("; ", '","', x, fixed = TRUE), '"]'), "[]")
+}
+
+# The per-cell detail the panel reads, as one JSON string per cell (the
+# cell-details convention, like species and interventions): totals, each
+# group with its city label and top species, and the rare species found within
+# the window. Built vectorised: 350k cells in Gent.
+opportunity_detail_json <- function(opp, labels) {
+  groups <- sub("^expected_", "", grep("^expected_", names(opp), value = TRUE))
+  groups <- setdiff(groups, "species")
+  num <- function(x) sprintf("%.2f", replace(x, !is.finite(x), 0))
+  group_json <- vapply(groups, function(g) {
+    label <- labels[[g]]$label %||% "insufficient"
+    sprintf('{"group":"%s","label":"%s","expected":%s,"gap":%s,"top":%s}',
+            g, label, num(opp[[paste0("expected_", g)]]), num(opp[[paste0("gap_", g)]]),
+            opportunity_json_names(opp[[paste0("top_", g)]]))
+  }, character(nrow(opp)))
+  group_json <- matrix(group_json, nrow = nrow(opp))
+  sprintf(
+    '{"expected":%s,"gap":%s,"gapChecked":%s,"groups":[%s],"top":%s,"rare":{"count":%d,"species":%s}}',
+    num(opp$expected_species), num(opp$opportunity_gap), num(opp$gap_checked),
+    apply(group_json, 1L, paste, collapse = ","),
+    opportunity_json_names(opp$top_species),
+    as.integer(replace(opp$rare_species_n, is.na(opp$rare_species_n), 0L)),
+    opportunity_json_names(opp$rare_species)
+  )
+}
+
+# The manifest block: what the map and panels need to label every number. The
+# coefficients stay in the local record (opportunity_model.json).
+opportunity_manifest <- function(record, opportunity_only_cells) {
+  if (is.null(record)) {
+    return(list(computed = FALSE,
+                reason = "No 05_opportunity outputs for this run (stage skipped or not run)."))
+  }
+  checks <- record$validation$direction$checks
+  list(
+    computed = TRUE,
+    definition = paste(
+      "Expected native species each cell's surroundings support now, and how many",
+      "more with the tree and vegetation cover that cells of the same land use in",
+      "this city reach (75th percentile). Summed occupancy probabilities over the",
+      "city's commonly recorded native species — not a census, not a deficit.",
+      "Every group counts; each carries a per-city label from its own records test:",
+      "checked, mismatch (tested, did not match the records) or insufficient",
+      "(too few well-recorded blocks to test)."
+    ),
+    method = record$method,
+    tileFields = list(expected = "expectedSpecies", gap = "opportunityGap",
+                      gapChecked = "opportunityGapChecked", opportunityOnly = "opportunityOnly"),
+    cellDetailField = "opportunity",
+    parkStatsField = "opportunity",
+    opportunityOnlyCells = as.integer(opportunity_only_cells),
+    settings = record$settings,
+    data = record$data,
+    labels = record$validation$labels,
+    summary = record$summary,
+    species = list(
+      counted = record$species$counted,
+      byGroup = record$species$byGroup,
+      introducedLeftOut = length(record$species$introducedLeftOut),
+      keptNativeIslandOnly = record$species$keptNativeIslandOnly
+    ),
+    rare = record$rare,
+    diagnostics = list(
+      signal = record$validation$signal[c("speciesTested", "medianAuc", "nullQ975", "pass")],
+      direction = list(
+        pass = record$validation$direction$pass,
+        right = sum(vapply(checks, function(x) isTRUE(x$right), logical(1))),
+        total = length(checks)
+      )
+    ),
+    generatedAt = record$generatedAt
+  )
+}
+
 export_upload_files <- function(export_dir = DATA_EXPORT) {
   # Both spellings are listed for the gzipped products and filtered by
   # existence below, so this keeps working if a product is ever written
@@ -731,6 +830,7 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
         bandBreaks = as.list(SCORE_BREAKS),
         scaling = score_scaling_record()
       ),
+      opportunityGap = OPPORTUNITY_MANIFEST,
       ecologicalResidualNormalized = list(
         sourceField = "ecological_residual_normalized",
         definition = "City-wise z-score of raw ecological_residual using finite sampled cells.",
@@ -1839,6 +1939,36 @@ cat(sprintf(
   nrow(hexgrid_render), nrow(grid)
 ))
 
+# Opportunity gap: loaded here, needed by the tiles, cell details, park stats and
+# manifest below. Its cell_id is the grid's, before the city prefix.
+OPPORTUNITY_RECORD <- opportunity_record()
+opportunity <- opportunity_cells()
+if (!is.null(opportunity) && is.null(OPPORTUNITY_RECORD)) {
+  warning("opportunity_gap.csv without opportunity_model.json — opportunity gap not exported.", call. = FALSE)
+  opportunity <- NULL
+}
+if (!is.null(opportunity)) {
+  opportunity$cell_id <- paste0(CITY_ID, "-", opportunity$cell_id)
+  opportunity_labels <- OPPORTUNITY_RECORD$validation$labels
+  checked_groups <- names(opportunity_labels)[vapply(
+    opportunity_labels, function(l) identical(l$label, "checked"), logical(1)
+  )]
+  checked_cols <- intersect(paste0("gap_", checked_groups), names(opportunity))
+  # The part of each cell's gap from groups labelled checked in this city, so
+  # the map can show how much of a number has been checked against records.
+  opportunity$gap_checked <- if (length(checked_cols)) {
+    rowSums(opportunity[, checked_cols, drop = FALSE])
+  } else 0
+  opportunity_tile <- data.frame(
+    cellId = opportunity$cell_id,
+    expectedSpecies = round(opportunity$expected_species, 1),
+    opportunityGap = round(opportunity$opportunity_gap, 1),
+    opportunityGapChecked = round(opportunity$gap_checked, 1)
+  )
+  cat(sprintf("Opportunity gap: %d cells; checked groups: %s\n", nrow(opportunity),
+              if (length(checked_groups)) paste(checked_groups, collapse = ", ") else "none"))
+}
+
 hexgrid_tiles <- hexgrid_render |>
   transmute(
     cellId             = cell_id,
@@ -1907,6 +2037,34 @@ hexgrid_tiles <- hexgrid_render |>
     # leaving it ~0.3 MiB under MAX_UPLOAD_BYTES.
     isUnsampled        = if_else(is_unsampled, TRUE, NA)
   )
+
+render_cell_count <- nrow(hexgrid_tiles)
+opportunity_only_count <- 0L
+if (!is.null(opportunity)) {
+  hexgrid_tiles <- hexgrid_tiles |> left_join(opportunity_tile, by = "cellId")
+  hexgrid_tiles$opportunityOnly <- NA
+  # Every other cell joins the tiles for the opportunity layer alone: the built-
+  # up cells the render filter above leaves out hold about half of Porto's gap.
+  # They carry only the opportunity fields (the rest are null, so they cost no
+  # bytes) and opportunityOnly = TRUE; every other layer must filter them out
+  # (src/lib/layer-styles.ts). Size is held under MAX_UPLOAD_BYTES by sharding
+  # (SHARD_TILES in the city file), never by the zoom ladder below.
+  extra <- grid_all |>
+    filter(!cell_id %in% hexgrid_render$cell_id) |>
+    transmute(cellId = cell_id) |>
+    inner_join(opportunity_tile, by = "cellId")
+  extra$opportunityOnly <- TRUE
+  for (col in setdiff(names(hexgrid_tiles), names(extra))) {
+    extra[[col]] <- hexgrid_tiles[[col]][NA_integer_]
+  }
+  extra <- extra[, names(hexgrid_tiles)]
+  opportunity_only_count <- nrow(extra)
+  hexgrid_tiles <- rbind(hexgrid_tiles, extra)
+  rm(extra)
+  cat(sprintf("  → PMTiles opportunity-only cells: %d (tiles now %d cells)\n",
+              opportunity_only_count, nrow(hexgrid_tiles)))
+}
+OPPORTUNITY_MANIFEST <- opportunity_manifest(OPPORTUNITY_RECORD, opportunity_only_count)
 
 hexgrid_tilesets <- write_hexgrid_tilesets(hexgrid_tiles, DATA_EXPORT)
 pmtiles_validation <- hexgrid_tilesets$validations[[1L]]
@@ -2061,7 +2219,16 @@ cell_attr_path <- file.path(DATA_EXPORT, "cell_attributes.geojson")
 write_geojson_chunked(cell_attr, cell_attr_path)
 cat(sprintf("Written: %s (gzip, or -part-NNN.geojson.gz when chunked)\n", gz_path(cell_attr_path)))
 
-write_cell_details_sharded(cell_attr, file.path(DATA_EXPORT, "cell-details"))
+# The opportunity block joins the panel's detail only, not cell_attributes: the
+# database projection and its import are unchanged.
+cell_details <- if (!is.null(opportunity)) {
+  cell_attr |>
+    left_join(data.frame(cell_id = opportunity$cell_id,
+                         opportunity = opportunity_detail_json(opportunity, opportunity_labels)),
+              by = "cell_id")
+} else cell_attr
+write_cell_details_sharded(cell_details, file.path(DATA_EXPORT, "cell-details"))
+rm(cell_details)
 
 # ── 4. Per-cell stats + park aggregates + interventions ───────────────────────
 
@@ -2076,6 +2243,17 @@ for (pid in unique(grid_df$park_id)) {
     cell_taxa_lookup,
     green_metrics |> filter(park_id == pid)
   )
+  if (!is.null(stats) && !is.null(opportunity)) {
+    m <- match(rows$cell_id, opportunity$cell_id)
+    m <- m[!is.na(m)]
+    if (length(m)) {
+      stats$opportunity <- list(
+        expected = round(mean(opportunity$expected_species[m]), 2),
+        gap = round(mean(opportunity$opportunity_gap[m]), 2),
+        gapChecked = round(mean(opportunity$gap_checked[m]), 2)
+      )
+    }
+  }
   if (!is.null(stats)) {
     park_iv <- park_intervention_lookup[[pid]]
     if (!is.null(park_iv)) stats$interventions <- park_iv
@@ -2125,7 +2303,7 @@ cat(sprintf(
 
 staged <- stage_versioned_exports(
   pmtiles_validation,
-  cell_count = nrow(hexgrid_tiles),
+  cell_count = render_cell_count,
   park_count = length(park_stats_out),
   tilesets = hexgrid_tilesets
 )
