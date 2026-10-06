@@ -76,7 +76,7 @@ suppressMessages(source("config.R"))
 pipeline_fns <- new.env()
 suppressMessages(sys.source(here::here("02_habitat", "process_tile.R"), envir = pipeline_fns))
 classify_taxon_group <- pipeline_fns$classify_taxon_group
-source(here::here("sensitivity", "occupancy_model.R"))
+source(here::here("05_opportunity", "occupancy_model.R"))
 
 SITE_UNITS    <- strsplit(Sys.getenv("SITE_UNITS", "250,500,park"), ",")[[1]]
 VALIDATE_UNIT <- Sys.getenv("VALIDATE_UNIT", "250")

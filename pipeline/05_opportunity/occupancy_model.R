@@ -1,7 +1,8 @@
-# NatureGap sensitivity — shared single-season occupancy model.
-#
-# Used by prototype_occupancy_gap.R and prototype_opportunity_gap.R. Functions
-# and constants only: sourcing this runs nothing.
+# NatureGap — single-season occupancy model, shared by the opportunity gap stage
+# (05_opportunity/opportunity_gap.R) and the sensitivity prototypes that
+# validated it (sensitivity/prototype_occupancy_gap.R,
+# sensitivity/prototype_opportunity_gap.R). Functions and constants only:
+# sourcing this runs nothing.
 #
 # Per species, per site s and visit v:
 #

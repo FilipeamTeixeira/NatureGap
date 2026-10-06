@@ -84,8 +84,8 @@ suppressMessages(source("config.R"))
 pipeline_fns <- new.env()
 suppressMessages(sys.source(here::here("02_habitat", "process_tile.R"), envir = pipeline_fns))
 classify_taxon_group <- pipeline_fns$classify_taxon_group
-source(here::here("sensitivity", "occupancy_model.R"))
-source(here::here("sensitivity", "introduced_species.R"))
+source(here::here("05_opportunity", "occupancy_model.R"))
+source(here::here("introduced_species.R"))
 
 # land_use_class() lives in 06_export/export.R, which runs the whole export
 # when sourced. Only its definition is evaluated, so "same land use" means
@@ -280,7 +280,7 @@ rownames(beta) <- species_tab$taxon_name
 excluded <- species_tab[0, c("taxon_name", "group")]
 excluded$source <- character()
 if (NATIVE_ONLY) {
-  intro <- introduced_species(CITY_COUNTRY, BBOX_FETCH)
+  intro <- introduced_species(CITY_COUNTRY, BBOX_FETCH, fetch = TRUE)
   src <- intro$source[match(binomial(species_tab$taxon_name), intro$taxon_name)]
   is_intro <- !is.na(src)
   excluded <- data.frame(taxon_name = species_tab$taxon_name[is_intro],

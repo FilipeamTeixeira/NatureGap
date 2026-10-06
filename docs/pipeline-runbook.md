@@ -238,6 +238,33 @@ cd pipeline && Rscript -e 'suppressMessages({library(sf);library(jsonlite)}); t<
 Regenerating it is cheap when the tile caches (`tiled_combined.rds`,
 `tiled_obs_all.rds`) are present — step 3 loads them instead of re-tiling.
 
+`05_opportunity/opportunity_gap.R` (methodology §15) needs:
+
+- `grid_residuals.gpkg` (step 5 residuals) and the **raw** observation files
+  (`inat_observations.gpkg`, `gbif_observations.gpkg`): it rebuilds observations
+  with `load_obs_for_tiling()` and its own 125 m GPS gate
+  (`OPPORTUNITY_MAX_ACCURACY_M`), not from `tiled_obs_all.rds`, which is gated at
+  30 m for the 20 m cell.
+- the introduced-species caches written by `01_ingest/introduced_species.R`:
+  `data/raw/griis/*.csv` (shared) and `data/<city>/raw/inat_introduced.csv`. The
+  stage never fetches; run the ingest step once per city, or after deleting a
+  cache to refresh it:
+
+```bash
+cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 01_ingest/introduced_species.R
+```
+
+It never breaks a run: with an input missing or on any error it warns
+(`Opportunity gap skipped for <city>: …`), writes nothing, and removes the
+previous run's `opportunity_gap.csv` and `opportunity_model.json` so a stale gap
+cannot be exported against a rebuilt grid. A city that fails its own validation
+still gets both files, with `validation.pass = false` in the JSON. To run it
+alone (about 1.5 min for Porto, 3.5 min and 3 GB for Gent):
+
+```bash
+cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 05_opportunity/opportunity_gap.R
+```
+
 ## Full Pipeline Refresh
 
 Run this when you want to regenerate ecological outputs and import them into

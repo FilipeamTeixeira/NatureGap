@@ -737,6 +737,61 @@ RESIDUAL_WINDOW_LAMBDA <- c(lower = 0.25, upper = 4)
 SPECIES_AREA_Z <- 0.25
 SPECIES_AREA_C <- 12
 
+# ── Opportunity gap (05_opportunity/opportunity_gap.R) ──────────────────────
+# How many more native species a place's surroundings would support with the
+# tree and vegetation cover that similar places in the city already reach. Per
+# species occupancy models, fitted on blocks from visit-based detection, then
+# read per 20 m cell over a window (docs/methodology.md §15). Settings are the
+# ones validated in pipeline/sensitivity/prototype_opportunity_gap.R on Porto and
+# Gent; change them only with a rerun of that script.
+OPPORTUNITY_BLOCK_M        <- 250    # model sites: square blocks
+OPPORTUNITY_WINDOW_M       <- 125    # each cell reads the habitat within this radius
+# A record placed to within half a block is evidence about the block. The 30 m
+# OBS_MAX_ACCURACY_M is set for the 20 m cell and drops half of Porto's
+# iNaturalist records, so this stage gates at its own scale.
+OPPORTUNITY_MAX_ACCURACY_M <- 125
+OPPORTUNITY_PERIOD_START   <- as.Date("2019-01-01")
+OPPORTUNITY_MIN_SITES      <- 10L    # blocks a species must be recorded at to be modelled
+OPPORTUNITY_CV_FOLDS       <- 5L
+OPPORTUNITY_SEED           <- 20261005L
+# Every group counts. classify_taxon_group() labels; "mammal" there is every
+# vertebrate but birds (mammals, reptiles, amphibians, fish) and "other" is
+# what it leaves unclassified (molluscs, crustaceans, ...). Each group is
+# labelled per city by its own records test rather than left out: "checked",
+# "mismatch" (tested, did not match the records) or "insufficient" (too few
+# well-recorded blocks to test). Native species too rarely recorded to model
+# are listed per cell as recorded instead (OPPORTUNITY_RARE_LISTED).
+OPPORTUNITY_GROUPS         <- c("bird", "mammal", "plant", "insect", "fungi", "other")
+OPPORTUNITY_RARE_LISTED    <- 10L    # rare species named per cell, rarest first
+OPPORTUNITY_HABITAT_LEVER  <- c("tree", "grass_shrub", "canopy_height", "veg_fraction")
+OPPORTUNITY_HABITAT_Q      <- 0.75   # "attainable": this quantile of the same land use
+# Validation, rerun every time (pass/fail recorded in PROC_OPPORTUNITY_MODEL).
+OPPORTUNITY_WELL_RECORDED_P <- 0.5   # P(recorded at least once | present) for a well-recorded block
+OPPORTUNITY_N_PERM         <- 200L
+OPPORTUNITY_PASS_RHO       <- 0.2
+OPPORTUNITY_MIN_TEST_BLOCKS <- 20L
+OPPORTUNITY_WOODLAND <- c("Erithacus rubecula", "Parus major", "Cyanistes caeruleus",
+                          "Sylvia atricapilla", "Certhia brachydactyla",
+                          "Aegithalos caudatus", "Columba palumbus")
+OPPORTUNITY_BUILT_UP <- c("Passer domesticus", "Columba livia")
+
+# Introduced-species registers: the Global Register of Introduced and Invasive
+# Species checklist per country (GBIF checklist datasets), and the island
+# registers a national list folds in. Fetched by 01_ingest/introduced_species.R;
+# the rule that combines them is introduced_species.R.
+GRIIS_DATASET_BY_COUNTRY <- c(
+  "Portugal"        = "61b67ae8-c623-42a9-9172-3283f2f1473b",
+  "Belgium"         = "6d9e952f-948c-4483-9807-575348147c7e",
+  "The Netherlands" = "6e74aa5e-d156-4fd9-9299-049307da6fe8",
+  "Japan"           = "5c5a6e45-d510-45ed-b7bf-6d0624fac056"
+)
+GRIIS_ISLANDS_BY_COUNTRY <- list(
+  "Portugal" = c(
+    "Azores"  = "e69281bf-debf-4443-812f-3fb130673273",
+    "Madeira" = "7c822f4a-3eb7-4956-af71-052a2c0167bc"
+  )
+)
+
 # ── Input raster files ────────────────────────────────────────────────────────
 # Raster inputs are downloaded/prepared by the scripts listed below before
 # ingest reads them. Shared raster inputs live under pipeline/data/raw/.
@@ -967,6 +1022,16 @@ PROC_EXPECTED_MODEL <- file.path(DATA_PROC, "expected_richness_model.json")
 # 05_residuals and 05_patch, read by 06_export for the manifest. The score is
 # within-city relative, so these are part of the published number.
 PROC_SCORE_SCALING <- file.path(DATA_PROC, "score_scaling.json")
+# Opportunity gap per cell, and its auditable record (settings, species, the
+# introduced species left out and why, coefficients, validation). Written by
+# 05_opportunity, read by 06_export.
+PROC_OPPORTUNITY       <- file.path(DATA_PROC, "opportunity_gap.csv")
+PROC_OPPORTUNITY_MODEL <- file.path(DATA_PROC, "opportunity_model.json")
+# Introduced-species caches, written by 01_ingest/introduced_species.R. The
+# registers are per country and shared across cities; the iNaturalist flags
+# are per city.
+GRIIS_CACHE_DIR       <- file.path(DATA_IMPORT, "griis")
+RAW_INAT_INTRODUCED   <- file.path(DATA_RAW, "inat_introduced.csv")
 
 # ── Robust geometry helpers ────────────────────────────────────────────────────
 # st_intersection()/st_union() on real-world OSM geometry against the hex grid
