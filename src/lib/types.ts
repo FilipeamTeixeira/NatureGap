@@ -1,6 +1,8 @@
+import type { CellFocus } from './green-focus';
 import type { CellOpportunity } from './opportunity-gap';
 
 export type LayerId =
+  | 'focus'
   | 'opportunity'
   | 'impact'
   | 'expected'
@@ -107,8 +109,10 @@ export interface CellStatsFields {
   interventionRankNorm?: number;
   pressures: string[];
   interventions: Intervention[];
-  /** Nature gap (lib/opportunity-gap.ts): per cell with groups, per park as means. */
+  /** Room to grow (lib/opportunity-gap.ts): per cell with groups, per park as means. */
   opportunity?: CellOpportunity | null;
+  /** Nature gap class and its reasons (lib/green-focus.ts); green cells only. */
+  focus?: CellFocus | null;
   /**
    * A cell outside the render filter, in the tiles only for the Nature gap
    * layer — every other field is empty, so the panel shows that alone.

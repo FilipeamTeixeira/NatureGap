@@ -627,13 +627,17 @@ NET_MAX_ROUTE_COST_M     <- 40000  # ... or whose absolute effective cost does
 NET_REDUNDANCY_RATIO    <- 0.6   # keep an extra link at < this fraction of the tree detour
 NET_MAX_ROUTE_OVERLAP   <- 0.5   # ... unless it reuses more than this share of kept cells
 
-# Corridor quality, as mean resistance along the route. Interpretive breaks, not
-# sourced: they divide the 1-CONN_MAX_RESISTANCE cost scale into classes that
-# separate "runs through habitat" from "runs through the built fabric". There is
-# no "fragmented" class — NET_MAX_ROUTE_RESISTANCE rejects a route that bad, and
-# a corridor that is broken rather than merely poor is described by its
+# Corridor quality, as the mean vegetation share (permeability) of the route's
+# cells. Interpretive breaks, not sourced: a route at least 80% vegetated is
+# "strongest", 65% "strong", 50% "moderate", below that "weak". There is no
+# "fragmented" class — NET_MAX_ROUTE_RESISTANCE rejects a route that bad, and a
+# corridor that is broken rather than merely poor is described by its
 # bottleneck sections instead of by its average.
-NET_STRENGTH_BREAKS     <- c(3, 6, 10)  # strongest | strong | moderate | weak
+# Until 2026-10-07 these were mean-resistance breaks (3, 6, 10). Resistance
+# depends on CONN_RESISTANCE_SHAPE: under the nonlinear curve 44 of Gent's 46
+# corridors were "strongest" and Amsterdam's moderate and weak classes fell from
+# 30 sections to 1. A vegetation share means the same under any curve.
+NET_STRENGTH_BREAKS     <- c(0.8, 0.65, 0.5)  # strongest | strong | moderate | weak
 
 # Bottlenecks: a run of genuinely hostile cells inside an otherwise useful
 # corridor. Carved out of the line as its own section, so the corridor keeps one
@@ -651,6 +655,31 @@ NET_MIN_SECTION_M           <- 40  # absorb shorter sections into their neighbou
 # left a 240 m corridor as four vertices, i.e. a polyline of straight dashes.
 NET_SMOOTH_PASSES       <- 2     # corner-cutting passes on centreline geometry
 NET_SIMPLIFY_M          <- 2     # Douglas-Peucker tolerance after smoothing
+
+# ── Patch connectivity: dPC and its connector fraction ───────────────────────
+# Each habitat patch's share of the city's habitat availability (probability of
+# connectivity, PC: Saura & Pascual-Hortal 2007), split into intra, flux and
+# connector fractions (Saura & Rubio 2010). The connector fraction is how much
+# connectivity between *other* patches runs through this one — its role as a
+# stepping stone. 04_connectivity/patch_connectivity.R; docs/methodology.md §9b.
+#
+# Patches are connected cells at or above PATCH_MIN_VEGETATION, kept at
+# PATCH_MIN_AREA_HA or more (about 3 cells), which holds 91-96% of such cells in
+# the four cities. Thinner green — street trees, verges — is not a patch: it is
+# the cheap ground between patches that CONN_RESISTANCE_SHAPE opened up, and the
+# cell-level corridor_importance scores it.
+#
+# Distances are least-cost, edge to edge, over the corridors' resistance
+# surface (build_routing_graph()). Only the two end patches are free to cross;
+# any other patch costs its own resistance — otherwise removing it would never
+# lengthen a path and no patch could score as a connector. Link probability
+# exp(-theta d), with p = PATCH_P_AT_DISPERSAL at CONN_DISPERSAL_M, so patches
+# and corridors share one dispersal assumption; links beyond PATCH_MAX_LINK_M
+# (p < 0.0025) are dropped. Choices, not calibrations: sensitivity-tested.
+PATCH_MIN_VEGETATION  <- 0.5
+PATCH_MIN_AREA_HA     <- 0.1
+PATCH_P_AT_DISPERSAL  <- 0.05
+PATCH_MAX_LINK_M      <- 1000
 
 # Shared st_make_grid() phase anchor. spatial_base.R (whole-AOI grid) and
 # process_tile.R (per-tile halo grid) must both offset from this exact point,
@@ -798,6 +827,45 @@ OPPORTUNITY_WOODLAND <- c("Erithacus rubecula", "Parus major", "Cyanistes caerul
                           "Sylvia atricapilla", "Certhia brachydactyla",
                           "Aegithalos caudatus", "Columba palumbus")
 OPPORTUNITY_BUILT_UP <- c("Passer domesticus", "Columba livia")
+
+# ── Green focus: where councils should look among green places ───────────────
+# 05_opportunity/green_focus.R; docs/methodology.md §16. Every green cell — one
+# the map draws, in_render_grid() — gets two yes/no tests:
+#   connectivity role  its patch is a stepping stone in the top FOCUS_STEPPING_PCT
+#                      (dPC connector percentile, §9b), or the cell is in the
+#                      top FOCUS_CORRIDOR_PCT of corridor_importance, or it lies
+#                      on a corridor bottleneck, or — for thin green outside
+#                      habitat patches (street trees, quays, verges) — it is in
+#                      the top FOCUS_THIN_CORRIDOR_PCT of corridor_importance
+#                      among thin green cells that carry routes. Ranked against
+#                      the whole city, the big green areas take the top quartile
+#                      and no canal-belt cell in Amsterdam had a role.
+#   species recorded   at least one native species recorded within
+#                      FOCUS_SPECIES_RADIUS_M (cell centroids), through the
+#                      pipeline's own record gates (OBS_MAX_ACCURACY_M). 50 m:
+#                      a record can sit 30 m from where it was made, so the
+#                      cell alone would claim a precision the records lack.
+# and an exposure hint, not a test: heat and disturbance (noise and traffic
+# together — they move together, rho 0.76 in Amsterdam) ranked among the city's
+# green cells, low below the first FOCUS_EXPOSURE_BREAKS, high above the second.
+# Light is left out: it is an OSM tagging artefact, zero in 85% of Amsterdam's
+# cells. Parks (OSM park, nature_reserve) are context, never a test.
+# "Worth protecting" (species, no connectivity role) also needs exposure at or
+# below FOCUS_PROTECT_MAX_EXPOSURE: a species within 50 m alone covered 46% of
+# Amsterdam's green cells, the whole canal belt included. That rests on the
+# literature on noise, roads and heat, not on the city's own species models,
+# which show no clear sign (§16).
+# Choices, not calibrations: green_focus.R reports class agreement when each moves.
+# Green is in_render_grid() — the cells the Tree cover and Vegetation layers
+# draw. Until 2026-10-07 any vegetated 0.5 m pixel or any canopy height above
+# zero counted: 65% of Amsterdam's cells, rooftops and streets among them
+# (canopy-only cells had a median canopy of 0.08 m — model noise).
+FOCUS_STEPPING_PCT     <- 0.5
+FOCUS_CORRIDOR_PCT     <- 0.75
+FOCUS_THIN_CORRIDOR_PCT <- 0.5
+FOCUS_PROTECT_MAX_EXPOSURE <- 0.5
+FOCUS_SPECIES_RADIUS_M <- 50
+FOCUS_EXPOSURE_BREAKS  <- c(1/3, 2/3)
 
 # Introduced-species registers: the Global Register of Introduced and Invasive
 # Species checklist per country (GBIF checklist datasets), and the island
@@ -953,6 +1021,19 @@ CIR_VEG_NDVI_THRESHOLD <- 0.2
 # the hexgrid_render filter in 06_export/export.R before changing it.
 CIR_VEG_RENDER_THRESHOLD <- 0.15
 
+# The cells the map draws (hexgrid_render in 06_export/export.R): a named green
+# space, WorldCover tree / shrub / grass / green at 10% or more, or CIR
+# vegetation at CIR_VEG_RENDER_THRESHOLD or more — what the Tree cover and
+# Vegetation layers show. The export filters with it, and
+# 05_opportunity/green_focus.R takes it as "green", so the two cannot drift.
+# Callers apply habitat_quality > 0 first, as the export does.
+in_render_grid <- function(park_id, tree, shrub, grass, green_wc, veg) {
+  wc <- suppressWarnings(pmax(tree, shrub, grass, green_wc, na.rm = TRUE))
+  (!is.na(park_id) & park_id != "city-green") |
+    dplyr::coalesce(wc, 0) >= 0.10 |
+    dplyr::coalesce(veg, 0) >= CIR_VEG_RENDER_THRESHOLD
+}
+
 S2_SAFE_DIR <- file.path(DATA_IMPORT, "sentinel2")
 S2_RED_BAND_PATTERN <- "B04_10m\\.jp2$"
 S2_NIR_BAND_PATTERN <- "B08_10m\\.jp2$"
@@ -1035,6 +1116,9 @@ PROC_GRID_CONN    <- file.path(DATA_PROC, "grid_connectivity.gpkg")
 PROC_CONNECTIVITY_GRAPH <- file.path(DATA_PROC, "connectivity_graph.rds")
 PROC_NETWORK_NODES <- file.path(DATA_PROC, "connectivity_network_nodes.gpkg")
 PROC_NETWORK_EDGES <- file.path(DATA_PROC, "connectivity_network_edges.gpkg")
+PROC_PATCH_CONN    <- file.path(DATA_PROC, "patch_connectivity.parquet")
+PROC_PATCH_CELLS   <- file.path(DATA_PROC, "patch_connectivity_cells.parquet")
+PROC_PATCH_META    <- file.path(DATA_PROC, "patch_connectivity.json")
 PROC_GREEN_SPACES_AGG <- file.path(DATA_PROC, "green_spaces_agg.gpkg")
 PROC_GRID_RESID   <- file.path(DATA_PROC, "grid_residuals.gpkg")
 PROC_CELL_ATTR    <- file.path(DATA_PROC, "cell_attributes.gpkg")
@@ -1053,6 +1137,8 @@ PROC_SCORE_SCALING <- file.path(DATA_PROC, "score_scaling.json")
 # 05_opportunity, read by 06_export.
 PROC_OPPORTUNITY       <- file.path(DATA_PROC, "opportunity_gap.csv")
 PROC_OPPORTUNITY_MODEL <- file.path(DATA_PROC, "opportunity_model.json")
+PROC_GREEN_FOCUS       <- file.path(DATA_PROC, "green_focus.csv")
+PROC_GREEN_FOCUS_MODEL <- file.path(DATA_PROC, "green_focus.json")
 # Introduced-species caches, written by 01_ingest/introduced_species.R. The
 # registers are per country and shared across cities; the iNaturalist flags
 # are per city.

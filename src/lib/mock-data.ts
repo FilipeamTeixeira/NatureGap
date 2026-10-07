@@ -8,10 +8,13 @@ import type { MapLayer } from './types';
 // every city's residual window is observation-dominated, so both draw grey
 // everywhere (lib/residual-window.ts). Their styles stay in layer-styles.ts;
 // adding the two rows back here and to THEMATIC_LAYER_GROUPS restores them.
+// 'intervention' (Where to look next) is out the same way: it ranks the residual,
+// and the Nature gap ('focus', lib/green-focus.ts) now answers where to look.
+// 'opportunity' was the Nature gap until 2026-10-07 and is now Room to grow.
 export const MAP_LAYERS: MapLayer[] = [
-  { id: 'opportunity',  label: 'Nature gap',              enabled: true,  color: '#22A884' },
+  { id: 'focus',        label: 'Nature gap',              enabled: true,  color: '#7B3294' },
+  { id: 'opportunity',  label: 'Room to grow',            enabled: false, color: '#22A884' },
   { id: 'expected',     label: 'Expected richness',       enabled: false, color: '#0d47a1' },
-  { id: 'intervention', label: 'Where to look next',      enabled: false, color: '#7b1fa2' },
   { id: 'habitat',      label: 'Habitat quality',         enabled: false, color: '#2E6F40' },
   { id: 'treecover',    label: 'Tree cover',              enabled: false, color: '#388e3c' },
   { id: 'vegetation',   label: 'Vegetation (0.5 m)',      enabled: false, color: '#78c679' },

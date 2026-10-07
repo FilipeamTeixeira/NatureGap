@@ -704,6 +704,67 @@ opportunity_manifest <- function(record, opportunity_only_cells) {
   )
 }
 
+# Green focus (05_opportunity/green_focus.R, docs/methodology.md §16): the
+# Nature gap classes on green cells. Absent when the stage was skipped; the
+# export then runs as before and the manifest says so.
+green_focus_record <- function(path = PROC_GREEN_FOCUS_MODEL) {
+  if (!exists("PROC_GREEN_FOCUS_MODEL") || !file.exists(path)) return(NULL)
+  tryCatch(jsonlite::read_json(path, simplifyVector = FALSE), error = function(e) {
+    warning(sprintf("Unreadable green focus record: %s", conditionMessage(e)), call. = FALSE)
+    NULL
+  })
+}
+
+green_focus_cells <- function(path = PROC_GREEN_FOCUS) {
+  if (!exists("PROC_GREEN_FOCUS") || !file.exists(path)) return(NULL)
+  as.data.frame(data.table::fread(path, colClasses = list(character = "cell_id")))
+}
+
+# The panel's per-cell detail, one JSON string per green cell (the cell-details
+# convention): the class, which tests it passed and the facts behind them.
+green_focus_detail_json <- function(f) {
+  num <- function(x, d = 3) ifelse(is.finite(x), formatC(x, format = "f", digits = d), "null")
+  lgl <- function(x) ifelse(x %in% TRUE, "true", "false")
+  sprintf(paste0(
+    '{"class":"%s","roles":{"stepping":%s,"corridor":%s,"bottleneck":%s,"thinCorridor":%s},',
+    '"steppingPct":%s,"corridorImportance":%s,"thinCorridorPct":%s,',
+    '"speciesNearby":%d,"speciesInCell":%d,"heatPct":%s,"disturbancePct":%s,',
+    '"exposure":%s,"hint":"%s","inPark":%s}'),
+    f$focus_class, lgl(f$role_stepping), lgl(f$role_corridor), lgl(f$role_bottleneck),
+    lgl(f$role_thin_corridor), num(f$stepping_pct), num(f$corridor_importance), num(f$thin_corridor_pct),
+    as.integer(f$species_nearby), as.integer(f$species_in_cell), num(f$heat_pct), num(f$disturbance_pct),
+    num(f$exposure), ifelse(is.na(f$exposure_hint), "", f$exposure_hint), lgl(f$in_park))
+}
+
+green_focus_manifest <- function(record) {
+  if (is.null(record)) {
+    return(list(computed = FALSE,
+                reason = "No 05_opportunity/green_focus.R outputs for this run (stage skipped or not run)."))
+  }
+  list(
+    computed = TRUE,
+    definition = paste(
+      "Green places (the cells the Tree cover and Vegetation layers draw) classed by two",
+      "tests: a connectivity role (a stepping-stone habitat patch, a top corridor cell, a corridor",
+      "bottleneck, or thin green such as street trees that carries more corridor routes than most",
+      "thin green) and at least one native species recorded nearby. focus = both; link = role, no",
+      "species recorded yet; protect = species, no role, and calmer and cooler than most green",
+      "places; green = the rest. Nothing here predicts species."
+    ),
+    method = record$method,
+    tileFields = list(class = "focusClass", hint = "focusHint", speciesNearby = "speciesNearby"),
+    cellDetailField = "focus",
+    classes = record$classes,
+    classesOutsideParks = record$classesOutsideParks,
+    roles = record$roles,
+    cells = record$cells,
+    settings = record$settings,
+    exposureByClass = record$exposureByClass,
+    tests = record$tests,
+    generatedAt = record$generatedAt
+  )
+}
+
 export_upload_files <- function(export_dir = DATA_EXPORT) {
   # Both spellings are listed for the gzipped products and filtered by
   # existence below, so this keeps working if a product is ever written
@@ -845,6 +906,7 @@ stage_versioned_exports <- function(validation, cell_count, park_count, tilesets
         scaling = score_scaling_record()
       ),
       opportunityGap = OPPORTUNITY_MANIFEST,
+      greenFocus = GREEN_FOCUS_MANIFEST,
       ecologicalResidualNormalized = list(
         sourceField = "ecological_residual_normalized",
         definition = "City-wise z-score of raw ecological_residual using finite sampled cells.",
@@ -1933,13 +1995,10 @@ park_intervention_lookup <- setNames(park_interventions$interventions, park_inte
 # 30% of a 346 m2 hex is ~104 m2, so the old bar rejected any 3 m verge
 # crossing a cell (~60 m2 -> 0.17) — exactly the green this arm exists to catch.
 # coalesce(veg_fraction, 0) leaves cities without CIR unchanged.
+# The rule itself is in_render_grid() in config.R, shared with the Nature gap.
 hexgrid_render <- grid |>
-  filter(
-    (!is.na(park_id) & park_id != "city-green") |
-      coalesce(pmax(tree_fraction, shrub_fraction, grass_fraction,
-                    green_fraction_wc, na.rm = TRUE), 0) >= 0.10 |
-      coalesce(veg_fraction, 0) >= CIR_VEG_RENDER_THRESHOLD
-  )
+  filter(in_render_grid(park_id, tree_fraction, shrub_fraction, grass_fraction,
+                        green_fraction_wc, veg_fraction))
 
 if (!is.null(green)) {
   metric_park_ids <- unique(hexgrid_render$park_id)
@@ -2082,6 +2141,27 @@ if (!is.null(opportunity)) {
               opportunity_only_count, nrow(hexgrid_tiles)))
 }
 OPPORTUNITY_MANIFEST <- opportunity_manifest(OPPORTUNITY_RECORD, opportunity_only_count)
+
+# Green focus: the Nature gap classes, on green cells only — the render cells
+# themselves (in_render_grid(), shared with green_focus.R).
+GREEN_FOCUS_RECORD <- green_focus_record()
+green_focus <- green_focus_cells()
+if (!is.null(green_focus) && is.null(GREEN_FOCUS_RECORD)) {
+  warning("green_focus.csv without green_focus.json — green focus not exported.", call. = FALSE)
+  green_focus <- NULL
+}
+if (!is.null(green_focus)) {
+  green_focus$cell_id <- paste0(CITY_ID, "-", green_focus$cell_id)
+  hexgrid_tiles <- hexgrid_tiles |>
+    left_join(data.frame(cellId = green_focus$cell_id,
+                         focusClass = green_focus$focus_class,
+                         focusHint = green_focus$exposure_hint,
+                         speciesNearby = as.integer(green_focus$species_nearby)),
+              by = "cellId")
+  cat(sprintf("Green focus: %d green cells, %d of them in the tiles\n",
+              nrow(green_focus), sum(!is.na(hexgrid_tiles$focusClass))))
+}
+GREEN_FOCUS_MANIFEST <- green_focus_manifest(GREEN_FOCUS_RECORD)
 
 hexgrid_tilesets <- write_hexgrid_tilesets(hexgrid_tiles, DATA_EXPORT)
 # The first archive with the full render contract describes the tileset.
@@ -2246,6 +2326,11 @@ cell_details <- if (!is.null(opportunity)) {
                          opportunity = opportunity_detail_json(opportunity, opportunity_labels)),
               by = "cell_id")
 } else cell_attr
+if (!is.null(green_focus)) {
+  cell_details <- cell_details |>
+    left_join(data.frame(cell_id = green_focus$cell_id, focus = green_focus_detail_json(green_focus)),
+              by = "cell_id")
+}
 write_cell_details_sharded(cell_details, file.path(DATA_EXPORT, "cell-details"))
 rm(cell_details)
 

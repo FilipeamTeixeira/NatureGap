@@ -255,5 +255,8 @@ export function renderCellProperties(properties: maplibregl.GeoJSONFeature['prop
     opportunityGap: properties.opportunityGap == null ? null : Number(properties.opportunityGap),
     opportunityGapChecked: properties.opportunityGapChecked == null ? null : Number(properties.opportunityGapChecked),
     opportunityOnly: properties.opportunityOnly === true,
+    focusClass: typeof properties.focusClass === 'string' ? properties.focusClass : null,
+    focusHint: typeof properties.focusHint === 'string' ? properties.focusHint : null,
+    speciesNearby: properties.speciesNearby == null ? null : Number(properties.speciesNearby),
   };
 }

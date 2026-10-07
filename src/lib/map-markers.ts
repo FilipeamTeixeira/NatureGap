@@ -7,11 +7,12 @@
 
 import { safeColor, scoreColor } from '@/lib/map-utils';
 import { OPPORTUNITY_COLORS } from '@/lib/layer-styles';
+import { FOCUS_CLASS_TEXT, FOCUS_TEXT_COLORS, type FocusClass } from '@/lib/green-focus';
 import { formatSpeciesChange, opportunityBand } from '@/lib/opportunity-gap';
 
-/** The hovered cell's Nature gap, as the layer currently draws it. */
+/** The hovered cell's Room to grow, as the layer currently draws it. */
 function opportunityLines(gap: number | null, checkedOnly: boolean): { label: string; value: string; color: string } {
-  const label = checkedOnly ? 'Nature gap · checked groups' : 'Nature gap';
+  const label = checkedOnly ? 'Room to grow · checked groups' : 'Room to grow';
   switch (opportunityBand(gap)) {
     case 'gain':
       return { label, value: `${formatSpeciesChange(gap as number)} native species`, color: OPPORTUNITY_COLORS.gain[4] };
@@ -30,11 +31,14 @@ export function createPopupContent({
   score,
   showScore,
   opportunity,
+  focus,
 }: {
   parkName?: string;
   score?: number;
   showScore: boolean;
   opportunity?: { gap: number | null; checkedOnly: boolean };
+  /** The hovered green cell's Nature gap class (lib/green-focus.ts). */
+  focus?: { focusClass: FocusClass; speciesNearby: number | null };
 }) {
   const root = document.createElement('div');
   root.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
@@ -71,8 +75,20 @@ export function createPopupContent({
     root.append(value);
   }
 
-  if (opportunity) {
-    const lines = opportunityLines(opportunity.gap, opportunity.checkedOnly);
+  const figures: { label: string; value: string; color: string }[] = [];
+  if (focus) {
+    const n = focus.speciesNearby;
+    figures.push({
+      label: 'Nature gap',
+      value: n != null && n > 0
+        ? `${FOCUS_CLASS_TEXT[focus.focusClass].label} · ${n} native species nearby`
+        : FOCUS_CLASS_TEXT[focus.focusClass].label,
+      color: FOCUS_TEXT_COLORS[focus.focusClass],
+    });
+  }
+  if (opportunity) figures.push(opportunityLines(opportunity.gap, opportunity.checkedOnly));
+
+  for (const lines of figures) {
     const labelEl = document.createElement('div');
     labelEl.textContent = lines.label;
     labelEl.style.fontSize = '10px';
@@ -92,7 +108,7 @@ export function createPopupContent({
     root.append(value);
   }
 
-  const hasFigure = showScore || Boolean(opportunity);
+  const hasFigure = showScore || figures.length > 0;
   const divider = document.createElement('div');
   divider.style.height = '1px';
   divider.style.background = '#E4E7E1';

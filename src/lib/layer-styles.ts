@@ -11,6 +11,7 @@ import {
   type OpportunityGapInfo,
   type OpportunityMode,
 } from './opportunity-gap';
+import { FOCUS_CLASS_ORDER, FOCUS_CLASS_TEXT, FOCUS_COLORS } from './green-focus';
 import type { LayerId } from './types';
 
 /**
@@ -45,6 +46,7 @@ export interface LayerStyleSpec {
 
 /** Bottom → top draw order when multiple cell layers are enabled. */
 export const LAYER_DRAW_ORDER = [
+  'focus',
   'opportunity',
   'impact',
   'expected',
@@ -237,6 +239,7 @@ export const INTERVENTION_RANK_LABELS_LAYER_ID = 'intervention-rank-labels';
 export type PatchFillLayerId = HexLayerId;
 
 export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
+  focus: 'green-focus-patch-fill',
   opportunity: 'opportunity-gap-patch-fill',
   impact: 'nature-gap-patch-fill',
   expected: 'expected-richness-patch-fill',
@@ -253,6 +256,7 @@ export const PATCH_FILL_LAYER_IDS: Record<PatchFillLayerId, string> = {
 };
 
 export const HEX_FILL_LAYER_IDS: Record<HexLayerId, string> = {
+  focus: 'green-focus-hex-fill',
   opportunity: 'opportunity-gap-hex-fill',
   impact: 'nature-gap-hex-fill',
   expected: 'expected-richness-hex-fill',
@@ -413,7 +417,7 @@ export function getEnabledLayerIds(layers: { id: LayerId; enabled: boolean }[]):
 
 /** First enabled layer — used for default legend focus. */
 export function getActiveLayerId(layers: { id: LayerId; enabled: boolean }[]): HexLayerId {
-  return getEnabledLayerIds(layers)[0] ?? 'opportunity';
+  return getEnabledLayerIds(layers)[0] ?? 'focus';
 }
 
 // Both diverging metrics (nature_gap_score, ecological_residual) are built from
@@ -428,7 +432,7 @@ const DIVERGING_STOPS: [number, string][] = [
 ];
 
 /** Saturated ramps — even low values stay visible on the light basemap. */
-const LAYER_RAMPS: Record<Exclude<HexLayerId, 'opportunity' | 'impact' | 'residual' | 'landuse'>, [number, string][]> = {
+const LAYER_RAMPS: Record<Exclude<HexLayerId, 'focus' | 'opportunity' | 'impact' | 'residual' | 'landuse'>, [number, string][]> = {
   expected:     [[0, '#deebf7'], [0.25, '#9ecae1'], [0.5, '#4292c6'], [0.75, '#08519c'], [1, '#08306b']],
   intervention: [[0, '#d8a7df'], [0.3, '#ab47bc'], [0.6, '#8e24aa'], [0.8, '#6a1b9a'], [1, '#4a148c']],
   habitat:      [[0, '#8ecf9a'], [0.25, '#52a868'], [0.5, '#3d8b57'], [0.75, '#2E6F40'], [1, '#1a4a28']],
@@ -794,8 +798,25 @@ export function opportunityLegend(info: OpportunityGapInfo | null | undefined): 
  */
 export const EXISTING_CELLS_FILTER: FilterSpecification = ['!=', ['get', 'opportunityOnly'], true];
 
+/**
+ * The Nature gap draws green cells only — those with a focusClass, which are
+ * the render cells (in_render_grid() in the pipeline); every other cell stays
+ * transparent rather than reading as a class.
+ */
+export const GREEN_FOCUS_FILTER: FilterSpecification = ['has', 'focusClass'];
+
 export function hexLayerFilter(layerId: HexLayerId): FilterSpecification | null {
+  if (layerId === 'focus') return GREEN_FOCUS_FILTER;
   return layerId === 'opportunity' ? null : EXISTING_CELLS_FILTER;
+}
+
+/** Nature gap: one colour per green-focus class (lib/green-focus.ts). */
+function buildFocusExpression(): ExpressionSpecification {
+  return [
+    'match', ['get', 'focusClass'],
+    ...FOCUS_CLASS_ORDER.flatMap((c) => [c, FOCUS_COLORS[c]]),
+    'rgba(0,0,0,0)',
+  ] as unknown as ExpressionSpecification;
 }
 
 /** Render observed-richness-dependent layers as flat grey when the feature is unsampled. */
@@ -833,6 +854,10 @@ export function patchFillColorExpression(
   const stat = statForMetric(cityStats, spec.rawMetric);
 
   switch (layerId) {
+    case 'focus':
+      // Classes are per cell; parks carry none, and patch fills are off
+      // (HAS_PATCH_OVERVIEW), so a park draws transparent.
+      return ['literal', 'rgba(0,0,0,0)'] as ExpressionSpecification;
     case 'opportunity':
       // Parks carry their mean gap; no city ramp is known here, and patch
       // fills are off (HAS_PATCH_OVERVIEW), so a fixed top is enough.
@@ -926,6 +951,8 @@ export function hexFillColorExpression(
   gapUnsupported = false,
   opportunity: { info?: OpportunityGapInfo | null; mode?: OpportunityMode } = {},
 ): ExpressionSpecification {
+  if (layerId === 'focus') return buildFocusExpression();
+
   if (layerId === 'opportunity') {
     // A city whose export has no opportunity gap draws flat grey, as a
     // withheld gap layer does; the legend says it was not computed.
@@ -1015,7 +1042,7 @@ export function hexFillColorExpression(
 }
 
 /** The default layer sits lighter so the basemap stays readable. */
-const HEX_FILL_OPACITY: Partial<Record<HexLayerId, number>> = { opportunity: 0.66, impact: 0.5 };
+const HEX_FILL_OPACITY: Partial<Record<HexLayerId, number>> = { focus: 0.8, opportunity: 0.66, impact: 0.5 };
 const HEX_FILL_OPACITY_DEFAULT = 0.78;
 
 /**
@@ -1065,8 +1092,14 @@ export function patchFillOpacityExpression(layerId: PatchFillLayerId): number | 
 }
 
 export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
-  opportunity: {
+  focus: {
     title: 'Nature gap',
+    property: 'focusClass',
+    note: 'Green places only. A connectivity role (stepping stone, corridor, or street trees that carry wildlife routes) and native species recorded nearby — together, where to focus.',
+    legend: FOCUS_CLASS_ORDER.map((c) => ({ color: FOCUS_COLORS[c], label: FOCUS_CLASS_TEXT[c].label })),
+  },
+  opportunity: {
+    title: 'Room to grow',
     property: 'opportunityGap',
     // Deliberately no rawMetric: the legend is numbered from the manifest's
     // gap p90 (opportunityLegend), not from city_layer_stats.
@@ -1249,9 +1282,10 @@ export const LAYER_STYLE_SPECS: Record<HexLayerId, LayerStyleSpec> = {
 export const THEMATIC_LAYER_GROUPS = [
   {
     title: 'Overview',
-    // 'impact' and 'residual' are out while every city withholds them — see
-    // MAP_LAYERS in mock-data.ts.
-    ids: ['opportunity', 'intervention'] as const satisfies readonly HexLayerId[],
+    // 'impact' and 'residual' are out while every city withholds them, and
+    // 'intervention' (Where to look next, built on the residual) since the Nature
+    // gap replaced it — see MAP_LAYERS in mock-data.ts.
+    ids: ['focus', 'opportunity'] as const satisfies readonly HexLayerId[],
   },
   {
     title: 'Biodiversity',

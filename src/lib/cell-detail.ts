@@ -1,5 +1,6 @@
 import { MAX_EXPECTED_RICHNESS, CITY, CITIES, SCORE_THRESHOLDS, STORAGE } from './config';
 import { getParkStats, getParks } from './green-spaces';
+import { focusFromRender, parseCellFocus } from './green-focus';
 import { opportunityFromRender, parseCellOpportunity } from './opportunity-gap';
 import {
   basename,
@@ -91,6 +92,10 @@ export type RenderCellProperties = {
   opportunityGap?: number | null;
   opportunityGapChecked?: number | null;
   opportunityOnly?: boolean;
+  /** Nature gap tile fields (lib/green-focus.ts); green cells only. */
+  focusClass?: string | null;
+  focusHint?: string | null;
+  speciesNearby?: number | null;
 };
 
 type CellAttributeRow = {
@@ -138,6 +143,8 @@ type CellAttributeRow = {
   interventions: unknown;
   /** JSON string, like species; absent before 05_opportunity existed. */
   opportunity?: unknown;
+  /** JSON string; green cells only, absent before green_focus.R existed. */
+  focus?: unknown;
 };
 
 type CellDetailManifest = {
@@ -372,6 +379,7 @@ function detailFromRow(
     interventionRankNorm: row?.intervention_rank_norm ?? render.interventionRankNorm ?? undefined,
     opportunity: parseCellOpportunity(row?.opportunity) ?? opportunityFromRender(render),
     opportunityOnly: render.opportunityOnly === true,
+    focus: parseCellFocus(row?.focus) ?? focusFromRender(render),
   };
 }
 

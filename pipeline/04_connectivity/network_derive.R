@@ -131,14 +131,17 @@ simplify_line <- function(xy, tol, crs_local) {
 
 # ── scoring ──────────────────────────────────────────────────────────────────
 
-# Mean resistance along the route, not mean corridor_importance: the route now
-# crosses cells that carry no betweenness at all, where importance is 0 by
-# definition, and averaging those collapses every score to the floor.
-corridor_class <- function(mean_resistance, breaks = NET_STRENGTH_BREAKS) {
+# Mean vegetation share (permeability) of the route's cells, not mean
+# corridor_importance — the route crosses cells that carry no betweenness at
+# all, where importance is 0 by definition — and not mean resistance, which
+# depends on the uncalibrated CONN_RESISTANCE_SHAPE and CONN_MAX_RESISTANCE.
+# Classed on resistance, the move to a nonlinear curve put 44 of Gent's 46
+# corridors in "strongest"; a vegetation share reads the same under any curve.
+corridor_class <- function(mean_vegetation, breaks = NET_STRENGTH_BREAKS) {
   as.character(cut(
-    mean_resistance,
-    breaks = c(-Inf, breaks, Inf),
-    labels = c("strongest", "strong", "moderate", "weak"),
+    mean_vegetation,
+    breaks = c(-Inf, sort(breaks), Inf),
+    labels = c("weak", "moderate", "strong", "strongest"),
     right = FALSE
   ))
 }
@@ -307,7 +310,7 @@ identify_habitat_cores <- function(graph, imp, perm, xy, cell_area_m2,
 # Least-cost route per candidate pair, one Dijkstra per source vertex rather
 # than one per pair. Routes run over the full graph, so a corridor may cross
 # weak ground; the ceilings are what keep it from crossing the whole city.
-route_candidates <- function(graph, weights, vnames, pairs, node_cells, xy,
+route_candidates <- function(graph, weights, vnames, pairs, node_cells, xy, perm,
                              max_resistance, max_cost_m) {
   vid <- stats::setNames(seq_along(vnames), vnames)
   from_v <- vid[node_cells[pairs[, 1L]]]
@@ -343,7 +346,8 @@ route_candidates <- function(graph, weights, vnames, pairs, node_cells, xy,
         cells = cells,
         cost = cost,
         length_m = len,
-        mean_resistance = mean_res
+        mean_resistance = mean_res,
+        mean_vegetation = mean(perm[cells], na.rm = TRUE)
       )
     }
   }
@@ -433,7 +437,7 @@ derive_connectivity_network <- function(routing, nodes_df, cell_area_m2,
   } else {
     route_candidates(
       graph, igraph::E(graph)$weight, igraph::V(graph)$name,
-      pairs, node_cells, xy, max_resistance, max_cost_m
+      pairs, node_cells, xy, perm, max_resistance, max_cost_m
     )
   }
   keep <- prune_routes(routes, node_cells, redundancy_ratio, max_overlap)
@@ -462,7 +466,7 @@ derive_connectivity_network <- function(routing, nodes_df, cell_area_m2,
     bad <- bottleneck_flags(
       perm[r$cells], steps, bottleneck_perm, bottleneck_min_m, min_section_m
     )
-    strength <- corridor_class(r$mean_resistance)
+    strength <- corridor_class(r$mean_vegetation)
     rank <- corridor_rank(tier_by_cell[[node_cells[r$a]]], tier_by_cell[[node_cells[r$b]]])
     sections <- section_ranges(bad)
     n_bottleneck <- sum(vapply(sections, function(s) isTRUE(s$bottleneck), logical(1L)))
@@ -484,6 +488,7 @@ derive_connectivity_network <- function(routing, nodes_df, cell_area_m2,
         to_node = node_cells[r$b],
         length_m = r$length_m,
         mean_resistance = r$mean_resistance,
+        mean_vegetation = r$mean_vegetation,
         bottlenecks = n_bottleneck
       )
     }
@@ -500,6 +505,7 @@ derive_connectivity_network <- function(routing, nodes_df, cell_area_m2,
       toNode = vapply(seg, function(s) s$to_node, character(1L)),
       lengthM = round(vapply(seg, function(s) s$length_m, numeric(1L))),
       meanResistance = round(vapply(seg, function(s) s$mean_resistance, numeric(1L)), 3),
+      meanVegetation = round(vapply(seg, function(s) s$mean_vegetation, numeric(1L)), 3),
       bottlenecks = vapply(seg, function(s) s$bottlenecks, integer(1L)),
       importance = round(corridor_quality(
         vapply(seg, function(s) s$mean_resistance, numeric(1L))
@@ -511,7 +517,7 @@ derive_connectivity_network <- function(routing, nodes_df, cell_area_m2,
       corridorId = character(), sectionIndex = integer(), kind = character(),
       strength = character(), rank = character(), fromNode = character(),
       toNode = character(), lengthM = numeric(), meanResistance = numeric(),
-      bottlenecks = integer(), importance = numeric(),
+      meanVegetation = numeric(), bottlenecks = integer(), importance = numeric(),
       geometry = sf::st_sfc(crs = crs_local)
     )
   }

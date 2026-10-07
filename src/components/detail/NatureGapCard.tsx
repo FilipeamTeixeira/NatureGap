@@ -19,7 +19,7 @@ const LABEL_CLASS: Record<OpportunityGroupLabel, string> = {
   insufficient: 'bg-[#F0F0EE] text-[#667066]',
 };
 
-/** The panel header's badge for a place's Nature gap. */
+/** The panel header's badge for a place's Room to grow (opportunity gap). */
 export function opportunityHeadline(gap: number | null | undefined): { text: string; className: string } {
   switch (opportunityBand(gap)) {
     case 'gain':
@@ -29,7 +29,7 @@ export function opportunityHeadline(gap: number | null | undefined): { text: str
     case 'same':
       return { text: 'No clear gain', className: 'bg-[#F0F0EE] text-[#667066]' };
     default:
-      return { text: 'Nature gap not computed', className: 'bg-[#F0F0EE] text-[#667066]' };
+      return { text: 'Room to grow not computed', className: 'bg-[#F0F0EE] text-[#667066]' };
   }
 }
 
@@ -113,7 +113,7 @@ export default function NatureGapCard({
       className="bg-white rounded-2xl border border-[#E4E7E1] p-6"
       style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
     >
-      <h3 className="text-[15px] font-semibold text-[#1F2A1F] mb-1">Nature gap</h3>
+      <h3 className="text-[15px] font-semibold text-[#1F2A1F] mb-1">Room to grow</h3>
       <p className="text-[11px] text-[#667066] uppercase tracking-widest mb-4">
         Compared with greener places like it
       </p>

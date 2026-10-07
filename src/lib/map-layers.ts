@@ -47,7 +47,7 @@ export function setMapLayerVisibility(map: maplibregl.Map, layerId: string, visi
 }
 
 export function activeThematicLayerId(layers: MapLayer[]): HexLayerId {
-  return THEMATIC_LAYER_IDS.find((id) => layerEnabled(layers, id)) ?? 'opportunity';
+  return THEMATIC_LAYER_IDS.find((id) => layerEnabled(layers, id)) ?? 'focus';
 }
 
 export function applyLayerPaintExpressions(map: maplibregl.Map) {

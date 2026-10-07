@@ -16,6 +16,7 @@ import {
 import ScoreGauge from './ScoreGauge';
 import InterventionCard from './InterventionCard';
 import NatureGapCard, { opportunityHeadline } from './NatureGapCard';
+import GreenFocusCard, { focusHeadline } from './GreenFocusCard';
 
 type Tab = 'overview' | 'biodiversity' | 'habitat' | 'actions' | 'community';
 
@@ -300,9 +301,12 @@ export default function CellDetailPanel({
     ? residualWindowReason(cityName, residualWindow)
     : null;
   const gapWithheldTitle = `Not shown for ${cityName}`;
-  // The Nature gap leads wherever the export has one. opportunityOnly cells
-  // carry nothing else, so they show that alone.
-  const headline = cell.opportunity ? opportunityHeadline(cell.opportunity.gap) : null;
+  // The Nature gap (green focus) leads on green cells; Room to grow on the
+  // rest wherever the export has one. opportunityOnly cells carry nothing
+  // else, so they show those alone.
+  const headline = cell.focus
+    ? focusHeadline(cell.focus)
+    : cell.opportunity ? opportunityHeadline(cell.opportunity.gap) : null;
   const opportunityOnly = cell.opportunityOnly === true;
   const isPark = scale === 'patch';
   const tabs = opportunityOnly ? TABS.filter((t) => t.id !== 'biodiversity' && t.id !== 'habitat') : TABS;
@@ -443,16 +447,21 @@ export default function CellDetailPanel({
                   </>
                 )}
               </Card>
-            ) : cell.opportunity ? (
-              <NatureGapCard
-                cell={cell}
-                info={opportunityInfo}
-                cityName={cityName}
-                isPark={isPark}
-                detailLoading={detailLoading}
-                onSeeActions={() => setTab('actions')}
-                onViewInsidePark={opportunityOnly ? undefined : onViewInsidePark}
-              />
+            ) : cell.focus || cell.opportunity ? (
+              <>
+                {cell.focus && <GreenFocusCard focus={cell.focus} detailLoading={detailLoading} />}
+                {cell.opportunity && (
+                  <NatureGapCard
+                    cell={cell}
+                    info={opportunityInfo}
+                    cityName={cityName}
+                    isPark={isPark}
+                    detailLoading={detailLoading}
+                    onSeeActions={() => setTab('actions')}
+                    onViewInsidePark={opportunityOnly ? undefined : onViewInsidePark}
+                  />
+                )}
+              </>
             ) : (
               <Card>
                 <CardTitle>Nature Gap</CardTitle>
@@ -521,8 +530,8 @@ export default function CellDetailPanel({
 
             {opportunityOnly && (
               <UnsampledNotice
-                title="Only the Nature gap covers this place"
-                detail="It lies outside the area the other layers analyse — mostly built-up ground, where the Nature gap still shows what greening could add."
+                title="Only Room to grow covers this place"
+                detail="It lies outside the green places the other layers analyse — mostly built-up ground, where Room to grow still shows what greening could add."
               />
             )}
 

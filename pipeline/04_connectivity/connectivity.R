@@ -25,6 +25,7 @@ if (!exists("CONFIG_LOADED")) source(here::here("config.R"))
 
 source(here::here("04_connectivity", "connectivity_load.R"), local = FALSE)
 source(here::here("04_connectivity", "network_derive.R"), local = FALSE)
+source(here::here("04_connectivity", "patch_connectivity.R"), local = FALSE)
 
 dir.create(DATA_PROC, recursive = TRUE, showWarnings = FALSE)
 
@@ -206,3 +207,8 @@ if (!force_run && connectivity_up_to_date(grid_sf = grid_habitat)) {
   message("[connectivity] Wrote ", paths_info$meta)
   message("[connectivity] Wrote ", PROC_CONNECTIVITY_GRAPH)
 }
+
+# Patch-level dPC (stepping stones). Independent of betweenness — it reads the
+# routing surface and the PATCH_* settings — so it keeps its own freshness check
+# and runs whichever branch ran above. FORCE_CONNECTIVITY forces it too.
+run_patch_connectivity(grid_habitat, force = force_run)

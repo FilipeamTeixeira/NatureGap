@@ -79,7 +79,7 @@ export default function Page() {
   const surveyPointsFc = useMemo(() => surveyPointsGeoJSON(surveyPoints), [surveyPoints]);
   const structuredSurveysFc = useMemo(() => structuredSurveysGeoJSON(structuredSurveys), [structuredSurveys]);
   const activeLayer = useMemo<HexLayerId>(
-    () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'opportunity',
+    () => THEMATIC_LAYER_IDS.find((id) => layers.some((layer) => layer.id === id && layer.enabled)) ?? 'focus',
     [layers],
   );
   // Selection wins; otherwise follow the map, so panning to another city
@@ -100,7 +100,7 @@ export default function Page() {
     const unsupported = !info[cityId];
     const target: HexLayerId | null = unsupported
       ? 'habitat'
-      : autoHabitatRef.current ? 'opportunity' : null;
+      : autoHabitatRef.current ? 'focus' : null;
     if (!target) return;
     autoHabitatRef.current = unsupported;
     setLayers((prev) => {

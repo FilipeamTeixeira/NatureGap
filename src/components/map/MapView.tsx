@@ -11,6 +11,7 @@ import {
   type ResidualWindow,
 } from '@/lib/residual-window';
 import type { RenderCellProperties } from '@/lib/cell-detail';
+import { isFocusClass } from '@/lib/green-focus';
 import {
   type OpportunityGapInfo,
   type OpportunityMode,
@@ -178,7 +179,7 @@ export default function MapView({
         legend: opportunityLegend(legendOpportunity),
         withheld,
         withheldReason: withheld
-          ? `This export has no Nature gap for ${cityMeta(legendCityId).name}; the other layers still apply.`
+          ? `This export has no Room to grow for ${cityMeta(legendCityId).name}; the other layers still apply.`
           : null,
       };
     }
@@ -366,7 +367,7 @@ export default function MapView({
               source: dataset.sourceId,
               'source-layer': dataset.sourceLayer,
               minzoom: DETAIL_ZOOM,
-              // Every layer but the Nature gap leaves out the opportunityOnly
+              // Every layer but the Nature gap and Room to grow leaves out the opportunityOnly
               // cells, which carry nothing else (layer-styles.ts).
               ...(filter ? { filter } : {}),
               layout: { visibility: 'none' },
@@ -637,6 +638,7 @@ export default function MapView({
         const impactOn = enabledIds.includes('impact')
           && !gapMapUnsupported(hoveredWindow?.hex);
         const opportunityOn = enabledIds[0] === 'opportunity' && Boolean(hoveredDataset?.opportunity);
+        const focusOn = enabledIds[0] === 'focus' && isFocusClass(props.focusClass);
         const checkedOnly = opportunityModeRef.current === 'checked';
 
         popupRef.current?.remove();
@@ -654,6 +656,9 @@ export default function MapView({
                   gap: checkedOnly ? props.opportunityGapChecked ?? null : props.opportunityGap ?? null,
                   checkedOnly,
                 }
+              : undefined,
+            focus: focusOn && isFocusClass(props.focusClass)
+              ? { focusClass: props.focusClass, speciesNearby: props.speciesNearby ?? null }
               : undefined,
           }))
           .addTo(map);
