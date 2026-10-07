@@ -16,8 +16,8 @@ function opportunityLines(gap: number | null, checkedOnly: boolean): { label: st
     case 'gain':
       return { label, value: `${formatSpeciesChange(gap as number)} native species`, color: OPPORTUNITY_COLORS.gain[4] };
     case 'loss':
-      // The map's taupe is too light for text on white; same hue, darker.
-      return { label, value: 'Already richer than greener places like it', color: '#5E564F' };
+      // The map's yellow is unreadable as text on white; same hue, darker.
+      return { label, value: 'Already richer than greener places like it', color: '#5C5300' };
     case 'same':
       return { label, value: 'No clear gain', color: '#667066' };
     default:

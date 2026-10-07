@@ -121,13 +121,15 @@ network_tuning_hash <- function() {
 connectivity_source_fingerprint <- function(grid_sf,
                                             max_resistance = CONN_MAX_RESISTANCE,
                                             min_permeability = CONN_MIN_PERMEABILITY,
-                                            dispersal_m = CONN_DISPERSAL_M) {
+                                            dispersal_m = CONN_DISPERSAL_M,
+                                            resistance_shape = CONN_RESISTANCE_SHAPE) {
   list(
     habitat_hash = habitat_fingerprint(grid_sf),
     cell_count = nrow(grid_sf),
     max_resistance = max_resistance,
     min_permeability = min_permeability,
     dispersal_m = dispersal_m,
+    resistance_shape = resistance_shape,
     graph_kind = "habitat-resistance-hex-adjacency",
     network_kind = "core-nodes-least-cost-routes",
     network_tuning = network_tuning_hash(),
@@ -157,7 +159,9 @@ connectivity_graph_up_to_date <- function(data_proc = DATA_PROC, grid_sf = NULL)
     isTRUE(identical(meta$graph_kind %||% NA_character_, current$graph_kind)) &&
     isTRUE(isTRUE(all.equal(meta$max_resistance %||% NA_real_, current$max_resistance))) &&
     isTRUE(isTRUE(all.equal(meta$min_permeability %||% NA_real_, current$min_permeability))) &&
-    isTRUE(isTRUE(all.equal(meta$dispersal_m %||% NA_real_, current$dispersal_m)))
+    isTRUE(isTRUE(all.equal(meta$dispersal_m %||% NA_real_, current$dispersal_m))) &&
+    # Absent before the shape existed: those runs were linear (0).
+    isTRUE(isTRUE(all.equal(meta$resistance_shape %||% 0, current$resistance_shape)))
 }
 
 # Every artefact this job is responsible for, not just the meta file. A run that
@@ -297,24 +301,36 @@ cell_vegetation <- function(grid_sf, verbose = TRUE) {
   )
 }
 
-# Permeability to wildlife movement: vegetation discounted by built cover. Both
-# inputs use their full 0-1 range, which is the contrast that habitat_quality
-# lacks. See the CONN_* block in config.R for why the documented
-# 1 - habitat_quality formula was replaced.
+# Permeability to wildlife movement: the cell's vegetated share. It uses the
+# full 0-1 range, which is the contrast that habitat_quality lacks. See the
+# CONN_* block in config.R for why the documented 1 - habitat_quality formula
+# was replaced.
+#
+# Built cover is not discounted again. Every vegetation measure above already
+# leaves built ground out — veg_fraction is the vegetated share of the cell, and
+# WorldCover's classes are exclusive per pixel — so multiplying by
+# (1 - built_fraction_wc) counted the same ground twice. It also struck out tree
+# crowns over quays and streets, which WorldCover labels built: the median green
+# cell of Amsterdam's canal belt was 100% built to WorldCover, and the double
+# count left 28% of those cells above CONN_MIN_PERMEABILITY instead of 56%.
 cell_permeability <- function(grid_sf, verbose = TRUE) {
-  built <- if ("built_fraction_wc" %in% names(grid_sf)) {
-    clamp01(grid_sf$built_fraction_wc)
-  } else {
-    rep(0, nrow(grid_sf))
-  }
-  cell_vegetation(grid_sf, verbose = verbose) * (1 - built)
+  cell_vegetation(grid_sf, verbose = verbose)
 }
 
 # Resistance to movement. Floored at 1 so ideal habitat costs its true length:
 # a zero floor gives zero-cost edges, which makes shortest paths degenerate
 # (unbounded free movement through the best cells).
-habitat_resistance <- function(permeability, max_resistance = CONN_MAX_RESISTANCE) {
-  1 + (max_resistance - 1) * (1 - clamp01(permeability))
+#
+# Negative exponential in permeability (Keeley, Beier & Gagnon 2016), shape
+# CONN_RESISTANCE_SHAPE; 0 is the linear form used until 2026-10-07. Linear
+# priced a cell with a line of street trees over 8% of it at 18.5 of 20 —
+# nearly a wall — so routes could not follow tree-lined streets, quays or
+# verges. See CONN_RESISTANCE_SHAPE in config.R.
+habitat_resistance <- function(permeability, max_resistance = CONN_MAX_RESISTANCE,
+                               shape = CONN_RESISTANCE_SHAPE) {
+  p <- clamp01(permeability)
+  if (shape == 0) return(1 + (max_resistance - 1) * (1 - p))
+  max_resistance - (max_resistance - 1) * (1 - exp(-shape * p)) / (1 - exp(-shape))
 }
 
 # Hex-adjacency graph weighted by habitat resistance: nodes are 20 m cell

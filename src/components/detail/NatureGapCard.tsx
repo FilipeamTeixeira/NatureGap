@@ -23,9 +23,9 @@ const LABEL_CLASS: Record<OpportunityGroupLabel, string> = {
 export function opportunityHeadline(gap: number | null | undefined): { text: string; className: string } {
   switch (opportunityBand(gap)) {
     case 'gain':
-      return { text: `${formatSpeciesChange(gap as number)} native species possible`, className: 'bg-[#E3EEF7] text-[#1472AC]' };
+      return { text: `${formatSpeciesChange(gap as number)} native species possible`, className: 'bg-[#EEE7F4] text-[#440154]' };
     case 'loss':
-      return { text: 'Richer than greener places like it', className: 'bg-[#EFECE8] text-[#5E564F]' };
+      return { text: 'Richer than greener places like it', className: 'bg-[#FCF6CC] text-[#5C5300]' };
     case 'same':
       return { text: 'No clear gain', className: 'bg-[#F0F0EE] text-[#667066]' };
     default:
@@ -125,10 +125,10 @@ export default function NatureGapCard({
           </div>
           <div className="text-[11px] text-[#667066] mt-1.5">Native species expected here</div>
         </div>
-        <div className={cn('rounded-xl p-4', band === 'loss' ? 'bg-[#EFECE8]' : band === 'gain' ? 'bg-[#E3EEF7]' : 'bg-[#F7F8F5]')}>
+        <div className={cn('rounded-xl p-4', band === 'loss' ? 'bg-[#FCF6CC]' : band === 'gain' ? 'bg-[#EEE7F4]' : 'bg-[#F7F8F5]')}>
           <div className={cn(
             'text-[32px] font-semibold leading-none',
-            band === 'loss' ? 'text-[#5E564F]' : band === 'gain' ? 'text-[#1472AC]' : 'text-[#1F2A1F]',
+            band === 'loss' ? 'text-[#5C5300]' : band === 'gain' ? 'text-[#440154]' : 'text-[#1F2A1F]',
           )}>
             {gap != null ? formatSpeciesChange(gap) : '—'}
           </div>

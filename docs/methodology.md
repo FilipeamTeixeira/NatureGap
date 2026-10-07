@@ -1582,10 +1582,10 @@ European, none of which occur there.
 ### 15.6 On the map
 
 The opportunity gap is the **Nature gap** layer, first in the list and open by
-default, drawn as a heatmap: gains sweep from yellow through orange, magenta
-and purple to blue up to the city's 90th-percentile gap; gaps between −1 and
-+0.5 read as "no clear gain"; at or below −1 a warm taupe reads "already richer than
-greener places like it"; cells without a comparison are grey. A legend switch draws `opportunityGap` (all groups, the default) or
+default, drawn with viridis: gains run from green through teal and blue to deep
+purple up to the city's 90th-percentile gap; gaps between −1 and +0.5 read as
+"no clear gain"; at or below −1 viridis's last colour, yellow, reads "already
+richer than greener places like it"; cells without a comparison are grey. A legend switch draws `opportunityGap` (all groups, the default) or
 `opportunityGapChecked` (checked groups only), and the legend states the
 city's checked share of the change. The panel gives expected species, the gap,
 its checked part, every group with its label and top species, and the rare

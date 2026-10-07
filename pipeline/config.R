@@ -501,8 +501,10 @@ local({
 # corridors ranked busy streets as prime habitat links and made green space with
 # no footway invisible. See docs/methodology.md section 9.
 #
-# Permeability is vegetation discounted by built cover:
-#   permeability = vegetation * (1 - built_fraction_wc)
+# Permeability is the cell's vegetated share:
+#   permeability = vegetation
+# (until 2026-10-07 vegetation * (1 - built_fraction_wc), which counted built
+# ground twice — see cell_permeability() in 04_connectivity/connectivity_load.R).
 # docs/methodology.md originally specified resistance as 1 - habitat_quality.
 # That does not work: habitat_quality is an NDVI-led blend with almost no
 # dynamic range (Amsterdam IQR 0.436-0.598) and it scores a cell that is 87.5%
@@ -517,6 +519,21 @@ local({
 # Zero-cost edges would make shortest paths degenerate, so the floor is
 # structural, not cosmetic.
 CONN_MAX_RESISTANCE   <- 20    # step cost at permeability = 0, relative to ideal = 1
+
+# Shape of the permeability -> resistance curve: negative exponential,
+#   resistance = R - (R - 1) * (1 - exp(-c p)) / (1 - exp(-c)),
+# after Keeley, Beier & Gagnon (2016, Landscape Ecology 31:2151), who found
+# nonlinear transforms of habitat suitability fit movement better than linear
+# ones. 0 is linear. Linear made partial cover nearly a wall: a cell with a line
+# of trees over 8% of it cost 18.5 of 20, so routes could not follow street
+# trees, quays or verges. Tested 2026-10-07 (c = 0 / 4 / 8): cells with
+# vegetation in mostly built ground carrying a route went 14% -> 41% -> 42% in
+# Amsterdam, 15 -> 41 -> 43% Porto, 6 -> 28 -> 30% Gent, 17 -> 22 -> 33%
+# Yokohama, with corridor ranks agreeing with linear at rho 0.86-0.94 for c = 4
+# and 0.79-0.89 for c = 8. c = 8 added little beyond 4 and spread importance
+# thinly (isolated top-decile cells in Gent 88 -> 235 -> 428). Uncalibrated,
+# like CONN_MAX_RESISTANCE.
+CONN_RESISTANCE_SHAPE <- 4
 
 # CONN_MAX_RESISTANCE is uncalibrated and the published ranking is highly
 # sensitive to it: sweeping 5-100 leaves only 5% of Amsterdam's baseline top-20
