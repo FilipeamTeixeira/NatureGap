@@ -298,7 +298,7 @@ cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 01_ingest/introduced_speci
 When its outputs are present, `06_export/export.R` adds every cell outside the
 render filter to the tiles as `opportunityOnly` (methodology §11, data contract
 `hexgrid.pmtiles`). **Do not publish such an export until the deployed frontend
-filters `opportunityOnly` cells out of every other layer** (the Nature gap
+filters `opportunityOnly` cells out of every other layer** (the Room to grow
 layer, `hexLayerFilter()` in `src/lib/layer-styles.ts`) — an older frontend
 paints them in all layers. That is also why Porto, Amsterdam, Gent and Yokohama
 now set `SHARD_TILES` (2, 3, 4 and 4 archives): the larger tileset is split to
@@ -315,6 +315,20 @@ alone (about 2 min for Porto; 6–12 min and up to 3.3 GB for Amsterdam and Gent
 
 ```bash
 cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla 05_opportunity/opportunity_gap.R
+```
+
+`04_connectivity/connectivity.R` also writes the patch stepping-stone scores
+(`patch_connectivity.parquet`, methodology §9b; 1–3 min, up to 1.7 GB), with
+its own cache check. `05_opportunity/green_focus.R` (methodology §16) builds the
+Nature gap classes and needs the connectivity outputs, the patch scores,
+`grid_residuals.gpkg`, the raw observation files and the introduced-species
+caches; about 1 min per city, up to 2.2 GB. It never breaks a run and removes
+its previous `green_focus.csv` / `green_focus.json` first. **Publish its export
+before deploying a frontend whose default layer is the Nature gap** — a dataset
+without `focusClass` leaves that layer empty.
+
+```bash
+cd pipeline && NATUREGAP_CITY=porto Rscript --vanilla -e 'source("config.R"); source("05_opportunity/green_focus.R")'
 ```
 
 ## Full Pipeline Refresh

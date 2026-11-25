@@ -17,7 +17,7 @@ Unlike generic environmental dashboards, NatureGap produces a spatially explicit
 | **Graph-theoretic corridors** | Dispersal-limited betweenness on a habitat-resistance graph, reduced to a node/corridor network — which cells carry the most habitat routes, and where corridors cross weak ground |
 | **Fully open source** | Methodology, pipeline, and application code are all public |
 
-The headline metric is the **Nature Gap score**: positive means fewer species are recorded than the habitat predicts (pressure), negative means more (surplus). See [`docs/methodology.md`](docs/methodology.md) §8.
+The headline layer is the **Nature gap**: among the city's green places, which carry wildlife movement (stepping stones, corridors, street trees that carry routes) and which have native species recorded nearby — where to focus, park or not. See [`docs/methodology.md`](docs/methodology.md) §16. The record-based Nature Gap score (§8) is still computed but off the map.
 
 ---
 

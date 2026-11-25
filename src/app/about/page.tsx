@@ -54,12 +54,16 @@ const STEPS = [
     body: 'Wildlife records cluster along footpaths, because that is where people walk. Each cell’s species count is therefore adjusted for how easily it can be searched. Cells that almost nobody can reach are set aside, rather than recorded as having no wildlife.',
   },
   {
-    title: 'Compare with greener places like it',
-    body: 'Models learn, across the whole city, which surroundings each native species is found in, allowing for how hard people looked. Each place is then compared with similar places in the same city that are greener. How many more native species those are expected to hold is the Nature gap.',
+    title: 'Trace how wildlife can move',
+    body: 'Every green cell is a step wildlife can take, and the more vegetation a cell holds the cheaper the step. Even a line of street trees counts. Routes between green areas show which places carry movement, and each patch of habitat is scored by how much other patches depend on it as a stepping stone.',
   },
   {
-    title: 'Rank where to look next',
-    body: 'A cell rises to the top of the list when fewer species are recorded there than predicted and it also sits on an important route between patches of habitat. Usually that is a well-vegetated cell nobody has surveyed yet.',
+    title: 'Find the green places to focus on',
+    body: 'Among the places the map shows as green, the Nature gap marks those that link nature together and have native species recorded nearby, those that link nature but have no records yet, and those with species in calm, cool surroundings. That is where a council’s attention matters, whether or not the place is a park.',
+  },
+  {
+    title: 'Compare with greener places like it',
+    body: 'Models learn, across the whole city, which surroundings each native species is found in, allowing for how hard people looked. Each place is then compared with similar places in the same city that are greener. How many more native species those are expected to hold is Room to grow.',
   },
 ];
 
@@ -85,7 +89,11 @@ const DATA_SOURCES = [
 const METRICS = [
   {
     title: 'Nature gap',
-    body: 'How many more native species a place could support, judged by real places in the same city that are like it but greener. For every native species recorded often enough to model — birds, plants, insects, fungi and every other group — a model learns which surroundings it is found in, allowing for how hard people looked. Each place is compared with the 25 most similar places of the same land use, with similar water, traffic, noise and light nearby, among the greener quarter of the city; the gap is how many more of these species those places are expected to hold. Where they hold fewer — often open, rough or wet ground whose species would lose out to trees — the map shows it in blue. Each species group is checked against what people actually recorded and labelled checked, didn’t match the records, or too few records to check, and the map can show all groups or only the checked ones. Rare species, seen too seldom to model, are listed where they were found rather than predicted.',
+    body: 'Where to focus among green places — the cells the Tree cover and Vegetation layers show. Each is tested twice. Does it carry wildlife movement: is it a stepping stone that other habitat patches connect through, one of the city’s busiest wildlife routes, a weak stretch of a corridor, or street trees and green strips that carry more routes than most? And has at least one native species been recorded within 50 metres? Both: focus here. Movement but no records yet: a link worth keeping, and worth a survey. Species but no movement role, in surroundings cooler and quieter than most green places: worth protecting. The rest is green space. Nothing here predicts species; every part is measured, and parks are shown but never decide the class.',
+  },
+  {
+    title: 'Room to grow',
+    body: 'How many more native species a place could support, judged by real places in the same city that are like it but greener. For every native species recorded often enough to model — birds, plants, insects, fungi and every other group — a model learns which surroundings it is found in, allowing for how hard people looked. Each place is compared with the 25 most similar places of the same land use, with similar water, traffic, noise and light nearby, among the greener quarter of the city; the gap is how many more of these species those places are expected to hold. Where they hold fewer — often open, rough or wet ground whose species would lose out to trees — the map shows it in yellow. Each species group is checked against what people actually recorded and labelled checked, didn’t match the records, or too few records to check, and the map can show all groups or only the checked ones. Rare species, seen too seldom to model, are listed where they were found rather than predicted.',
   },
   {
     title: 'Habitat quality',

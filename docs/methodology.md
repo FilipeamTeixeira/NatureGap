@@ -954,8 +954,44 @@ Graph construction:
 
 Permeability and resistance:
 
-    permeability = vegetation * (1 - built_fraction_wc)
-    resistance   = 1 + (CONN_MAX_RESISTANCE - 1) * (1 - permeability)
+    permeability = vegetation
+    resistance   = R - (R - 1) * (1 - exp(-c * permeability)) / (1 - exp(-c))
+                   R = CONN_MAX_RESISTANCE (20), c = CONN_RESISTANCE_SHAPE (4)
+
+Two changes on 2026-10-07, both so that thin green — street trees, quays,
+verges — can carry routes:
+
+- **Built cover is counted once.** Permeability was
+  `vegetation * (1 - built_fraction_wc)`. Every vegetation measure already
+  leaves built ground out (`veg_fraction` is the vegetated share of the cell;
+  WorldCover's classes are exclusive per pixel), so the product counted the same
+  ground twice, and it struck out tree crowns over quays and streets, which
+  WorldCover labels built. The median green cell of Amsterdam's canal belt was
+  100% built to WorldCover; the double count left 28% of those cells above
+  `CONN_MIN_PERMEABILITY` instead of 56%.
+- **Resistance falls off nonlinearly with vegetation** (negative exponential,
+  Keeley, Beier & Gagnon 2016, *Landscape Ecology* 31:2151, who found nonlinear
+  transforms of habitat suitability fit movement better than linear ones;
+  `c = 0` is the old linear form). Linear priced a cell with a line of trees
+  over 8% of it at 18.5 of 20 — nearly a wall — so under the 500 m dispersal
+  cap a route could cross one or two such cells at most.
+
+Tested at c = 0, 4 and 8 on the four cities (betweenness at the baseline R):
+
+| | Amsterdam | Porto | Gent | Yokohama |
+| --- | --- | --- | --- | --- |
+| Green cells carrying a route, c = 0 / 4 / 8 | 40 / 57 / 59% | 33 / 52 / 54% | 45 / 62 / 64% | 35 / 39 / 42% |
+| Vegetated cells in mostly built ground carrying a route, c = 0 / 4 / 8 | 14 / 41 / 42% | 15 / 41 / 43% | 6 / 28 / 30% | 17 / 22 / 33% |
+| Corridor ranks against linear, ρ (c = 4 / 8) | 0.88 / 0.83 | 0.86 / 0.79 | 0.90 / 0.83 | 0.94 / 0.89 |
+| Isolated top-decile cells, c = 0 / 4 / 8 | 52 / 104 / 182 | 10 / 40 / 77 | 88 / 235 / 428 | 21 / 22 / 29 |
+
+c = 8 adds little beyond 4 and spreads importance thinly, so c = 4. Against the
+original surface (both changes), green cells carrying a route went 31 → 57% in
+Amsterdam, 23 → 52% Porto, 42 → 62% Gent and 31 → 39% Yokohama; vegetated cells
+in mostly built ground 1 → 41%, 1 → 41%, 0 → 28% and 5 → 22%. Yokohama gains
+least: without CIR its WorldCover fractions are close to binary, so partial
+cover barely registers. `CONN_RESISTANCE_SHAPE` is uncalibrated, like
+`CONN_MAX_RESISTANCE`, and is part of the connectivity cache key.
 
 `vegetation` is `veg_fraction` where available, falling back to
 `tree_fraction + shrub_fraction + grass_fraction` and then `green_fraction_wc`
@@ -1059,8 +1095,16 @@ Derivation, per city:
    non-tree link survives only if it costs less than `NET_REDUNDANCY_RATIO` of the
    detour the tree forces *and* reuses no more than `NET_MAX_ROUTE_OVERLAP` of the
    cells already covered.
-6. **Scoring.** Each corridor gets one class from its whole route's mean
-   resistance: `strongest | strong | moderate | weak` (`NET_STRENGTH_BREAKS`).
+6. **Scoring.** Each corridor gets one class from the mean vegetation share
+   (permeability) of its route's cells: `strongest` at 80% or more, `strong`
+   65%, `moderate` 50%, `weak` below (`NET_STRENGTH_BREAKS`, interpretive, not
+   sourced), exported as `meanVegetation`. Until 2026-10-07 the class came from
+   mean resistance (breaks 3 / 6 / 10); resistance depends on the uncalibrated
+   curve, and under c = 4 44 of Gent's 46 corridors read `strongest` and
+   Amsterdam's moderate and weak sections fell from 30 to 1. A vegetation share
+   reads the same under any curve. Converting the old breaks through the new
+   curve overcorrected (most corridors `weak`), because routes mix cells and one
+   conversion cannot carry the average.
    There is no `fragmented` class — step 4 rejects a route that bad, and a
    corridor that is broken rather than merely poor is described by its bottlenecks
    instead of by its average. Mean `corridor_importance` is *not* usable here: the
@@ -1086,14 +1130,25 @@ Generating three networks for three scales would mean three things that can
 disagree. Rank gates by significance rather than by quality on purpose: a weak
 corridor between two major cores is a finding worth seeing at city scale.
 
-| | corridors | sections | nodes (major/secondary/stepping) | median route |
-|---|---|---|---|---|
-| amsterdam | 34 | 66 | 31 (6/8/17) | 720 m |
-| porto | 49 | 85 | 40 (7/23/10) | 680 m |
-| yokohama | 8 | 10 | 9 (5/3/1) | 1060 m |
+2026-10-07, vegetation-only permeability and c = 4:
 
-Amsterdam previously emitted 211 segments (median 92 m) and 404 nodes; Porto 420
-segments and 822 nodes. The edge GeoJSON is now about 5 KB per city.
+| | corridors | sections | nodes (major/secondary/stepping) | median route | bottleneck sections | strongest / strong / moderate / weak |
+|---|---|---|---|---|---|---|
+| amsterdam | 51 | 55 | 39 (22/17/0) | 1360 m | 2 | 18 / 25 / 7 / 1 |
+| porto | 59 | 69 | 40 (25/15/0) | 1320 m | 5 | 6 / 33 / 19 / 1 |
+| gent | 46 | 46 | 40 (40/0/0) | 1940 m | 0 | 34 / 12 / 0 / 0 |
+| yokohama | 35 | 59 | 39 (12/23/4) | 1540 m | 12 | 17 / 14 / 3 / 1 |
+
+Median vegetation along the routes is 76% (Amsterdam), 70% (Porto), 84% (Gent)
+and 79% (Yokohama). Stepping-stone nodes almost vanish because cheaper routes
+let more cells carry importance, cores grow, and the node budget fills with the
+largest ones; requiring core cells to be at least 0.3 or 0.5 vegetated did not
+bring them back. Stepping stones are measured per patch in §9b instead.
+
+Before (linear, built counted twice): Amsterdam 45 corridors, 12 bottleneck
+sections, 9 stepping-stone nodes; Porto 49, 20, 3; Gent 40, 4, 0; Yokohama 40,
+20, 13. Earlier still, Amsterdam emitted 211 segments (median 92 m) and 404
+nodes; Porto 420 segments and 822 nodes. The edge GeoJSON is about 5 KB per city.
 
 Yokohama is genuinely sparse rather than misconfigured: it has no NIR coverage, so
 permeability falls back to the near-binary WorldCover fractions (see the
@@ -1120,7 +1175,63 @@ Limitations:
 - Betweenness favours shortest paths and may not capture all ecological corridors.
 - Habitat thresholds should be sensitivity-tested.
 
+### 9b. Patch connectivity: stepping stones (dPC)
+
+Computed in `pipeline/04_connectivity/patch_connectivity.R` (settings: the
+`PATCH_*` block in `config.R`), after betweenness; outputs
+`patch_connectivity.parquet`, `patch_connectivity_cells.parquet` and
+`patch_connectivity.json`. Sensitivity: `pipeline/sensitivity/patch_connectivity_sensitivity.R`.
+
+Each habitat patch's share of the city's habitat availability — the probability
+of connectivity, PC (Saura & Pascual-Hortal 2007) — split into the fractions of
+Saura & Rubio (2010, *Ecography* 33:523): **intra** (the patch's own habitat),
+**flux** (connections that start or end at it) and **connector** (connectivity
+between *other* patches that runs through it: its role as a stepping stone).
+
+- **Patches.** Connected cells with permeability ≥ 0.5 (`PATCH_MIN_VEGETATION`),
+  kept at ≥ 0.1 ha (`PATCH_MIN_AREA_HA`, about 3 cells), which holds 91–96% of
+  such cells. Habitat amount = Σ cell area × vegetation share. Thinner green
+  (street trees, verges) is not a patch: it is the ground between patches that
+  the resistance curve (§9) made cheap, and corridor importance scores it.
+- **Distances.** Least-cost, edge to edge, over the corridors' routing surface.
+  Only the two end patches are free to cross; any other patch costs its own
+  resistance. (If every patch were free to cross, removing one would never
+  lengthen a path and no patch could ever score as a connector.) Implemented as
+  a directed copy of the surface with one source and one sink vertex per patch.
+- **Links.** p = exp(−θd), θ set so p = 0.05 at `CONN_DISPERSAL_M` (500
+  effective m), so patches and corridors share one dispersal assumption; links
+  beyond 1,000 m (p < 0.0025) are dropped. p* is the most probable path.
+- **Connector.** PC recomputed without each patch, on its 1,000 m neighbourhood
+  only — a path through it longer than 2,000 m has p* < 6×10⁻⁶. Checked against
+  full city-wide removal on 20 Amsterdam patches (the top 10 connectors and 10
+  random): largest relative error 0.16%.
+
+| | Amsterdam | Porto | Gent | Yokohama |
+| --- | --- | --- | --- | --- |
+| Patches | 1,290 | 1,064 | 2,202 | 846 |
+| With a connector role | 631 | 564 | 1,156 | 248 |
+| Top-10% connectors under 1 ha | 33 of 64 | 17 of 57 | 25 of 116 | 5 of 25 |
+| Connector vs patch area, ρ | 0.37 | 0.42 | 0.47 | 0.35 |
+| Runtime / peak memory | 1.0 min / 1.1 GB | 0.7 min / 0.7 GB | 3.1 min / 1.4 GB | 0.6 min / 1.7 GB |
+
+Sensitivity, cell-level against the baseline (rank ρ / overlap of the top-10%
+connector cells): dispersal halved 0.94–0.98 / 0.64–0.90; doubled 0.95–0.98 /
+0.77–0.92; **patch threshold 0.3 instead of 0.5: 0.55–0.87 / 0.51–0.70** —
+the patches themselves change shape, so the threshold is the choice the result
+rests on. Against corridor importance over patch cells ρ is 0.50–0.61, and
+54–77% of the top connectors are also top-quartile corridor cells: related, not
+redundant.
+
+Limits: one generic disperser, structural only, not validated against movement
+or species data; the threshold above is a choice; connector values mark a
+patch's position, and large central patches score as connectors too.
+`fragmentation_index` and its sibling placeholders are not touched.
+
 ## 10. Intervention Ranking
+
+**Off the map since 2026-10-07.** "Where to look next" ranks the ecological
+residual, which every city's records cannot support (§7.1); the Nature gap
+(§16) now answers where to look. The ranking is still computed and exported.
 
 Intervention ranking is computed in `pipeline/05_residuals/residuals.R`.
 
@@ -1369,6 +1480,11 @@ the Storage artefacts used by the frontend.
 
 ## 15. Opportunity Gap
 
+On the map as **Room to grow** since 2026-10-07; it was the Nature gap layer
+from 2026-10-06. The Nature gap is now §16: this measure answers where greening
+could add species, which points mostly at places where nature is missing, not
+at the green places to look after.
+
 Computed in `pipeline/05_opportunity/opportunity_gap.R` (settings: the
 "Opportunity gap" block in `config.R`), recorded in `opportunity_model.json`,
 validated in `pipeline/sensitivity/prototype_opportunity_gap.R`.
@@ -1581,15 +1697,157 @@ European, none of which occur there.
 
 ### 15.6 On the map
 
-The opportunity gap is the **Nature gap** layer, first in the list and open by
-default, drawn with viridis: gains run from green through teal and blue to deep
-purple up to the city's 90th-percentile gap; gaps between −1 and +0.5 read as
-"no clear gain"; at or below −1 viridis's last colour, yellow, reads "already
-richer than greener places like it"; cells without a comparison are grey. A legend switch draws `opportunityGap` (all groups, the default) or
-`opportunityGapChecked` (checked groups only), and the legend states the
-city's checked share of the change. The panel gives expected species, the gap,
-its checked part, every group with its label and top species, and the rare
-species found nearby; `opportunityOnly` cells show this alone. Every other layer
-leaves `opportunityOnly` cells out. The record-based Nature Gap score (§8) and
-the ecological residual layer are out of the layer list while every city's
-residual window is observation-dominated (§8.4).
+The opportunity gap is the **Room to grow** layer, off by default, drawn with
+viridis: gains run from green through teal and blue to deep purple up to the
+city's 90th-percentile gap; gaps between −1 and +0.5 read as "no clear gain"; at
+or below −1 viridis's last colour, yellow, reads "already richer than greener
+places like it"; cells without a comparison are grey. A legend switch draws
+`opportunityGap` (all groups, the default) or `opportunityGapChecked` (checked
+groups only), and the legend states the city's checked share of the change. The
+panel shows it under the Nature gap card: expected species, the gap, its checked
+part, every group with its label and top species, and the rare species found
+nearby; `opportunityOnly` cells show this alone. Every layer but Room to grow
+leaves `opportunityOnly` cells out. The record-based Nature Gap score (§8), the
+ecological residual layer and "Where to look next" (§10) are out of the layer
+list while every city's residual window is observation-dominated (§8.4).
+
+## 16. Nature Gap: where to focus among green places
+
+Computed in `pipeline/05_opportunity/green_focus.R` (settings: the "Green
+focus" block in `config.R`), recorded in `green_focus.json`, drawn as the
+**Nature gap** layer, first in the list and open by default.
+
+### 16.1 The question
+
+Which green places should a council look at because they carry species
+movement or hold species — above all the ones no one treats as nature: street
+trees, canal-side rows, courtyard gardens, verges, "just a patch of greenery".
+The records cannot say what a place lacks or how well its nature is doing
+(§7.1, §15.1), so nothing here predicts species. Every class is built from
+measured facts: green cover, the corridor surface (§9), patch connectivity
+(§9b), species records, and measured heat, noise and traffic.
+
+### 16.2 Method
+
+- **Green places.** The cells the map already draws as green — what the Tree
+  cover and Vegetation layers show: a named green space, WorldCover tree, shrub,
+  grass or green at 10% or more, or 0.5 m CIR vegetation at
+  `CIR_VEG_RENDER_THRESHOLD` (15%) or more, after the export's
+  `habitat_quality > 0` cut. One function, `in_render_grid()` in `config.R`,
+  serves both the export and this stage, so the two cannot drift. Every other
+  cell gets no class and draws transparent. (A first version counted any
+  vegetated 0.5 m pixel or any canopy height above zero: 65% of Amsterdam's
+  cells, rooftops and streets among them. Cells green only by canopy had a
+  median canopy of 0.08 m — model noise.)
+- **Connectivity role**, any of:
+  - its habitat patch is in the top half of stepping stones (dPC connector
+    percentile, §9b, `FOCUS_STEPPING_PCT`);
+  - it is in the top quarter of corridor importance (§9, `FOCUS_CORRIDOR_PCT`);
+  - it lies on a corridor bottleneck;
+  - it is thin green — outside every habitat patch — in the top half of
+    corridor importance among thin green cells that carry routes
+    (`FOCUS_THIN_CORRIDOR_PCT`). Ranked against the whole city, the big green
+    areas take the top quarter and not one canal-belt cell in Amsterdam had a
+    role; ranked against its own kind, a tree-lined street that carries more
+    routes than most tree-lined streets does.
+- **Species recorded**: at least one native species recorded within 50 m
+  (`FOCUS_SPECIES_RADIUS_M`, between cell centroids), through
+  `load_obs_for_tiling()`'s gates (GPS accuracy ≤ 30 m, obscured records out),
+  species-level names only, introduced species (§15.3) left out. 50 m because a
+  record may sit 30 m from where it was made: the cell alone would claim a
+  precision the records lack. Few species are enough — the test is presence.
+- **Exposure**: heat (surface-temperature anomaly) and disturbance (noise and
+  traffic averaged — they move together, ρ 0.76 in Amsterdam) ranked among the
+  city's green cells and averaged; `low` below 1/3, `high` above 2/3. Light is
+  left out: it is built from OSM lamp and lit-road tags, zero in 85% of
+  Amsterdam's cells, with a hard edge where mapping stops. Air quality is not
+  used: too sparse to place per cell.
+- **Classes:**
+
+| class | test | panel text |
+| --- | --- | --- |
+| `focus` | role and species | Focus here: links nature and has species |
+| `link` | role, no species recorded | Link worth keeping: no species recorded here yet |
+| `protect` | species, no role, exposure ≤ 0.5 | Worth protecting: species recorded in calm, cool green |
+| `green` | everything else | Green space |
+
+  Exposure gates `protect` only (`FOCUS_PROTECT_MAX_EXPOSURE`): a species within
+  50 m alone covered 46% of Amsterdam's green cells, the whole canal belt
+  included, and said nothing. Elsewhere it is a hint: "calm and cool: protect it
+  as it is" or "hot, noisy or busy: relieving the pressure would help".
+- **Parks** (OSM `park`, `nature_reserve`) are context, never a test: formal
+  status is what the map is meant to look past.
+
+### 16.3 Exposure and the city's own species models
+
+The occupancy models (§15.2) do not show heat, noise or traffic lowering
+occupancy. Share of modelled species with a negative coefficient:
+
+| | heat | noise | traffic |
+| --- | --- | --- | --- |
+| Porto | 53% | 55% | 48% |
+| Gent | 60% | 60% | 46% |
+| Amsterdam | 27% | 52% | 57% |
+| Yokohama | 48% | 27% | 55% |
+
+The pressures cannot be told apart across blocks (§15.2), and hot cells are
+often open, sunny ground. So exposure rests on the literature — noise on
+wildlife (Shannon et al. 2016, *Biological Reviews*), roads' effect zones
+(Forman & Alexander 1998, *Annual Review of Ecology and Systematics*) — not on
+these data, and it is reported, not scored, except as the `protect` gate.
+
+### 16.4 Results
+
+2026-10-07:
+
+| | Amsterdam | Porto | Gent | Yokohama |
+| --- | --- | --- | --- | --- |
+| Green cells (of all) | 94,701 (49%) | 67,439 (56%) | 234,064 (67%) | 45,733 (12%) |
+| focus / link / protect / green | 33 / 15 / 10 / 42% | 18 / 24 / 9 / 49% | 18 / 28 / 4 / 49% | 8 / 34 / 5 / 54% |
+| Green cells in parks | 3,887 | 6,371 | 35,784 | 7,191 |
+| Thin green cells with a route role | 13,759 of 55,055 | 11,644 of 44,838 | 31,325 of 138,838 | 1,171 of 16,027 |
+| Median exposure, focus / green | 0.35 / 0.68 | 0.40 / 0.62 | 0.38 / 0.66 | 0.27 / 0.63 |
+| Native species within 50 m / in the cell | 66 / 12% | 43 / 8% | 38 / 5% | 18 / 2% |
+
+### 16.5 Tests
+
+- **Not an effort map.** Spearman ρ with path density over green cells:
+  exposure −0.23 to −0.02, connectivity role −0.06 to 0.18, species floor
+  0.11 to 0.25; role against record counts −0.00 to 0.10.
+- **Robustness** — share of green cells keeping their class / overlap
+  (Jaccard) of the `focus` cells, when one choice moves:
+
+| | Amsterdam | Porto | Gent | Yokohama |
+| --- | --- | --- | --- | --- |
+| stepping stones top third | 0.99 / 0.97 | 0.99 / 0.97 | 0.98 / 0.96 | 0.96 / 0.90 |
+| corridors top third | 0.99 / 0.99 | 0.98 / 0.96 | 0.99 / 0.99 | 0.99 / 0.97 |
+| thin green top third | 0.95 / 0.91 | 0.94 / 0.87 | 0.96 / 0.91 | 0.99 / 0.99 |
+| `protect` at exposure ≤ 1/3 | 0.94 / 1.00 | 0.95 / 1.00 | 0.98 / 1.00 | 0.98 / 1.00 |
+| **species radius 100 m** | 0.83 / **0.72** | 0.79 / **0.56** | 0.80 / **0.53** | 0.87 / **0.45** |
+
+  The species radius is the choice the classes rest on; the panel shows the
+  count, not only the yes/no.
+
+### 16.6 Interpretation and limits
+
+- It describes; it does not predict. "Focus here" means a place that moves
+  species through the green network and has species recorded — not that it
+  holds more species than elsewhere.
+- Records follow where people look. "No species recorded yet" is a prompt to
+  survey, not an absence; Yokohama has 18% of green cells with a record nearby.
+- Connectivity is structural, one generic disperser (§9, §9b); the patch
+  threshold is a choice the stepping-stone ranking depends on (§9b).
+- Exposure is literature-based (§16.3) and within-city; classes and ranks are
+  not comparable between cities.
+- Green follows the render grid: a paved square inside a named park is green,
+  a 3 m verge below 15% of its cell is not.
+
+### 16.7 On the map
+
+The **Nature gap** layer draws the four classes on green cells only (tile field
+`focusClass`; purple, orange, dark green, pale green), other cells transparent.
+Hover gives the class and the number of native species nearby; the panel leads
+with the class, its plain-language reasons (stepping stone, busy wildlife route,
+street trees carrying routes, weak corridor stretch; species within 50 m;
+cooler and quieter than X% of the city's green places; in a park) and the
+exposure hint, with Room to grow (§15) below it.
